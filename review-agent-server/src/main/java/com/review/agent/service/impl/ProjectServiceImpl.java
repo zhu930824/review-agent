@@ -78,6 +78,23 @@ public class ProjectServiceImpl implements ProjectService {
         projectMapper.deleteById(id);
     }
 
+    @Override
+    public void retryClone(Long id) {
+        Project project = requireProject(id);
+        if (project.getStatus() != ProjectStatus.ERROR) {
+            throw new BusinessException("400", "只有克隆失败的项目才能重新克隆");
+        }
+        project.setStatus(ProjectStatus.PENDING);
+        projectMapper.updateById(project);
+        gitService.cloneRepository(id);
+    }
+
+    @Override
+    public List<String> getBranches(Long id) {
+        requireProject(id);
+        return gitService.getBranches(id);
+    }
+
     /** 按ID查询项目，不存在则抛出业务异常 */
     private Project requireProject(Long id) {
         Project project = projectMapper.selectById(id);

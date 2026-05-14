@@ -75,19 +75,19 @@ public class GitOperations {
             CanonicalTreeParser oldTree = resolveTree(repo, revWalk, targetBranch);
             CanonicalTreeParser newTree = resolveTree(repo, revWalk, sourceBranch);
             return formatDiff(git, oldTree, newTree);
-        } catch (IOException e) {
+        } catch (IOException | GitAPIException e) {
             throw new BusinessException("GIT_DIFF_FAILED", "获取分支 diff 失败: " + e.getMessage(), e);
         }
     }
 
-    public String getDiff(String localPath, String sourceCommit, String targetCommit) {
+    public String getDiffByCommit(String localPath, String sourceCommit, String targetCommit) {
         try (Git git = openGit(localPath);
              RevWalk revWalk = new RevWalk(git.getRepository())) {
             Repository repo = git.getRepository();
             CanonicalTreeParser oldTree = resolveTreeByCommit(repo, revWalk, targetCommit);
             CanonicalTreeParser newTree = resolveTreeByCommit(repo, revWalk, sourceCommit);
             return formatDiff(git, oldTree, newTree);
-        } catch (IOException e) {
+        } catch (IOException | GitAPIException e) {
             throw new BusinessException("GIT_DIFF_FAILED", "获取提交 diff 失败: " + e.getMessage(), e);
         }
     }

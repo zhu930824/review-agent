@@ -27,9 +27,11 @@ import com.review.agent.infrastructure.persistence.ReviewFindingMapper;
 import com.review.agent.infrastructure.persistence.ReviewMapper;
 import com.review.agent.infrastructure.persistence.ReviewModelResultMapper;
 import com.review.agent.service.AgentReviewService;
+import com.review.agent.service.ReviewProgressService;
 import com.review.agent.service.ReviewService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -50,6 +52,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final GitDiffService gitDiffService;
     private final AIReviewService aiReviewService;
     private final AgentReviewService agentReviewService;
+    private final ReviewProgressService reviewProgressService;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -65,10 +68,15 @@ public class ReviewServiceImpl implements ReviewService {
         review.setStatus(ReviewStatus.RUNNING);
         reviewMapper.insert(review);
 
-        // 简化为同步执行，后续可改为异步
-        executeReview(review, request.getModelsConfig());
+        // 异步执行审查
+        executeReviewAsync(review, request.getModelsConfig());
 
         return ReviewConverter.toVO(review, getProjectName(review.getProjectId()));
+    }
+
+    @Async("agentTaskExecutor")
+    public void executeReviewAsync(Review review, String modelsConfig) {
+        executeReview(review, modelsConfig);
     }
 
     @Override
@@ -166,6 +174,7 @@ public class ReviewServiceImpl implements ReviewService {
                 review.setStatus(ReviewStatus.COMPLETED);
                 review.setSummary("{\"totalFindings\":0}");
                 reviewMapper.updateById(review);
+                reviewProgressService.notifyReviewCompleted(review.getId());
                 return;
             }
 
@@ -190,11 +199,13 @@ public class ReviewServiceImpl implements ReviewService {
             review.setSummary(String.format("{\"totalFindings\":%d,\"blockerCount\":%d,\"majorCount\":%d}",
                     aiFindings.size(), blockerCount, majorCount));
             reviewMapper.updateById(review);
+            reviewProgressService.notifyReviewCompleted(review.getId());
 
         } catch (Exception e) {
             log.error("审查执行失败: reviewId={}", review.getId(), e);
             review.setStatus(ReviewStatus.FAILED);
             reviewMapper.updateById(review);
+            reviewProgressService.notifyReviewCompleted(review.getId());
             throw new BusinessException("REVIEW_FAILED", "审查执行失败: " + e.getMessage(), e);
         }
     }
@@ -204,10 +215,12 @@ public class ReviewServiceImpl implements ReviewService {
         String modelName = parseModelName(modelsConfig);
 
         ReviewModelResult modelResult = createModelResult(review.getId(), modelName, ModelRole.WORKER);
+        reviewProgressService.notifyAgentStarted(review.getId(), "WORKER", modelName);
 
         List<ReviewFindingResult> findings = aiReviewService.reviewWithModel(fileChanges, modelName);
 
         completeModelResult(modelResult, null);
+        reviewProgressService.notifyAgentCompleted(review.getId(), "WORKER", modelName, findings.size());
         return findings;
     }
 
@@ -220,6 +233,10 @@ public class ReviewServiceImpl implements ReviewService {
                 .map(name -> createModelResult(review.getId(), name, ModelRole.WORKER))
                 .toList();
 
+        for (String name : modelNames) {
+            reviewProgressService.notifyAgentStarted(review.getId(), "WORKER", name);
+        }
+
         // 并行审查
         List<ModelReviewResult> parallelResults = aiReviewService.reviewWithModelsParallel(fileChanges, modelNames);
 
@@ -229,6 +246,8 @@ public class ReviewServiceImpl implements ReviewService {
         // 更新模型执行记录
         for (int i = 0; i < modelResults.size(); i++) {
             completeModelResult(modelResults.get(i), parallelResults.get(i).getFindings().size() + " findings");
+            reviewProgressService.notifyAgentCompleted(review.getId(), "WORKER", modelNames.get(i),
+                    parallelResults.get(i).getFindings().size());
         }
 
         return findings;
@@ -246,6 +265,11 @@ public class ReviewServiceImpl implements ReviewService {
         // Judge 模型执行记录
         ReviewModelResult judgeModelResult = createModelResult(review.getId(), judgeConfig.judge, ModelRole.JUDGE);
 
+        for (String name : judgeConfig.workers) {
+            reviewProgressService.notifyAgentStarted(review.getId(), "WORKER", name);
+        }
+        reviewProgressService.notifyAgentStarted(review.getId(), "JUDGE", judgeConfig.judge);
+
         // Worker 并行审查 + Judge 评估
         JudgeReviewResult judgeReviewResult = aiReviewService.reviewWithJudge(
                 fileChanges, judgeConfig.workers, judgeConfig.judge);
@@ -257,11 +281,14 @@ public class ReviewServiceImpl implements ReviewService {
         for (int i = 0; i < workerModelResults.size(); i++) {
             completeModelResult(workerModelResults.get(i),
                     judgeReviewResult.getWorkerResults().get(i).getFindings().size() + " findings");
+            reviewProgressService.notifyAgentCompleted(review.getId(), "WORKER", judgeConfig.workers.get(i),
+                    judgeReviewResult.getWorkerResults().get(i).getFindings().size());
         }
 
         // 更新 Judge 执行记录
         String judgeRawResult = serializeJudgeEvaluation(judgeReviewResult.getEvaluation());
         completeModelResult(judgeModelResult, judgeRawResult);
+        reviewProgressService.notifyAgentCompleted(review.getId(), "JUDGE", judgeConfig.judge, findings.size());
 
         return findings;
     }

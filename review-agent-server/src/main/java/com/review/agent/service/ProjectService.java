@@ -6,6 +6,8 @@ import com.review.agent.domain.dto.PageResult;
 import com.review.agent.domain.dto.ProjectVO;
 import com.review.agent.domain.dto.UpdateProjectRequest;
 
+import java.util.List;
+
 public interface ProjectService {
 
     ProjectVO createProject(CreateProjectRequest request);
@@ -17,4 +19,8 @@ public interface ProjectService {
     ProjectVO updateProject(Long id, UpdateProjectRequest request);
 
     void deleteProject(Long id);
+
+    void retryClone(Long id);
+
+    List<String> getBranches(Long id);
 }

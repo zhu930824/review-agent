@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/projects")
 @RequiredArgsConstructor
@@ -37,19 +39,30 @@ public class ProjectController {
     }
 
     @GetMapping("/{id}")
-    public ApiResponse<ProjectVO> getProject(@PathVariable Long id) {
+    public ApiResponse<ProjectVO> getProject(@PathVariable("id") Long id) {
         return ApiResponse.success(projectService.getProject(id));
     }
 
     @PutMapping("/{id}")
-    public ApiResponse<ProjectVO> updateProject(@PathVariable Long id,
+    public ApiResponse<ProjectVO> updateProject(@PathVariable("id") Long id,
                                                  @RequestBody UpdateProjectRequest request) {
         return ApiResponse.success(projectService.updateProject(id, request));
     }
 
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> deleteProject(@PathVariable Long id) {
+    public ApiResponse<Void> deleteProject(@PathVariable("id") Long id) {
         projectService.deleteProject(id);
         return ApiResponse.success();
+    }
+
+    @PostMapping("/{id}/retry-clone")
+    public ApiResponse<Void> retryClone(@PathVariable("id") Long id) {
+        projectService.retryClone(id);
+        return ApiResponse.success();
+    }
+
+    @GetMapping("/{id}/branches")
+    public ApiResponse<List<String>> getBranches(@PathVariable("id") Long id) {
+        return ApiResponse.success(projectService.getBranches(id));
     }
 }

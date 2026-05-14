@@ -1,14 +1,14 @@
 <template>
   <div class="space-y-2">
     <!-- 文件路径 -->
-    <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+    <div class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
       <UIcon name="i-heroicons-document-text" class="h-4 w-4" />
       <span class="font-mono text-xs">{{ filePath }}</span>
     </div>
 
     <!-- Diff 内容展示区域（占位实现，后续可替换为专业 diff 库） -->
     <div
-      class="overflow-auto rounded-lg border border-gray-200 bg-gray-950 font-mono text-xs leading-relaxed dark:border-gray-700"
+      class="overflow-auto rounded-lg border border-slate-200 font-mono text-xs leading-relaxed dark:border-slate-700"
     >
       <table class="w-full">
         <tbody>
@@ -17,10 +17,10 @@
             :key="idx"
             :class="lineClass(line.type)"
           >
-            <td class="select-none px-2 py-0.5 text-right text-gray-500 w-10">
+            <td class="select-none px-2 py-0.5 text-right text-slate-500 w-10">
               {{ line.oldLine }}
             </td>
-            <td class="select-none px-2 py-0.5 text-right text-gray-500 w-10">
+            <td class="select-none px-2 py-0.5 text-right text-slate-500 w-10">
               {{ line.newLine }}
             </td>
             <td class="whitespace-pre px-3 py-0.5">
@@ -97,7 +97,7 @@ function lineClass(type: string): string {
     case 'header':
       return 'bg-cyan-900/40 text-cyan-400 font-medium'
     default:
-      return 'text-gray-300'
+      return 'text-slate-300'
   }
 }
 </script>

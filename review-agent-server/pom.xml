@@ -139,69 +139,9 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.13.0</version>
-                <executions>
-                    <execution>
-                        <id>compile-repair-sources</id>
-                        <phase>generate-sources</phase>
-                        <goals>
-                            <goal>compile</goal>
-                        </goals>
-                        <configuration>
-                            <compileSourceRoots>
-                                <compileSourceRoot>${project.basedir}/repair-src/main/java</compileSourceRoot>
-                            </compileSourceRoots>
-                            <sourcepath>${project.basedir}/src/main/java</sourcepath>
-                            <excludes combine.self="override" />
-                        </configuration>
-                    </execution>
-                </executions>
                 <configuration>
                     <release>${java.version}</release>
-                    <sourcepath />
-                    <excludes>
-                        <exclude>**/com/review/agent/domain/dto/ApiResponse.java</exclude>
-                        <exclude>**/com/review/agent/domain/dto/CreateProjectRequest.java</exclude>
-                        <exclude>**/com/review/agent/domain/dto/UpdateProjectRequest.java</exclude>
-                        <exclude>**/com/review/agent/domain/dto/CreatePrePrRequest.java</exclude>
-                        <exclude>**/com/review/agent/domain/dto/CreateReviewRequest.java</exclude>
-                        <exclude>**/com/review/agent/domain/dto/UpdateFindingStatusRequest.java</exclude>
-                        <exclude>**/com/review/agent/domain/dto/PageRequest.java</exclude>
-                        <exclude>**/com/review/agent/domain/dto/PageResult.java</exclude>
-                        <exclude>**/com/review/agent/domain/dto/ProjectVO.java</exclude>
-                        <exclude>**/com/review/agent/domain/dto/ReviewVO.java</exclude>
-                        <exclude>**/com/review/agent/domain/dto/ReviewDetailVO.java</exclude>
-                        <exclude>**/com/review/agent/domain/dto/ReviewFindingVO.java</exclude>
-                        <exclude>**/com/review/agent/domain/dto/ReviewModelResultVO.java</exclude>
-                        <exclude>**/com/review/agent/domain/entity/Project.java</exclude>
-                        <exclude>**/com/review/agent/domain/entity/Review.java</exclude>
-                        <exclude>**/com/review/agent/domain/entity/ReviewFinding.java</exclude>
-                        <exclude>**/com/review/agent/domain/entity/ReviewModelResult.java</exclude>
-                        <exclude>**/com/review/agent/domain/enums/ChangeType.java</exclude>
-                        <exclude>**/com/review/agent/domain/enums/FindingCategory.java</exclude>
-                        <exclude>**/com/review/agent/domain/enums/HumanStatus.java</exclude>
-                        <exclude>**/com/review/agent/domain/enums/ModelRole.java</exclude>
-                        <exclude>**/com/review/agent/domain/enums/ProjectStatus.java</exclude>
-                        <exclude>**/com/review/agent/domain/enums/ReviewMode.java</exclude>
-                        <exclude>**/com/review/agent/domain/enums/ReviewStatus.java</exclude>
-                        <exclude>**/com/review/agent/domain/enums/Severity.java</exclude>
-                        <exclude>**/com/review/agent/domain/dto/diff/DiffLine.java</exclude>
-                        <exclude>**/com/review/agent/domain/dto/diff/FileChange.java</exclude>
-                        <exclude>**/com/review/agent/domain/dto/diff/Hunk.java</exclude>
-                        <exclude>**/com/review/agent/domain/dto/diff/LineType.java</exclude>
-                        <exclude>**/com/review/agent/domain/exception/BusinessException.java</exclude>
-                        <exclude>**/com/review/agent/infrastructure/agent/AgentExecutionResult.java</exclude>
-                        <exclude>**/com/review/agent/infrastructure/agent/AgentReviewSummary.java</exclude>
-                        <exclude>**/com/review/agent/infrastructure/agent/config/AgentConfig.java</exclude>
-                        <exclude>**/com/review/agent/infrastructure/agent/config/AgentPipelineConfig.java</exclude>
-                        <exclude>**/com/review/agent/infrastructure/agent/ReviewAgent.java</exclude>
-                        <exclude>**/com/review/agent/infrastructure/ai/JudgeEvaluation.java</exclude>
-                        <exclude>**/com/review/agent/infrastructure/ai/JudgeReviewResult.java</exclude>
-                        <exclude>**/com/review/agent/infrastructure/ai/ModelReviewResult.java</exclude>
-                        <exclude>**/com/review/agent/infrastructure/ai/ReviewFindingList.java</exclude>
-                        <exclude>**/com/review/agent/infrastructure/ai/ReviewFindingResult.java</exclude>
-                        <exclude>**/com/review/agent/infrastructure/config/GlobalExceptionHandler.java</exclude>
-                        <exclude>**/com/review/agent/infrastructure/git/GitOperations.java</exclude>
-                    </excludes>
+                    <parameters>true</parameters>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>

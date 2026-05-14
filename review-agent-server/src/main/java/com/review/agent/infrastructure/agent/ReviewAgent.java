@@ -38,7 +38,6 @@ public class ReviewAgent {
                 .model(chatModel)
                 .systemPrompt(fullSystemPrompt)
                 .tools(tools.toArray(new ToolCallback[0]))
-                .saver()
                 .build();
     }
 

@@ -20,7 +20,7 @@ public class GitDiffService {
     public List<FileChange> getBranchDiff(Long projectId, String sourceBranch, String targetBranch) {
         String localPath = resolveLocalPath(projectId);
         gitOperations.fetchRepository(localPath);
-        String diffOutput = gitOperations.getDiff(localPath, sourceBranch, targetBranch);
+        String diffOutput = gitOperations.getDiff(localPath, "origin/" + sourceBranch, "origin/" + targetBranch);
         return diffParser.parse(diffOutput);
     }
 
@@ -32,7 +32,8 @@ public class GitDiffService {
 
     public String getLatestCommit(Long projectId, String branch) {
         String localPath = resolveLocalPath(projectId);
-        return gitOperations.getLatestCommit(localPath, branch);
+        gitOperations.fetchRepository(localPath);
+        return gitOperations.getLatestCommit(localPath, "origin/" + branch);
     }
 
     /**
