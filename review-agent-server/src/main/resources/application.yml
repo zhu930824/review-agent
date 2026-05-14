@@ -1,0 +1,80 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: review-agent-server
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/review_agent?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      connection-timeout: 30000
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 1
+    locations: classpath:db/migration
+    clean-disabled: true
+    out-of-order: false
+
+  ai:
+    dashscope:
+      api-key: ${DASHSCOPE_API_KEY}
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
+
+logging:
+  level:
+    root: INFO
+    com.review.agent: DEBUG
+    org.springframework.web: INFO
+    org.flywaydb: DEBUG
+
+review-agent:
+  repo-base-path: ${REPO_BASE_PATH:./repos}
+  agent:
+    timeout-minutes: 5
+    default-max-steps: 15
+    default-temperature: 0.3
+    preset-roles:
+      - role: SECURITY_AUDITOR
+        model-name: qwen-max
+        system-prompt: "你是一名资深安全审计专家。专注于发现代码中的安全漏洞..."
+        skills: ["SecuritySkill"]
+      - role: PERFORMANCE_ANALYST
+        model-name: qwen-plus
+        system-prompt: "你是一名资深性能分析专家。专注于发现代码中的性能问题..."
+        skills: ["PerformanceSkill"]
+      - role: CODE_STYLE_CHECKER
+        model-name: qwen-plus
+        system-prompt: "你是一名资深代码规范审查专家。专注于代码风格..."
+        skills: ["JavaCodeStyleSkill"]
+      - role: EXCEPTION_HANDLER
+        model-name: qwen-plus
+        system-prompt: "你是一名异常处理专家。专注于发现异常处理缺陷..."
+        skills: ["ExceptionHandlingSkill"]
+      - role: ARCHITECT_REVIEWER
+        model-name: qwen-max
+        system-prompt: "你是一名资深架构评审专家。专注于架构设计..."
+        skills: ["JavaCodeStyleSkill", "PerformanceSkill"]
+  mcp:
+    enabled: false
+    server-urls:
+      - http://localhost:5000
+    server:
+      enabled: false
+      port: 5001

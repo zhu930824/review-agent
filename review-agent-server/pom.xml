@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.review.agent</groupId>
+    <artifactId>review-agent-server</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+    <name>review-agent-server</name>
+    <description>AI-powered code review agent server</description>
+
+    <properties>
+        <java.version>21</java.version>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <spring-boot.version>3.3.5</spring-boot.version>
+        <spring-ai-alibaba.version>1.1.2.0</spring-ai-alibaba.version>
+        <mybatis-plus.version>3.5.7</mybatis-plus.version>
+        <mysql-connector.version>8.0.33</mysql-connector.version>
+        <flyway.version>10.17.1</flyway.version>
+        <lombok.version>1.18.36</lombok.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Spring Boot BOM -->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- Spring Boot Web锛堝惈 Jackson锛?-->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Spring AI Alibaba -->
+        <dependency>
+            <groupId>com.alibaba.cloud.ai</groupId>
+            <artifactId>spring-ai-alibaba-agent-framework</artifactId>
+            <version>1.1.2.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.alibaba.cloud.ai</groupId>
+            <artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
+            <version>1.1.2.0</version>
+        </dependency>
+
+        <!-- MyBatis-Plus -->
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+            <version>${mybatis-plus.version}</version>
+        </dependency>
+
+        <!-- MySQL Connector -->
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <version>${mysql-connector.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Flyway -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+            <version>${flyway.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+            <version>${flyway.version}</version>
+        </dependency>
+
+        <!-- Validation -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- JGit -->
+        <dependency>
+            <groupId>org.eclipse.jgit</groupId>
+            <artifactId>org.eclipse.jgit</artifactId>
+            <version>6.8.0.202311291450-r</version>
+        </dependency>
+
+        <!-- Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Test -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <repositories>
+        <repository>
+            <id>spring-milestones</id>
+            <name>Spring Milestones</name>
+            <url>https://repo.spring.io/milestone</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+        <repository>
+            <id>spring-snapshots</id>
+            <name>Spring Snapshots</name>
+            <url>https://repo.spring.io/snapshot</url>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+        </repository>
+    </repositories>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <executions>
+                    <execution>
+                        <id>compile-repair-sources</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                        <configuration>
+                            <compileSourceRoots>
+                                <compileSourceRoot>${project.basedir}/repair-src/main/java</compileSourceRoot>
+                            </compileSourceRoots>
+                            <sourcepath>${project.basedir}/src/main/java</sourcepath>
+                            <excludes combine.self="override" />
+                        </configuration>
+                    </execution>
+                </executions>
+                <configuration>
+                    <release>${java.version}</release>
+                    <sourcepath />
+                    <excludes>
+                        <exclude>**/com/review/agent/domain/dto/ApiResponse.java</exclude>
+                        <exclude>**/com/review/agent/domain/dto/CreateProjectRequest.java</exclude>
+                        <exclude>**/com/review/agent/domain/dto/UpdateProjectRequest.java</exclude>
+                        <exclude>**/com/review/agent/domain/dto/CreatePrePrRequest.java</exclude>
+                        <exclude>**/com/review/agent/domain/dto/CreateReviewRequest.java</exclude>
+                        <exclude>**/com/review/agent/domain/dto/UpdateFindingStatusRequest.java</exclude>
+                        <exclude>**/com/review/agent/domain/dto/PageRequest.java</exclude>
+                        <exclude>**/com/review/agent/domain/dto/PageResult.java</exclude>
+                        <exclude>**/com/review/agent/domain/dto/ProjectVO.java</exclude>
+                        <exclude>**/com/review/agent/domain/dto/ReviewVO.java</exclude>
+                        <exclude>**/com/review/agent/domain/dto/ReviewDetailVO.java</exclude>
+                        <exclude>**/com/review/agent/domain/dto/ReviewFindingVO.java</exclude>
+                        <exclude>**/com/review/agent/domain/dto/ReviewModelResultVO.java</exclude>
+                        <exclude>**/com/review/agent/domain/entity/Project.java</exclude>
+                        <exclude>**/com/review/agent/domain/entity/Review.java</exclude>
+                        <exclude>**/com/review/agent/domain/entity/ReviewFinding.java</exclude>
+                        <exclude>**/com/review/agent/domain/entity/ReviewModelResult.java</exclude>
+                        <exclude>**/com/review/agent/domain/enums/ChangeType.java</exclude>
+                        <exclude>**/com/review/agent/domain/enums/FindingCategory.java</exclude>
+                        <exclude>**/com/review/agent/domain/enums/HumanStatus.java</exclude>
+                        <exclude>**/com/review/agent/domain/enums/ModelRole.java</exclude>
+                        <exclude>**/com/review/agent/domain/enums/ProjectStatus.java</exclude>
+                        <exclude>**/com/review/agent/domain/enums/ReviewMode.java</exclude>
+                        <exclude>**/com/review/agent/domain/enums/ReviewStatus.java</exclude>
+                        <exclude>**/com/review/agent/domain/enums/Severity.java</exclude>
+                        <exclude>**/com/review/agent/domain/dto/diff/DiffLine.java</exclude>
+                        <exclude>**/com/review/agent/domain/dto/diff/FileChange.java</exclude>
+                        <exclude>**/com/review/agent/domain/dto/diff/Hunk.java</exclude>
+                        <exclude>**/com/review/agent/domain/dto/diff/LineType.java</exclude>
+                        <exclude>**/com/review/agent/domain/exception/BusinessException.java</exclude>
+                        <exclude>**/com/review/agent/infrastructure/agent/AgentExecutionResult.java</exclude>
+                        <exclude>**/com/review/agent/infrastructure/agent/AgentReviewSummary.java</exclude>
+                        <exclude>**/com/review/agent/infrastructure/agent/config/AgentConfig.java</exclude>
+                        <exclude>**/com/review/agent/infrastructure/agent/config/AgentPipelineConfig.java</exclude>
+                        <exclude>**/com/review/agent/infrastructure/agent/ReviewAgent.java</exclude>
+                        <exclude>**/com/review/agent/infrastructure/ai/JudgeEvaluation.java</exclude>
+                        <exclude>**/com/review/agent/infrastructure/ai/JudgeReviewResult.java</exclude>
+                        <exclude>**/com/review/agent/infrastructure/ai/ModelReviewResult.java</exclude>
+                        <exclude>**/com/review/agent/infrastructure/ai/ReviewFindingList.java</exclude>
+                        <exclude>**/com/review/agent/infrastructure/ai/ReviewFindingResult.java</exclude>
+                        <exclude>**/com/review/agent/infrastructure/config/GlobalExceptionHandler.java</exclude>
+                        <exclude>**/com/review/agent/infrastructure/git/GitOperations.java</exclude>
+                    </excludes>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>${spring-boot.version}</version>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

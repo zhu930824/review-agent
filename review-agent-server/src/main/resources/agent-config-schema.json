@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AgentPipelineConfig",
+  "type": "object",
+  "properties": {
+    "agents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": ["SECURITY_AUDITOR", "PERFORMANCE_ANALYST", "CODE_STYLE_CHECKER", "EXCEPTION_HANDLER", "ARCHITECT_REVIEWER"]
+          },
+          "modelName": {
+            "type": "string",
+            "default": "qwen-plus"
+          },
+          "systemPrompt": {
+            "type": "string"
+          },
+          "skills": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "temperature": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 2.0,
+            "default": 0.3
+          },
+          "maxSteps": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 10
+          }
+        },
+        "required": ["role"]
+      }
+    },
+    "orchestrationStrategy": {
+      "type": "string",
+      "enum": ["PARALLEL", "SEQUENTIAL", "HYBRID"],
+      "default": "PARALLEL"
+    },
+    "mcpEnabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "mcpServerUrls": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}
