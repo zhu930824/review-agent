@@ -1,9 +1,8 @@
 <template>
-  <div class="space-y-6">
+  <div class="grid gap-6">
     <div class="animate-slide-up">
       <UButton to="/projects" variant="ghost" color="gray" icon="i-heroicons-arrow-left" size="sm">返回</UButton>
       <h2 class="mt-2 text-2xl font-bold text-slate-800 dark:text-white">{{ project?.name ?? '加载中...' }}</h2>
-      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ project?.description }}</p>
     </div>
 
     <div class="panel-soft p-6 animate-slide-up stagger-2">
@@ -25,7 +24,11 @@
           重新克隆
         </UButton>
       </div>
-      <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <dl class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        <div class="sm:col-span-2">
+          <dt class="text-sm text-slate-500 font-medium">项目描述</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-800 dark:text-white">{{ project?.description || '暂无描述' }}</dd>
+        </div>
         <div>
           <dt class="text-sm text-slate-500 font-medium">仓库地址</dt>
           <dd class="mt-1 text-sm font-semibold text-slate-800 dark:text-white">{{ project?.repoUrl }}</dd>
@@ -38,12 +41,15 @@
           <dt class="text-sm text-slate-500 font-medium">状态</dt>
           <dd class="mt-1 flex items-center gap-2">
             <span class="badge-soft" :class="statusBadgeClass(project?.status ?? '')">{{ statusLabel(project?.status ?? '') }}</span>
-            <span v-if="project?.status === 'ERROR'" class="text-xs text-red-500">{{ project?.description }}</span>
           </dd>
         </div>
         <div>
           <dt class="text-sm text-slate-500 font-medium">创建时间</dt>
           <dd class="mt-1 text-sm font-semibold text-slate-800 dark:text-white">{{ project?.createdAt }}</dd>
+        </div>
+        <div v-if="project?.status === 'ERROR' && project?.cloneErrorMessage" class="sm:col-span-2">
+          <dt class="text-sm text-slate-500 font-medium">克隆失败信息</dt>
+          <dd class="mt-1 rounded-2xl bg-red-50 px-4 py-3 text-sm font-medium leading-6 text-red-600 dark:bg-red-900/10 dark:text-red-300">{{ project.cloneErrorMessage }}</dd>
         </div>
       </dl>
     </div>

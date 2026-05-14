@@ -1,7 +1,7 @@
 <template>
-  <div class="min-w-0 flex-1 animate-slide-up">
-    <NuxtLink :to="`/projects/${project.id}`" class="group block">
-      <div class="stat-card cursor-pointer">
+  <div class="min-w-0 h-full animate-slide-up">
+    <NuxtLink :to="`/projects/${project.id}`" class="group block h-full">
+      <div class="stat-card h-full cursor-pointer">
         <div class="flex items-start justify-between">
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-3">

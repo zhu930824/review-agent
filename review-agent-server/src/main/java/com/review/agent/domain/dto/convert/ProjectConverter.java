@@ -51,6 +51,7 @@ public final class ProjectConverter {
         vo.setLocalPath(entity.getLocalPath());
         vo.setStatus(entity.getStatus());
         vo.setDescription(entity.getDescription());
+        vo.setCloneErrorMessage(entity.getCloneErrorMessage());
         vo.setCreatedAt(entity.getCreatedAt());
         vo.setUpdatedAt(entity.getUpdatedAt());
         return vo;

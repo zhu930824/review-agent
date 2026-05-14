@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-6">
+  <div class="grid gap-6">
     <!-- Header -->
     <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between animate-slide-up">
       <div>
@@ -7,7 +7,7 @@
         <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">跟踪 Pre-PR 通过率、阻断风险和多模型审查稳定性</p>
       </div>
       <NuxtLink to="/reviews/create">
-        <button class="soft-button-primary rounded-full">
+        <button class="soft-button soft-button-primary min-w-[136px] whitespace-nowrap rounded-sm">
           <UIcon name="i-heroicons-play" class="h-5 w-5" />
           <span>发起 Pre-PR</span>
         </button>
@@ -15,7 +15,7 @@
     </div>
 
     <!-- KPI Stats Row -->
-    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
       <div v-for="(stat, index) in stats" :key="stat.label" class="stat-card animate-slide-up" :class="`stagger-${index + 1}`">
         <div class="flex items-start justify-between gap-3">
           <div>
@@ -66,7 +66,7 @@
       </div>
 
       <!-- Right Sidebar Cards -->
-      <aside class="space-y-5">
+      <aside class="grid content-start gap-6">
         <!-- Risk Pressure -->
         <div class="panel-soft p-5 animate-slide-up stagger-4">
           <div class="flex items-center gap-3 mb-4">
@@ -76,7 +76,7 @@
             <h3 class="text-sm font-bold text-slate-800 dark:text-white">风险压力</h3>
           </div>
 
-          <div class="space-y-4">
+          <div class="grid gap-4">
             <div>
               <div class="flex items-center justify-between text-sm">
                 <span class="text-slate-500 dark:text-slate-400 font-medium">Pre-PR 通过率</span>
@@ -140,7 +140,7 @@
             </NuxtLink>
           </div>
 
-          <div class="space-y-3">
+          <div class="grid gap-3">
             <div>
               <div class="flex items-center justify-between text-sm">
                 <span class="text-slate-500 dark:text-slate-400 font-medium">市场能力覆盖</span>

@@ -61,9 +61,7 @@ public class GitService {
         }
         project.setStatus(status);
         project.setUpdatedAt(LocalDateTime.now());
-        if (errorMessage != null) {
-            project.setDescription(errorMessage);
-        }
+        project.setCloneErrorMessage(errorMessage);
         projectMapper.updateById(project);
     }
 }

@@ -1,17 +1,17 @@
 <template>
-  <div class="space-y-6">
+  <div class="grid gap-6">
     <div class="flex items-center justify-between animate-slide-up">
       <div>
         <h2 class="text-2xl font-bold text-slate-800 dark:text-white">项目管理</h2>
         <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">管理您的代码仓库项目</p>
       </div>
-      <button class="soft-button-primary rounded-full px-5" @click="showCreateModal = true">
+      <button class="soft-button soft-button-primary min-w-[136px] whitespace-nowrap rounded-sm" @click="showCreateModal = true">
         <UIcon name="i-heroicons-plus" class="h-5 w-5" />
         创建项目
       </button>
     </div>
 
-    <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 -mt-6">
+    <div class="grid grid-cols-[repeat(auto-fill,minmax(480px,1fr))] gap-6">
       <ProjectCard v-for="project in projects" :key="project.id" :project="project" />
     </div>
 

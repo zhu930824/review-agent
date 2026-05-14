@@ -1,38 +1,38 @@
-// composables/useApi.ts - 统一的 HTTP 请求封装
 import type { ApiResponse } from '~/types/api'
 
-/**
- * 从 runtimeConfig 获取后端 API 基地址
- * 返回已配置好 baseURL 的 $fetch 实例
- */
 function getBaseURL(): string {
   const config = useRuntimeConfig()
   return config.public.apiBaseUrl as string
 }
 
-/** 通用请求选项：允许覆盖默认配置 */
 interface RequestOptions {
-  /** 自定义 headers */
   headers?: Record<string, string>
-  /** 超时时间（ms） */
   timeout?: number
-  /** 请求重试次数 */
   retry?: number
 }
 
-/**
- * 构建统一请求头
- */
 function buildHeaders(extra?: Record<string, string>): Record<string, string> {
-  return {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...extra,
   }
+
+  const { token } = useAuth()
+  if (token.value) {
+    headers.Authorization = `Bearer ${token.value}`
+  }
+
+  return headers
 }
 
-/**
- * 统一的 fetch 封装，自动拼接 baseURL 并处理错误
- */
+async function handleUnauthorized() {
+  const { clearAuth } = useAuth()
+  clearAuth()
+  if (import.meta.client && useRoute().path !== '/login') {
+    await navigateTo('/login')
+  }
+}
+
 async function request<T>(
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
   url: string,
@@ -44,32 +44,30 @@ async function request<T>(
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const response = await $fetch<ApiResponse<T>>(url, {
+      return await $fetch<ApiResponse<T>>(url, {
         method,
         baseURL,
         headers: buildHeaders(options?.headers),
         body: body ?? undefined,
         timeout: options?.timeout ?? 30000,
       })
-      return response
-    } catch (error: unknown) {
-      // 最后一次重试仍失败，抛出错误
+    } catch (error: any) {
+      if (error?.status === 401 || error?.statusCode === 401) {
+        await handleUnauthorized()
+      }
+
       if (attempt >= retries) {
-        console.error(`[useApi] ${method} ${url} 请求失败:`, error)
+        console.error(`[useApi] ${method} ${url} request failed:`, error)
         throw error
       }
-      // 指数退避
-      await new Promise((r) => setTimeout(r, 500 * 2 ** attempt))
+
+      await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt))
     }
   }
 
-  // 理论上不会走到这里，但保证 TypeScript 类型完备
-  throw new Error('请求失败，已达到最大重试次数')
+  throw new Error('Request failed after all retry attempts')
 }
 
-/**
- * 导出的类型化请求方法集合
- */
 export function useApi() {
   const get = <T>(url: string, options?: RequestOptions) =>
     request<T>('GET', url, undefined, options)

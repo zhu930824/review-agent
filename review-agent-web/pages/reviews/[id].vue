@@ -1,7 +1,7 @@
 <template>
-  <div class="space-y-6">
+  <div class="grid gap-6">
     <div class="animate-slide-up">
-      <UButton to="/" variant="ghost" color="slate" icon="i-heroicons-arrow-left" size="sm">返回质量驾驶舱</UButton>
+      <UButton to="/" variant="ghost" color="gray" icon="i-heroicons-arrow-left" size="sm">返回质量驾驶舱</UButton>
     </div>
 
     <!-- 进度区域（审查中时显示） -->
@@ -29,7 +29,7 @@
       </div>
 
       <!-- Agent 执行状态 -->
-      <div class="space-y-3">
+      <div class="grid gap-3">
         <div v-for="agent in agentProgress" :key="agent.role"
              class="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-700/30">
           <div class="flex-shrink-0">
@@ -103,7 +103,7 @@
           </div>
         </div>
 
-        <div class="mt-6 grid grid-cols-2 gap-3 md:grid-cols-5">
+        <div class="mt-6 grid grid-cols-2 gap-6 md:grid-cols-5">
           <div v-for="item in severityStats" :key="item.label" class="rounded-2xl p-4" :class="item.bgClass">
             <p class="text-xs font-semibold" :class="item.textClass">{{ item.label }}</p>
             <p class="mt-1 text-xl font-extrabold" :class="item.valueClass">{{ item.value }}</p>
@@ -141,7 +141,7 @@
             </div>
           </div>
 
-          <div class="p-4 space-y-3">
+          <div class="grid gap-3 p-4">
             <FindingCard v-for="finding in filteredFindings" :key="finding.id" :finding="finding" @confirm="updateFindingStatus(finding.id, 'CONFIRMED')" @dismiss="updateFindingStatus(finding.id, 'DISMISSED')" />
           </div>
 
@@ -151,7 +151,7 @@
           </div>
         </div>
 
-        <aside class="space-y-5">
+        <aside class="grid content-start gap-6">
           <div v-if="detail.modelResults.length" class="panel-soft p-5 animate-slide-up stagger-4">
             <div class="flex items-center gap-3 mb-4">
               <div class="icon-soft icon-soft-primary" style="width:36px;height:36px;border-radius:10px;">
@@ -159,7 +159,7 @@
               </div>
               <h3 class="text-sm font-bold text-slate-800 dark:text-white">模型执行</h3>
             </div>
-            <div class="space-y-3">
+            <div class="grid gap-3">
               <div v-for="result in detail.modelResults" :key="result.id" class="rounded-2xl bg-slate-50 dark:bg-slate-700/30 p-4">
                 <div class="flex items-center justify-between gap-2">
                   <div>
@@ -180,7 +180,7 @@
               </div>
               <h3 class="text-sm font-bold text-slate-800 dark:text-white">人工处理</h3>
             </div>
-            <div class="space-y-3">
+            <div class="grid gap-3">
               <div class="flex items-center justify-between rounded-2xl bg-amber-50/50 dark:bg-amber-900/10 px-4 py-3">
                 <span class="text-sm text-slate-500 dark:text-slate-400 font-medium">待确认</span>
                 <span class="text-lg font-extrabold text-amber-600 dark:text-amber-400">{{ pendingFindings }}</span>

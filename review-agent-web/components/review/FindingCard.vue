@@ -27,7 +27,7 @@
     </div>
 
     <div class="mt-2">
-      <UButton variant="ghost" color="slate" size="xs" :label="expanded ? '收起详情' : '展开详情'" @click="expanded = !expanded" />
+      <UButton variant="ghost" color="gray" size="xs" :label="expanded ? '收起详情' : '展开详情'" @click="expanded = !expanded" />
     </div>
   </div>
 </template>

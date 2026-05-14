@@ -46,6 +46,9 @@ logging:
 
 review-agent:
   repo-base-path: ${REPO_BASE_PATH:./repos}
+  auth:
+    jwt-secret: ${JWT_SECRET:review-agent-dev-secret-change-me-review-agent-dev-secret}
+    jwt-expire-hours: ${JWT_EXPIRE_HOURS:168}
   agent:
     timeout-minutes: 5
     default-max-steps: 15

@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-6">
+  <div class="grid gap-6">
     <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between animate-slide-up">
       <div>
         <h2 class="text-2xl font-bold text-slate-800 dark:text-white">治理中心</h2>
@@ -7,12 +7,12 @@
       </div>
       <div class="flex flex-wrap gap-2">
         <UButton to="/reviews/create" icon="i-heroicons-play">按模板发起审查</UButton>
-        <UButton to="/settings/models" icon="i-heroicons-cog-6-tooth" variant="soft" color="slate">配置模型策略</UButton>
+        <UButton to="/settings/models" icon="i-heroicons-cog-6-tooth" variant="soft" color="gray">配置模型策略</UButton>
       </div>
     </div>
 
     <!-- KPI Cards -->
-    <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <div class="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
       <div class="stat-card animate-slide-up stagger-1">
         <div class="flex items-start justify-between gap-3">
           <div>
@@ -82,13 +82,13 @@
         </div>
       </div>
 
-      <aside class="space-y-5">
+      <aside class="grid h-full grid-rows-[auto_minmax(0,1fr)] gap-6">
         <div class="panel-soft p-5 animate-slide-up stagger-4">
           <div class="flex items-center gap-3 mb-4">
             <div class="icon-soft icon-soft-warning" style="width:36px;height:36px;border-radius:10px;"><UIcon name="i-heroicons-bolt" class="h-4 w-4" /></div>
             <h3 class="text-sm font-bold text-slate-800 dark:text-white">优先落地项</h3>
           </div>
-          <div class="space-y-3">
+          <div class="grid gap-3">
             <div v-for="action in recommendedActions" :key="action.id" class="rounded-2xl bg-slate-50 dark:bg-slate-700/30 p-4">
               <div class="flex items-start justify-between gap-3">
                 <div><p class="text-sm font-bold text-slate-800 dark:text-white">{{ action.name }}</p><p class="mt-1 text-xs leading-5 text-slate-500">{{ action.platformMove }}</p></div>
@@ -98,12 +98,12 @@
           </div>
         </div>
 
-        <div class="panel-soft p-5 animate-slide-up stagger-5">
+        <div class="panel-soft h-full p-5 animate-slide-up stagger-5">
           <div class="flex items-center gap-3 mb-4">
             <div class="icon-soft icon-soft-error" style="width:36px;height:36px;border-radius:10px;"><UIcon name="i-heroicons-shield-check" class="h-4 w-4" /></div>
             <h3 class="text-sm font-bold text-slate-800 dark:text-white">发布门禁策略包</h3>
           </div>
-          <div class="space-y-4">
+          <div class="grid gap-4">
             <div><p class="text-xs font-semibold text-slate-500">要求能力</p><div class="mt-2 flex flex-wrap gap-1"><UBadge v-for="capability in releasePolicy.requiredCapabilities" :key="capability" :label="capability" color="red" variant="subtle" size="xs" /></div></div>
             <div><p class="text-xs font-semibold text-slate-500">建议策略</p><div class="mt-2 flex flex-wrap gap-1"><UBadge v-for="strategy in releasePolicy.suggestedStrategies" :key="strategy" :label="strategy" color="primary" variant="subtle" size="xs" /></div></div>
             <div><p class="text-xs font-semibold text-slate-500">人工检查点</p><ul class="mt-2 space-y-1"><li v-for="checkpoint in releasePolicy.requiredHumanCheckpoints" :key="checkpoint" class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300"><UIcon name="i-heroicons-user-circle" class="h-4 w-4 text-amber-500" /><span>{{ checkpoint }}</span></li></ul></div>
@@ -120,8 +120,8 @@
           <h3 class="text-lg font-bold text-slate-800 dark:text-white">集成路线图</h3>
         </div>
         <div class="p-6">
-          <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div v-for="stage in rolloutStages" :key="stage.key" class="space-y-3">
+          <div class="grid grid-cols-1 gap-6 md:grid-cols-3">
+            <div v-for="stage in rolloutStages" :key="stage.key" class="grid content-start gap-3">
               <div class="flex items-center gap-2"><UIcon :name="stage.icon" class="h-5 w-5" :class="stage.iconClass" /><p class="text-sm font-bold text-slate-800 dark:text-white">{{ stage.label }}</p></div>
               <div v-for="connector in connectorsByStage[stage.key]" :key="connector.id" class="rounded-2xl bg-slate-50 dark:bg-slate-700/30 p-4">
                 <p class="text-sm font-semibold text-slate-800 dark:text-white">{{ connector.name }}</p>
@@ -138,7 +138,7 @@
           <div class="icon-soft icon-soft-success" style="width:40px;height:40px;border-radius:12px;"><UIcon name="i-heroicons-arrow-path-rounded-square" class="h-5 w-5" /></div>
           <h3 class="text-lg font-bold text-slate-800 dark:text-white">业务工作流模板</h3>
         </div>
-        <div class="p-6 space-y-3">
+        <div class="grid gap-3 p-6">
           <div v-for="workflow in workflowTemplates" :key="workflow.id" class="rounded-2xl bg-slate-50 dark:bg-slate-700/30 p-5">
             <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div><p class="text-sm font-bold text-slate-800 dark:text-white">{{ workflow.name }}</p><p class="mt-1 text-xs leading-5 text-slate-500">{{ workflow.scenario }}</p></div>

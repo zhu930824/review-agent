@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-6">
+  <div class="grid gap-6">
     <div class="animate-slide-up">
       <h2 class="text-2xl font-bold text-slate-800 dark:text-white">创建项目</h2>
       <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">添加一个新的代码仓库进行审查</p>

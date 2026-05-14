@@ -1,12 +1,12 @@
 <template>
-  <div class="space-y-6">
+  <div class="grid gap-6">
     <div class="animate-slide-up">
       <h2 class="text-2xl font-bold text-slate-800 dark:text-white">模型配置</h2>
       <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">管理模型供应商、模型档案、审查策略和质量闸门</p>
     </div>
 
     <!-- Provider Cards -->
-    <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div v-for="(provider, index) in providerCounts" :key="provider.providerId" class="stat-card animate-slide-up" :class="`stagger-${index + 1}`">
         <div class="flex items-start justify-between gap-3">
           <div>
@@ -39,14 +39,14 @@
       </div>
 
       <!-- Right Sidebar: Strategies -->
-      <aside class="space-y-5">
+      <aside class="grid content-start gap-6">
         <div class="panel-soft p-5 animate-slide-up stagger-4">
           <div class="flex items-center gap-3 mb-4">
             <div class="icon-soft icon-soft-primary" style="width:36px;height:36px;border-radius:10px;"><UIcon name="i-heroicons-squares-2x2" class="h-4 w-4" /></div>
             <h3 class="text-sm font-bold text-slate-800 dark:text-white">审查策略</h3>
           </div>
 
-          <div class="space-y-3">
+          <div class="grid gap-3">
             <div v-for="strategy in strategySummaries" :key="strategy.id" class="rounded-2xl bg-slate-50 dark:bg-slate-700/30 p-4">
               <div class="flex items-start justify-between gap-3">
                 <div><p class="text-sm font-bold text-slate-800 dark:text-white">{{ strategy.name }}</p><p class="mt-1 text-xs leading-5 text-slate-400">{{ strategy.description }}</p></div>

@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-6">
+  <div class="grid gap-6">
     <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between animate-slide-up">
       <div>
         <h2 class="text-2xl font-bold text-slate-800 dark:text-white">运营中心</h2>
@@ -7,12 +7,12 @@
       </div>
       <div class="flex flex-wrap gap-2">
         <UButton to="/governance" icon="i-heroicons-squares-2x2">查看治理路线</UButton>
-        <UButton to="/reviews/create" icon="i-heroicons-play" variant="soft" color="slate">发起审查</UButton>
+        <UButton to="/reviews/create" icon="i-heroicons-play" variant="soft" color="gray">发起审查</UButton>
       </div>
     </div>
 
     <!-- KPI Cards -->
-    <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <div class="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
       <div class="stat-card animate-slide-up stagger-1">
         <div class="flex items-start justify-between gap-3">
           <div>
@@ -79,13 +79,13 @@
         </div>
       </div>
 
-      <aside class="space-y-5">
+      <aside class="grid content-start gap-6">
         <div class="panel-soft p-5 animate-slide-up stagger-4">
           <div class="flex items-center gap-3 mb-4">
             <div class="icon-soft icon-soft-primary" style="width:36px;height:36px;border-radius:10px;"><UIcon name="i-heroicons-users" class="h-4 w-4" /></div>
             <h3 class="text-sm font-bold text-slate-800 dark:text-white">责任人负载</h3>
           </div>
-          <div class="space-y-3">
+          <div class="grid gap-3">
             <div v-for="owner in ownerLoad" :key="owner.role">
               <div class="flex items-center justify-between text-sm"><span class="text-slate-600 dark:text-slate-300 font-medium">{{ owner.role }}</span><span class="font-bold text-slate-800 dark:text-white">{{ owner.count }}</span></div>
               <UProgress :value="owner.percent" class="mt-2" />
@@ -98,7 +98,7 @@
             <div class="icon-soft icon-soft-success" style="width:36px;height:36px;border-radius:10px;"><UIcon name="i-heroicons-academic-cap" class="h-4 w-4" /></div>
             <h3 class="text-sm font-bold text-slate-800 dark:text-white">规则学习</h3>
           </div>
-          <div class="space-y-3">
+          <div class="grid gap-3">
             <div v-for="candidate in learningCandidates" :key="candidate.findingId" class="rounded-2xl bg-slate-50 dark:bg-slate-700/30 p-4">
               <div class="flex items-start justify-between gap-3">
                 <div><p class="text-sm font-bold text-slate-800 dark:text-white">{{ candidate.ruleTitle }}</p><p class="mt-1 text-xs leading-5 text-slate-500">{{ candidate.reason }}</p></div>
@@ -117,7 +117,7 @@
         <h3 class="text-lg font-bold text-slate-800 dark:text-white">运营节奏建议</h3>
       </div>
       <div class="p-6">
-        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div class="grid grid-cols-1 gap-6 md:grid-cols-3">
           <div v-for="cadence in operatingCadences" :key="cadence.name" class="rounded-2xl bg-slate-50 dark:bg-slate-700/30 p-5">
             <div class="flex items-center gap-3">
               <div class="icon-soft icon-soft-primary" style="width:40px;height:40px;border-radius:12px;"><UIcon :name="cadence.icon" class="h-5 w-5" /></div>

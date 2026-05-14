@@ -1,11 +1,11 @@
 <template>
-  <div class="space-y-6">
+  <div class="grid gap-6">
     <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between animate-slide-up">
       <div>
         <h2 class="text-2xl font-bold text-slate-800 dark:text-white">发起 Pre-PR 审查</h2>
         <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">选择项目、分支和审查策略，生成提交前质量结论。</p>
       </div>
-      <UButton to="/settings/models" variant="soft" color="slate" icon="i-heroicons-cog-6-tooth">
+      <UButton to="/settings/models" variant="soft" color="gray" icon="i-heroicons-cog-6-tooth">
         模型配置
       </UButton>
     </div>
@@ -13,7 +13,7 @@
     <div class="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
       <div class="soft-card-flat p-6 animate-slide-up stagger-2">
         <form class="space-y-6" @submit.prevent="handleSubmit">
-          <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div class="grid grid-cols-1 gap-6 md:grid-cols-3">
             <UFormGroup label="选择项目" name="projectId" required>
               <USelect v-model="form.projectId" :options="projectOptions" placeholder="选择项目" searchable :loading="loadingProjects" />
             </UFormGroup>
@@ -34,7 +34,7 @@
               <UIcon name="i-heroicons-arrow-path" class="h-5 w-5 animate-spin text-indigo-500" />
             </div>
           </div>
-          <div v-else class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div v-else class="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <button
               v-for="strategy in strategyOptions"
               :key="strategy.id"
@@ -97,12 +97,12 @@
             <UButton type="submit" variant="solid" :loading="submitting" icon="i-heroicons-play">
               开始审查
             </UButton>
-            <UButton to="/" variant="ghost" color="slate">取消</UButton>
+            <UButton to="/" variant="ghost" color="gray">取消</UButton>
           </div>
         </form>
       </div>
 
-      <aside class="space-y-5">
+      <aside class="grid content-start gap-6">
         <div class="panel-soft p-5 animate-slide-up stagger-3">
           <div class="flex items-center gap-3 mb-4">
             <div class="icon-soft icon-soft-error" style="width:36px;height:36px;border-radius:10px;">
@@ -110,7 +110,7 @@
             </div>
             <h3 class="text-sm font-bold text-slate-800 dark:text-white">质量闸门</h3>
           </div>
-          <div class="space-y-4 text-sm">
+          <div class="grid gap-4 text-sm">
             <div>
               <p class="text-xs font-semibold text-slate-500">阻断级别</p>
               <div class="mt-2 flex flex-wrap gap-1">
