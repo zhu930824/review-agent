@@ -4,13 +4,14 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.review.agent.common.exception.BizException;
 import com.review.agent.domain.dto.*;
 import com.review.agent.domain.dto.diff.FileChange;
 import com.review.agent.domain.entity.Review;
 import com.review.agent.domain.entity.ReviewFinding;
 import com.review.agent.domain.entity.ReviewModelResult;
 import com.review.agent.domain.enums.*;
-import com.review.agent.domain.exception.BusinessException;
+import com.review.agent.domain.exception.CommonExceptionEnum;
 import com.review.agent.infrastructure.agent.AgentReviewSummary;
 import com.review.agent.infrastructure.agent.AgentRoleTemplates;
 import com.review.agent.infrastructure.agent.config.AgentConfig;
@@ -68,7 +69,6 @@ public class ReviewServiceImpl implements ReviewService {
         review.setCreatedAt(LocalDateTime.now());
         review.setUpdatedAt(LocalDateTime.now());
 
-        // 解析分支的最新 commit SHA
         if (request.getSourceBranch() != null && request.getTargetBranch() != null) {
             review.setSourceCommit(gitDiffService.getLatestCommit(request.getProjectId(), request.getSourceBranch()));
             review.setTargetCommit(gitDiffService.getLatestCommit(request.getProjectId(), request.getTargetBranch()));
@@ -77,7 +77,6 @@ public class ReviewServiceImpl implements ReviewService {
         review.setStatus(ReviewStatus.RUNNING);
         reviewMapper.insert(review);
 
-        // 异步执行审查
         executeReviewAsync(review, request.getModelsConfig());
 
         return buildReviewVO(review, getProjectName(review.getProjectId()));
@@ -141,7 +140,6 @@ public class ReviewServiceImpl implements ReviewService {
 
         executeReview(review, null);
 
-        // 收集阻塞原因：BLOCKER 级别 或 SECURITY 类别的 MAJOR 问题
         List<ReviewFinding> findings = reviewFindingMapper.selectList(
                 new LambdaQueryWrapper<ReviewFinding>().eq(ReviewFinding::getReviewId, review.getId()));
 
@@ -175,16 +173,13 @@ public class ReviewServiceImpl implements ReviewService {
     public ReviewFindingVO updateFindingStatus(Long findingId, UpdateFindingStatusRequest request) {
         ReviewFinding finding = reviewFindingMapper.selectById(findingId);
         if (finding == null) {
-            throw new BusinessException("404", "审查发现不存在: " + findingId);
+            throw new BizException(CommonExceptionEnum.REVIEW_FINDING_NOT_FOUND);
         }
         finding.setHumanStatus(request.getHumanStatus());
         reviewFindingMapper.updateById(finding);
         return buildReviewFindingVO(finding);
     }
 
-    /**
-     * 审查核心流程：获取 diff -> 按模式审查 -> 存储结果
-     */
     private void executeReview(Review review, String modelsConfig) {
         try {
             List<FileChange> fileChanges = resolveFileChanges(review);
@@ -206,12 +201,10 @@ public class ReviewServiceImpl implements ReviewService {
                 default -> aiFindings = executeSingleReview(review, fileChanges, modelsConfig);
             }
 
-            // 存储审查发现
             for (ReviewFindingResult finding : aiFindings) {
                 reviewFindingMapper.insert(toReviewFinding(review.getId(), finding));
             }
 
-            // 更新审查状态
             long blockerCount = aiFindings.stream().filter(f -> f.getSeverity() == Severity.BLOCKER).count();
             long majorCount = aiFindings.stream().filter(f -> f.getSeverity() == Severity.MAJOR).count();
             review.setStatus(ReviewStatus.COMPLETED);
@@ -220,16 +213,17 @@ public class ReviewServiceImpl implements ReviewService {
             reviewMapper.updateById(review);
             reviewProgressService.notifyReviewCompleted(review.getId());
 
+        } catch (BizException e) {
+            throw e;
         } catch (Exception e) {
             log.error("审查执行失败: reviewId={}", review.getId(), e);
             review.setStatus(ReviewStatus.FAILED);
             reviewMapper.updateById(review);
             reviewProgressService.notifyReviewCompleted(review.getId());
-            throw new BusinessException("REVIEW_FAILED", "审查执行失败: " + e.getMessage(), e);
+            throw new BizException(CommonExceptionEnum.REVIEW_FAILED, e);
         }
     }
 
-    /** SINGLE 模式：单模型审查 */
     private List<ReviewFindingResult> executeSingleReview(Review review, List<FileChange> fileChanges, String modelsConfig) {
         String modelName = parseModelName(modelsConfig);
 
@@ -243,11 +237,9 @@ public class ReviewServiceImpl implements ReviewService {
         return findings;
     }
 
-    /** MULTI 模式：多模型并行审查 + 交叉验证 */
     private List<ReviewFindingResult> executeMultiReview(Review review, List<FileChange> fileChanges, String modelsConfig) {
         List<String> modelNames = parseModelNames(modelsConfig);
 
-        // 为每个模型创建执行记录
         List<ReviewModelResult> modelResults = modelNames.stream()
                 .map(name -> createModelResult(review.getId(), name, ModelRole.WORKER))
                 .toList();
@@ -256,13 +248,10 @@ public class ReviewServiceImpl implements ReviewService {
             reviewProgressService.notifyAgentStarted(review.getId(), "WORKER", name);
         }
 
-        // 并行审查
         List<ModelReviewResult> parallelResults = aiReviewService.reviewWithModelsParallel(fileChanges, modelNames);
 
-        // 交叉验证
         List<ReviewFindingResult> findings = aiReviewService.crossValidate(parallelResults);
 
-        // 更新模型执行记录
         for (int i = 0; i < modelResults.size(); i++) {
             completeModelResult(modelResults.get(i), parallelResults.get(i).getFindings().size() + " findings");
             reviewProgressService.notifyAgentCompleted(review.getId(), "WORKER", modelNames.get(i),
@@ -272,16 +261,13 @@ public class ReviewServiceImpl implements ReviewService {
         return findings;
     }
 
-    /** JUDGE 模式：Worker 并行审查 + Judge 评估 */
     private List<ReviewFindingResult> executeJudgeReview(Review review, List<FileChange> fileChanges, String modelsConfig) {
         JudgeConfig judgeConfig = parseJudgeConfig(modelsConfig);
 
-        // Worker 模型执行记录
         List<ReviewModelResult> workerModelResults = judgeConfig.workers.stream()
                 .map(name -> createModelResult(review.getId(), name, ModelRole.WORKER))
                 .toList();
 
-        // Judge 模型执行记录
         ReviewModelResult judgeModelResult = createModelResult(review.getId(), judgeConfig.judge, ModelRole.JUDGE);
 
         for (String name : judgeConfig.workers) {
@@ -289,14 +275,11 @@ public class ReviewServiceImpl implements ReviewService {
         }
         reviewProgressService.notifyAgentStarted(review.getId(), "JUDGE", judgeConfig.judge);
 
-        // Worker 并行审查 + Judge 评估
         JudgeReviewResult judgeReviewResult = aiReviewService.reviewWithJudge(
                 fileChanges, judgeConfig.workers, judgeConfig.judge);
 
-        // 交叉验证 Worker 的 findings
         List<ReviewFindingResult> findings = aiReviewService.crossValidate(judgeReviewResult.getWorkerResults());
 
-        // 更新 Worker 执行记录
         for (int i = 0; i < workerModelResults.size(); i++) {
             completeModelResult(workerModelResults.get(i),
                     judgeReviewResult.getWorkerResults().get(i).getFindings().size() + " findings");
@@ -304,7 +287,6 @@ public class ReviewServiceImpl implements ReviewService {
                     judgeReviewResult.getWorkerResults().get(i).getFindings().size());
         }
 
-        // 更新 Judge 执行记录
         String judgeRawResult = serializeJudgeEvaluation(judgeReviewResult.getEvaluation());
         completeModelResult(judgeModelResult, judgeRawResult);
         reviewProgressService.notifyAgentCompleted(review.getId(), "JUDGE", judgeConfig.judge, findings.size());
@@ -312,13 +294,11 @@ public class ReviewServiceImpl implements ReviewService {
         return findings;
     }
 
-    /** AGENT 模式：多智能体审查，Agent 通过 SaveFindingTool 自行持久化发现结果 */
     private List<ReviewFindingResult> executeAgentReview(Review review, List<FileChange> fileChanges, String modelsConfig) {
         AgentPipelineConfig pipelineConfig = parseAgentConfig(modelsConfig);
 
-        AgentReviewSummary summary = agentReviewService.executeAgentReview(review, pipelineConfig);
+        agentReviewService.executeAgentReview(review, pipelineConfig);
 
-        // Agent 已通过 SaveFindingTool 将 findings 持久化，从数据库加载
         List<ReviewFinding> findings = reviewFindingMapper.selectList(
                 new LambdaQueryWrapper<ReviewFinding>().eq(ReviewFinding::getReviewId, review.getId()));
 
@@ -327,7 +307,6 @@ public class ReviewServiceImpl implements ReviewService {
                 .toList();
     }
 
-    /** 将持久化实体转为 AI 审查结果 DTO */
     private ReviewFindingResult toReviewFindingResult(ReviewFinding entity) {
         ReviewFindingResult result = new ReviewFindingResult();
         result.setFilePath(entity.getFilePath());
@@ -344,7 +323,6 @@ public class ReviewServiceImpl implements ReviewService {
         return result;
     }
 
-    /** 根据审查记录中的分支或 commit 信息获取文件差异 */
     private List<FileChange> resolveFileChanges(Review review) {
         if (review.getSourceBranch() != null && review.getTargetBranch() != null) {
             return gitDiffService.getBranchDiff(
@@ -354,10 +332,9 @@ public class ReviewServiceImpl implements ReviewService {
             return gitDiffService.getCommitDiff(
                     review.getProjectId(), review.getSourceCommit(), review.getTargetCommit());
         }
-        throw new BusinessException("INVALID_REVIEW_PARAMS", "必须指定分支或 commit 范围");
+        throw new BizException(CommonExceptionEnum.INVALID_REVIEW_PARAMS);
     }
 
-    /** 将 AI 审查结果转换为持久化实体 */
     private ReviewFinding toReviewFinding(Long reviewId, ReviewFindingResult finding) {
         ReviewFinding entity = new ReviewFinding();
         entity.setReviewId(reviewId);
@@ -376,7 +353,6 @@ public class ReviewServiceImpl implements ReviewService {
         return entity;
     }
 
-    /** 创建模型执行记录 */
     private ReviewModelResult createModelResult(Long reviewId, String modelName, ModelRole role) {
         ReviewModelResult modelResult = new ReviewModelResult();
         modelResult.setReviewId(reviewId);
@@ -388,7 +364,6 @@ public class ReviewServiceImpl implements ReviewService {
         return modelResult;
     }
 
-    /** 完成模型执行记录 */
     private void completeModelResult(ReviewModelResult modelResult, String rawResult) {
         modelResult.setStatus(ReviewStatus.COMPLETED);
         modelResult.setCompletedAt(LocalDateTime.now());
@@ -396,7 +371,6 @@ public class ReviewServiceImpl implements ReviewService {
         reviewModelResultMapper.updateById(modelResult);
     }
 
-    /** 解析 SINGLE 模式的模型名称 */
     private String parseModelName(String modelsConfig) {
         if (modelsConfig == null || modelsConfig.isBlank()) {
             return "qwen-plus";
@@ -411,7 +385,6 @@ public class ReviewServiceImpl implements ReviewService {
         }
     }
 
-    /** 解析 MULTI 模式的模型名称列表 */
     @SuppressWarnings("unchecked")
     private List<String> parseModelNames(String modelsConfig) {
         if (modelsConfig == null || modelsConfig.isBlank()) {
@@ -425,14 +398,12 @@ public class ReviewServiceImpl implements ReviewService {
             }
             return List.of("qwen-plus");
         } catch (Exception e) {
-            throw new BusinessException("INVALID_MODELS_CONFIG", "MULTI 模式的模型配置格式错误: " + modelsConfig, e);
+            throw new BizException(CommonExceptionEnum.INVALID_MODELS_CONFIG, e);
         }
     }
 
-    /** JUDGE 模式配置 */
     private record JudgeConfig(List<String> workers, String judge) {}
 
-    /** 解析 JUDGE 模式的模型配置 */
     @SuppressWarnings("unchecked")
     private JudgeConfig parseJudgeConfig(String modelsConfig) {
         try {
@@ -441,20 +412,18 @@ public class ReviewServiceImpl implements ReviewService {
             Object judgeObj = config.get("judge");
 
             if (!(workersObj instanceof List<?> list) || judgeObj == null) {
-                throw new BusinessException("INVALID_MODELS_CONFIG",
-                        "JUDGE 模式需要 workers 数组和 judge 字段");
+                throw new BizException(CommonExceptionEnum.INVALID_MODELS_CONFIG);
             }
 
             List<String> workers = list.stream().map(Object::toString).toList();
             return new JudgeConfig(workers, judgeObj.toString());
-        } catch (BusinessException e) {
+        } catch (BizException e) {
             throw e;
         } catch (Exception e) {
-            throw new BusinessException("INVALID_MODELS_CONFIG", "JUDGE 模式的模型配置格式错误: " + modelsConfig, e);
+            throw new BizException(CommonExceptionEnum.INVALID_MODELS_CONFIG, e);
         }
     }
 
-    /** 解析 AGENT 模式的管道配置 */
     private AgentPipelineConfig parseAgentConfig(String modelsConfig) {
         if (modelsConfig == null || modelsConfig.isBlank()) {
             List<AgentConfig> agents = new ArrayList<>(AgentRoleTemplates.getPresets().values());
@@ -475,7 +444,6 @@ public class ReviewServiceImpl implements ReviewService {
         }
     }
 
-    /** 序列化 Judge 评估结果 */
     private String serializeJudgeEvaluation(JudgeEvaluation evaluation) {
         if (evaluation == null) return null;
         try {
@@ -489,7 +457,7 @@ public class ReviewServiceImpl implements ReviewService {
     private Review requireReview(Long reviewId) {
         Review review = reviewMapper.selectById(reviewId);
         if (review == null) {
-            throw new BusinessException("404", "审查记录不存在: " + reviewId);
+            throw new BizException(CommonExceptionEnum.REVIEW_NOT_FOUND);
         }
         return review;
     }

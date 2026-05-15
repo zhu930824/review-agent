@@ -1,8 +1,9 @@
 package com.review.agent.infrastructure.git;
 
+import com.review.agent.common.exception.BizException;
 import com.review.agent.domain.entity.Project;
 import com.review.agent.domain.enums.ProjectStatus;
-import com.review.agent.domain.exception.BusinessException;
+import com.review.agent.domain.exception.CommonExceptionEnum;
 import com.review.agent.infrastructure.persistence.ProjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +25,7 @@ public class GitService {
     public void cloneRepository(Long projectId) {
         Project project = projectMapper.selectById(projectId);
         if (project == null) {
-            throw new BusinessException("PROJECT_NOT_FOUND", "项目不存在: " + projectId);
+            throw new BizException(CommonExceptionEnum.PROJECT_NOT_FOUND);
         }
 
         updateProjectStatus(projectId, ProjectStatus.CLONING, null);
@@ -37,7 +38,7 @@ public class GitService {
             );
             updateProjectStatus(projectId, ProjectStatus.READY, null);
             log.info("仓库克隆成功: projectId={}", projectId);
-        } catch (BusinessException e) {
+        } catch (BizException e) {
             updateProjectStatus(projectId, ProjectStatus.ERROR, e.getMessage());
             log.error("仓库克隆失败: projectId={}", projectId, e);
         }
@@ -46,10 +47,10 @@ public class GitService {
     public List<String> getBranches(Long projectId) {
         Project project = projectMapper.selectById(projectId);
         if (project == null) {
-            throw new BusinessException("PROJECT_NOT_FOUND", "项目不存在: " + projectId);
+            throw new BizException(CommonExceptionEnum.PROJECT_NOT_FOUND);
         }
         if (project.getStatus() != ProjectStatus.READY) {
-            throw new BusinessException("REPO_NOT_CLONED", "仓库尚未克隆完成");
+            throw new BizException(CommonExceptionEnum.REPO_NOT_CLONED);
         }
         return gitOperations.getBranches(project.getLocalPath());
     }

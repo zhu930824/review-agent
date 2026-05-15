@@ -1,13 +1,14 @@
 package com.review.agent.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.review.agent.common.exception.BizException;
 import com.review.agent.domain.dto.AuthRequest;
 import com.review.agent.domain.dto.AuthTokenVO;
 import com.review.agent.domain.dto.RegisterRequest;
 import com.review.agent.domain.dto.UserVO;
 import com.review.agent.domain.dto.convert.UserConverter;
 import com.review.agent.domain.entity.UserAccount;
-import com.review.agent.domain.exception.BusinessException;
+import com.review.agent.domain.exception.CommonExceptionEnum;
 import com.review.agent.infrastructure.auth.JwtService;
 import com.review.agent.infrastructure.persistence.UserAccountMapper;
 import com.review.agent.service.AuthService;
@@ -52,10 +53,10 @@ public class AuthServiceImpl implements AuthService {
         UserAccount user = userAccountMapper.selectOne(new LambdaQueryWrapper<UserAccount>()
                 .eq(UserAccount::getUsername, request.getUsername().trim()));
         if (user == null || !passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-            throw new BusinessException("AUTH_INVALID_CREDENTIALS", "用户名或密码错误");
+            throw new BizException(CommonExceptionEnum.AUTH_INVALID_CREDENTIALS);
         }
         if (!ACTIVE.equals(user.getStatus())) {
-            throw new BusinessException("AUTH_USER_DISABLED", "账号已停用");
+            throw new BizException(CommonExceptionEnum.AUTH_USER_DISABLED);
         }
         return buildToken(user);
     }
@@ -64,7 +65,7 @@ public class AuthServiceImpl implements AuthService {
         Long count = userAccountMapper.selectCount(new LambdaQueryWrapper<UserAccount>()
                 .eq(UserAccount::getUsername, username));
         if (count != null && count > 0) {
-            throw new BusinessException("AUTH_USERNAME_EXISTS", "用户名已存在");
+            throw new BizException(CommonExceptionEnum.AUTH_USERNAME_EXISTS);
         }
     }
 
@@ -72,7 +73,7 @@ public class AuthServiceImpl implements AuthService {
         Long count = userAccountMapper.selectCount(new LambdaQueryWrapper<UserAccount>()
                 .eq(UserAccount::getEmail, email));
         if (count != null && count > 0) {
-            throw new BusinessException("AUTH_EMAIL_EXISTS", "邮箱已存在");
+            throw new BizException(CommonExceptionEnum.AUTH_EMAIL_EXISTS);
         }
     }
 

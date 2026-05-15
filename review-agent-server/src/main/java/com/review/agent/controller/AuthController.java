@@ -1,6 +1,6 @@
 package com.review.agent.controller;
 
-import com.review.agent.domain.dto.ApiResponse;
+import com.review.agent.common.result.Result;
 import com.review.agent.domain.dto.AuthRequest;
 import com.review.agent.domain.dto.AuthTokenVO;
 import com.review.agent.domain.dto.RegisterRequest;
@@ -20,17 +20,17 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
-    public ApiResponse<AuthTokenVO> register(@Validated @RequestBody RegisterRequest request) {
-        return ApiResponse.success(authService.register(request));
+    public Result<AuthTokenVO> register(@Validated @RequestBody RegisterRequest request) {
+        return Result.success(authService.register(request));
     }
 
     @PostMapping("/login")
-    public ApiResponse<AuthTokenVO> login(@Validated @RequestBody AuthRequest request) {
-        return ApiResponse.success(authService.login(request));
+    public Result<AuthTokenVO> login(@Validated @RequestBody AuthRequest request) {
+        return Result.success(authService.login(request));
     }
 
     @PostMapping("/logout")
-    public ApiResponse<Void> logout() {
-        return ApiResponse.success();
+    public Result<Void> logout() {
+        return Result.success();
     }
 }

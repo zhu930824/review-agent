@@ -2,6 +2,7 @@ package com.review.agent.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.review.agent.common.exception.BizException;
 import com.review.agent.domain.dto.CreateProjectRequest;
 import com.review.agent.domain.dto.PageRequest;
 import com.review.agent.domain.dto.PageResult;
@@ -9,7 +10,7 @@ import com.review.agent.domain.dto.ProjectVO;
 import com.review.agent.domain.dto.UpdateProjectRequest;
 import com.review.agent.domain.entity.Project;
 import com.review.agent.domain.enums.ProjectStatus;
-import com.review.agent.domain.exception.BusinessException;
+import com.review.agent.domain.exception.CommonExceptionEnum;
 import com.review.agent.infrastructure.git.GitService;
 import com.review.agent.infrastructure.persistence.ProjectMapper;
 import com.review.agent.service.ProjectService;
@@ -102,7 +103,7 @@ public class ProjectServiceImpl implements ProjectService {
     public void retryClone(Long id) {
         Project project = requireProject(id);
         if (project.getStatus() != ProjectStatus.ERROR) {
-            throw new BusinessException("400", "只有克隆失败的项目才能重新克隆");
+            throw new BizException(CommonExceptionEnum.PROJECT_RETRY_NOT_ALLOWED);
         }
         project.setStatus(ProjectStatus.PENDING);
         projectMapper.updateById(project);
@@ -118,7 +119,7 @@ public class ProjectServiceImpl implements ProjectService {
     private Project requireProject(Long id) {
         Project project = projectMapper.selectById(id);
         if (project == null) {
-            throw new BusinessException("404", "项目不存在: " + id);
+            throw new BizException(CommonExceptionEnum.PROJECT_NOT_FOUND);
         }
         return project;
     }

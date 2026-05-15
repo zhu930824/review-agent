@@ -1,8 +1,9 @@
 package com.review.agent.infrastructure.git;
 
+import com.review.agent.common.exception.BizException;
 import com.review.agent.domain.dto.diff.FileChange;
 import com.review.agent.domain.entity.Project;
-import com.review.agent.domain.exception.BusinessException;
+import com.review.agent.domain.exception.CommonExceptionEnum;
 import com.review.agent.infrastructure.persistence.ProjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -36,9 +37,6 @@ public class GitDiffService {
         return gitOperations.getLatestCommit(localPath, "origin/" + branch);
     }
 
-    /**
-     * 当前简化实现：DiffParser 返回完整上下文，contextLines 参数暂不裁剪
-     */
     public List<FileChange> getDiffWithContext(Long projectId, String sourceBranch, String targetBranch, int contextLines) {
         return getBranchDiff(projectId, sourceBranch, targetBranch);
     }
@@ -46,10 +44,10 @@ public class GitDiffService {
     private String resolveLocalPath(Long projectId) {
         Project project = projectMapper.selectById(projectId);
         if (project == null) {
-            throw new BusinessException("PROJECT_NOT_FOUND", "项目不存在: " + projectId);
+            throw new BizException(CommonExceptionEnum.PROJECT_NOT_FOUND);
         }
         if (project.getLocalPath() == null) {
-            throw new BusinessException("REPO_NOT_CLONED", "仓库尚未克隆");
+            throw new BizException(CommonExceptionEnum.REPO_NOT_CLONED);
         }
         return project.getLocalPath();
     }

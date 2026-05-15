@@ -4,12 +4,13 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.review.agent.common.exception.BizException;
 import com.review.agent.domain.dto.*;
 import com.review.agent.domain.entity.ModelProfile;
 import com.review.agent.domain.entity.ModelProvider;
 import com.review.agent.domain.entity.ReviewStrategy;
 import com.review.agent.domain.entity.ReviewStrategyModel;
-import com.review.agent.domain.exception.BusinessException;
+import com.review.agent.domain.exception.CommonExceptionEnum;
 import com.review.agent.infrastructure.persistence.ModelProfileMapper;
 import com.review.agent.infrastructure.persistence.ModelProviderMapper;
 import com.review.agent.infrastructure.persistence.ReviewStrategyMapper;
@@ -33,8 +34,6 @@ public class ModelConfigServiceImpl implements ModelConfigService {
     private final ReviewStrategyMapper reviewStrategyMapper;
     private final ReviewStrategyModelMapper reviewStrategyModelMapper;
     private final ObjectMapper objectMapper;
-
-    // ==================== ModelProvider ====================
 
     @Override
     public List<ModelProviderVO> listProviders() {
@@ -75,8 +74,6 @@ public class ModelConfigServiceImpl implements ModelConfigService {
         requireProvider(id);
         modelProviderMapper.deleteById(id);
     }
-
-    // ==================== ModelProfile ====================
 
     @Override
     public List<ModelProfileVO> listProfiles(Long providerId) {
@@ -119,8 +116,6 @@ public class ModelConfigServiceImpl implements ModelConfigService {
         requireProfile(id);
         modelProfileMapper.deleteById(id);
     }
-
-    // ==================== ReviewStrategy ====================
 
     @Override
     public List<ReviewStrategyVO> listStrategies() {
@@ -176,12 +171,10 @@ public class ModelConfigServiceImpl implements ModelConfigService {
                 new LambdaQueryWrapper<ReviewStrategyModel>().eq(ReviewStrategyModel::getStrategyId, id));
     }
 
-    // ==================== Helper Methods ====================
-
     private ModelProvider requireProvider(Long id) {
         ModelProvider provider = modelProviderMapper.selectById(id);
         if (provider == null) {
-            throw new BusinessException("404", "模型供应商不存在: " + id);
+            throw new BizException(CommonExceptionEnum.MODEL_PROVIDER_NOT_FOUND);
         }
         return provider;
     }
@@ -189,7 +182,7 @@ public class ModelConfigServiceImpl implements ModelConfigService {
     private ModelProfile requireProfile(Long id) {
         ModelProfile profile = modelProfileMapper.selectById(id);
         if (profile == null) {
-            throw new BusinessException("404", "模型档案不存在: " + id);
+            throw new BizException(CommonExceptionEnum.MODEL_PROFILE_NOT_FOUND);
         }
         return profile;
     }
@@ -197,7 +190,7 @@ public class ModelConfigServiceImpl implements ModelConfigService {
     private ReviewStrategy requireStrategy(Long id) {
         ReviewStrategy strategy = reviewStrategyMapper.selectById(id);
         if (strategy == null) {
-            throw new BusinessException("404", "审查策略不存在: " + id);
+            throw new BizException(CommonExceptionEnum.REVIEW_STRATEGY_NOT_FOUND);
         }
         return strategy;
     }

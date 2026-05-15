@@ -1,5 +1,6 @@
 package com.review.agent.controller;
 
+import com.review.agent.common.result.Result;
 import com.review.agent.domain.dto.*;
 import com.review.agent.service.ReviewProgressService;
 import com.review.agent.service.ReviewService;
@@ -19,13 +20,13 @@ public class ReviewController {
     private final ReviewProgressService reviewProgressService;
 
     @PostMapping
-    public ApiResponse<ReviewVO> createReview(@Validated @RequestBody CreateReviewRequest request) {
-        return ApiResponse.success(reviewService.createReview(request));
+    public Result<ReviewVO> createReview(@Validated @RequestBody CreateReviewRequest request) {
+        return Result.success(reviewService.createReview(request));
     }
 
     @GetMapping("/{id}")
-    public ApiResponse<ReviewDetailVO> getReviewDetail(@PathVariable("id") Long id) {
-        return ApiResponse.success(reviewService.getReviewDetail(id));
+    public Result<ReviewDetailVO> getReviewDetail(@PathVariable("id") Long id) {
+        return Result.success(reviewService.getReviewDetail(id));
     }
 
     @GetMapping(value = "/{id}/progress", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -34,22 +35,22 @@ public class ReviewController {
     }
 
     @GetMapping
-    public ApiResponse<PageResult<ReviewVO>> listReviews(
+    public Result<PageResult<ReviewVO>> listReviews(
             @RequestParam(value = "projectId", required = false) Long projectId,
             PageRequest pageRequest) {
-        return ApiResponse.success(reviewService.listReviews(projectId, pageRequest));
+        return Result.success(reviewService.listReviews(projectId, pageRequest));
     }
 
     @PostMapping("/pre-pr")
-    public ApiResponse<ReviewDetailVO> createPrePrReview(@Validated @RequestBody CreatePrePrRequest request) {
-        return ApiResponse.success(reviewService.createPrePrReview(request));
+    public Result<ReviewDetailVO> createPrePrReview(@Validated @RequestBody CreatePrePrRequest request) {
+        return Result.success(reviewService.createPrePrReview(request));
     }
 
     @PatchMapping("/{id}/finding/{findingId}")
-    public ApiResponse<ReviewFindingVO> updateFindingStatus(
+    public Result<ReviewFindingVO> updateFindingStatus(
             @PathVariable("id") Long id,
             @PathVariable("findingId") Long findingId,
             @Validated @RequestBody UpdateFindingStatusRequest request) {
-        return ApiResponse.success(reviewService.updateFindingStatus(findingId, request));
+        return Result.success(reviewService.updateFindingStatus(findingId, request));
     }
 }

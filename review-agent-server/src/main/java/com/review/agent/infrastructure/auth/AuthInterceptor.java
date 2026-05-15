@@ -1,7 +1,7 @@
 package com.review.agent.infrastructure.auth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.review.agent.domain.dto.ApiResponse;
+import com.review.agent.common.result.Result;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -60,6 +60,6 @@ public class AuthInterceptor implements HandlerInterceptor {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.getWriter().write(objectMapper.writeValueAsString(ApiResponse.error("401", message)));
+        response.getWriter().write(objectMapper.writeValueAsString(Result.fail(401, message)));
     }
 }

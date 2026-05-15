@@ -1,6 +1,7 @@
 package com.review.agent.common.util;
 
-import cn.sdh.intelligent.common.exception.BizException;
+
+import com.review.agent.common.exception.BizException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 

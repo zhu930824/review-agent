@@ -6,14 +6,14 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-public class SpringDocConfig {
+public class OpenApiConfig {
 
     @Bean
     public OpenAPI openAPI() {
         return new OpenAPI()
             .info(new Info()
-                .title("智能数据平台 API")
-                .description("智能数据平台接口文档")
+                .title("Review Agent API")
+                .description("AI-powered code review agent server")
                 .version("v1.0.0"));
     }
 }

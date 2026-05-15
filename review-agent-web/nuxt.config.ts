@@ -1,6 +1,6 @@
 // nuxt.config.ts - Nuxt 3 应用配置
 export default defineNuxtConfig({
-  devtools: { enabled: true },
+  devtools: { enabled: false },
 
   modules: [
     '@nuxt/ui',

@@ -1,6 +1,10 @@
 server:
   port: 8080
 
+jwt:
+  secret: ${JWT_SECRET:sdh-intelligent-data-jwt-secret-key-2026}
+  expiration: 86400000
+
 spring:
   application:
     name: review-agent-server

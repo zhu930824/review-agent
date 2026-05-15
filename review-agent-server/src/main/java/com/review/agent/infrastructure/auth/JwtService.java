@@ -2,7 +2,8 @@ package com.review.agent.infrastructure.auth;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.review.agent.domain.exception.BusinessException;
+import com.review.agent.common.exception.BizException;
+import com.review.agent.domain.exception.CommonExceptionEnum;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -51,7 +52,7 @@ public class JwtService {
             String signature = sign(headerPart + "." + payloadPart);
             return new TokenResult(headerPart + "." + payloadPart + "." + signature, expiresAt);
         } catch (Exception e) {
-            throw new BusinessException("AUTH_TOKEN_CREATE_FAILED", "生成登录凭证失败", e);
+            throw new BizException(CommonExceptionEnum.INTERNAL_ERROR, e);
         }
     }
 
@@ -59,25 +60,25 @@ public class JwtService {
         try {
             String[] parts = token.split("\\.");
             if (parts.length != 3) {
-                throw new BusinessException("AUTH_TOKEN_INVALID", "登录凭证格式不正确");
+                throw new BizException(CommonExceptionEnum.AUTH_TOKEN_INVALID);
             }
 
             String expectedSignature = sign(parts[0] + "." + parts[1]);
             if (!constantTimeEquals(expectedSignature, parts[2])) {
-                throw new BusinessException("AUTH_TOKEN_INVALID", "登录凭证无效");
+                throw new BizException(CommonExceptionEnum.AUTH_TOKEN_INVALID);
             }
 
             Map<String, Object> payload = objectMapper.readValue(base64UrlDecode(parts[1]), MAP_TYPE);
             long expiresAt = toLong(payload.get("exp"));
             if (expiresAt <= Instant.now().getEpochSecond()) {
-                throw new BusinessException("AUTH_TOKEN_EXPIRED", "登录已过期");
+                throw new BizException(CommonExceptionEnum.AUTH_TOKEN_EXPIRED);
             }
 
             return new JwtClaims(toLong(payload.get("sub")), String.valueOf(payload.get("username")), expiresAt);
-        } catch (BusinessException e) {
+        } catch (BizException e) {
             throw e;
         } catch (Exception e) {
-            throw new BusinessException("AUTH_TOKEN_INVALID", "登录凭证无效", e);
+            throw new BizException(CommonExceptionEnum.AUTH_TOKEN_INVALID, e);
         }
     }
 

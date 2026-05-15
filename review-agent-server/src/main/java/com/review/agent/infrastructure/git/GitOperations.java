@@ -1,6 +1,7 @@
 package com.review.agent.infrastructure.git;
 
-import com.review.agent.domain.exception.BusinessException;
+import com.review.agent.common.exception.BizException;
+import com.review.agent.domain.exception.CommonExceptionEnum;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.ListBranchCommand;
@@ -44,7 +45,7 @@ public class GitOperations {
                 .call()) {
             log.info("仓库克隆成功: url={}, branch={}", remoteUrl, branch);
         } catch (GitAPIException e) {
-            throw new BusinessException("GIT_CLONE_FAILED", "仓库克隆失败: " + e.getMessage(), e);
+            throw new BizException(CommonExceptionEnum.GIT_CLONE_FAILED, e);
         }
     }
 
@@ -55,7 +56,7 @@ public class GitOperations {
                     .call();
             log.info("仓库拉取成功: path={}, branch={}", localPath, branch);
         } catch (GitAPIException e) {
-            throw new BusinessException("GIT_PULL_FAILED", "仓库拉取失败: " + e.getMessage(), e);
+            throw new BizException(CommonExceptionEnum.GIT_PULL_FAILED, e);
         }
     }
 
@@ -64,7 +65,7 @@ public class GitOperations {
             git.fetch().call();
             log.info("仓库 fetch 成功: path={}", localPath);
         } catch (GitAPIException e) {
-            throw new BusinessException("GIT_FETCH_FAILED", "仓库 fetch 失败: " + e.getMessage(), e);
+            throw new BizException(CommonExceptionEnum.GIT_FETCH_FAILED, e);
         }
     }
 
@@ -76,7 +77,7 @@ public class GitOperations {
             CanonicalTreeParser newTree = resolveTree(repo, revWalk, sourceBranch);
             return formatDiff(git, oldTree, newTree);
         } catch (IOException | GitAPIException e) {
-            throw new BusinessException("GIT_DIFF_FAILED", "获取分支 diff 失败: " + e.getMessage(), e);
+            throw new BizException(CommonExceptionEnum.GIT_DIFF_FAILED, e);
         }
     }
 
@@ -88,7 +89,7 @@ public class GitOperations {
             CanonicalTreeParser newTree = resolveTreeByCommit(repo, revWalk, sourceCommit);
             return formatDiff(git, oldTree, newTree);
         } catch (IOException | GitAPIException e) {
-            throw new BusinessException("GIT_DIFF_FAILED", "获取提交 diff 失败: " + e.getMessage(), e);
+            throw new BizException(CommonExceptionEnum.GIT_DIFF_FAILED, e);
         }
     }
 
@@ -103,7 +104,7 @@ public class GitOperations {
                     .distinct()
                     .collect(Collectors.toList());
         } catch (GitAPIException e) {
-            throw new BusinessException("GIT_BRANCH_FAILED", "获取分支列表失败: " + e.getMessage(), e);
+            throw new BizException(CommonExceptionEnum.GIT_BRANCH_FAILED, e);
         }
     }
 
@@ -111,17 +112,14 @@ public class GitOperations {
         try (Git git = openGit(localPath)) {
             ObjectId objectId = git.getRepository().resolve(branch);
             if (objectId == null) {
-                throw new BusinessException("GIT_RESOLVE_FAILED", "无法解析分支: " + branch);
+                throw new BizException(CommonExceptionEnum.GIT_RESOLVE_FAILED);
             }
             return objectId.getName();
         } catch (IOException e) {
-            throw new BusinessException("GIT_RESOLVE_FAILED", "解析最新提交失败: " + e.getMessage(), e);
+            throw new BizException(CommonExceptionEnum.GIT_RESOLVE_FAILED, e);
         }
     }
 
-    /**
-     * 打开本地仓库，失败时抛出 BusinessException
-     */
     private Git openGit(String localPath) {
         try {
             Repository repo = new FileRepositoryBuilder()
@@ -131,28 +129,22 @@ public class GitOperations {
                     .build();
             return new Git(repo);
         } catch (IOException e) {
-            throw new BusinessException("GIT_OPEN_FAILED", "无法打开仓库: " + localPath, e);
+            throw new BizException(CommonExceptionEnum.GIT_OPEN_FAILED, e);
         }
     }
 
-    /**
-     * 通过分支名解析其指向的 tree
-     */
     private CanonicalTreeParser resolveTree(Repository repo, RevWalk revWalk, String branch) throws IOException {
         ObjectId objectId = repo.resolve(branch);
         if (objectId == null) {
-            throw new BusinessException("GIT_RESOLVE_FAILED", "无法解析分支: " + branch);
+            throw new BizException(CommonExceptionEnum.GIT_RESOLVE_FAILED);
         }
         return buildTreeParser(repo, revWalk, objectId);
     }
 
-    /**
-     * 通过 commit SHA 解析其指向的 tree
-     */
     private CanonicalTreeParser resolveTreeByCommit(Repository repo, RevWalk revWalk, String commitSha) throws IOException {
         ObjectId objectId = repo.resolve(commitSha);
         if (objectId == null) {
-            throw new BusinessException("GIT_RESOLVE_FAILED", "无法解析提交: " + commitSha);
+            throw new BizException(CommonExceptionEnum.GIT_RESOLVE_FAILED);
         }
         return buildTreeParser(repo, revWalk, objectId);
     }
@@ -166,9 +158,6 @@ public class GitOperations {
         return treeParser;
     }
 
-    /**
-     * 将 DiffEntry 列表格式化为 unified diff 文本
-     */
     private String formatDiff(Git git, CanonicalTreeParser oldTree, CanonicalTreeParser newTree)
             throws IOException, GitAPIException {
         List<DiffEntry> diffEntries = git.diff()
@@ -184,7 +173,6 @@ public class GitOperations {
         return out.toString();
     }
 
-    /** 递归删除目录，克隆前清理已有目录 */
     private void deleteDirectory(File directory) {
         File[] files = directory.listFiles();
         if (files != null) {
