@@ -74,7 +74,7 @@
               <div
                 v-for="label in selectedRoleLabels"
                 :key="label"
-                class="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-50/50 to-purple-50/50 dark:from-indigo-900/20 dark:to-purple-900/20 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200"
+                class="flex items-center gap-2 rounded-2xl bg-gradient-to-result from-indigo-50/50 to-purple-50/50 dark:from-indigo-900/20 dark:to-purple-900/20 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200"
               >
                 <UIcon name="i-heroicons-cpu-chip" class="h-4 w-4 text-indigo-500" />
                 <span>{{ label }}</span>

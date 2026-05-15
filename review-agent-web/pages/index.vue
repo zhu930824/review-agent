@@ -114,7 +114,7 @@
           </div>
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-3xl font-extrabold bg-gradient-to-r from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-purple-400 bg-clip-text text-transparent">
+              <p class="text-3xl font-extrabold bg-gradient-to-result from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-purple-400 bg-clip-text text-transparent">
                 {{ metrics.modelSuccessRate }}%
               </p>
               <p class="mt-1 text-xs text-slate-400 font-medium">模型成功率</p>

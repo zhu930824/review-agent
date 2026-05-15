@@ -18,7 +18,7 @@
           <div>
             <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">市场能力覆盖</p>
             <div class="mt-2 flex items-end gap-2">
-              <p class="text-3xl font-extrabold bg-gradient-to-r from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-purple-400 bg-clip-text text-transparent">{{ coverage.coveragePercent }}%</p>
+              <p class="text-3xl font-extrabold bg-gradient-to-result from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-purple-400 bg-clip-text text-transparent">{{ coverage.coveragePercent }}%</p>
             </div>
             <p class="mt-1 text-xs text-slate-400">按已启用与部分具备折算</p>
           </div>

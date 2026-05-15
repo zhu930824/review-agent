@@ -18,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Slf4j
@@ -33,7 +34,15 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     public ProjectVO createProject(CreateProjectRequest request) {
-        Project project = ProjectConverter.toEntity(request);
+        Project project = new Project();
+        project.setName(request.getName());
+        project.setRepoUrl(request.getRepoUrl());
+        project.setDefaultBranch(request.getDefaultBranch() != null ? request.getDefaultBranch() : "main");
+        project.setDescription(request.getDescription());
+        project.setStatus(ProjectStatus.PENDING);
+        project.setCreatedAt(LocalDateTime.now());
+        project.setUpdatedAt(LocalDateTime.now());
+
         projectMapper.insert(project);
 
         String localPath = repoBasePath + "/" + project.getId();
@@ -42,7 +51,7 @@ public class ProjectServiceImpl implements ProjectService {
 
         gitService.cloneRepository(project.getId());
 
-        return ProjectConverter.toVO(project);
+        return toVO(project);
     }
 
     @Override
@@ -52,7 +61,7 @@ public class ProjectServiceImpl implements ProjectService {
         wrapper.orderByDesc(Project::getCreatedAt);
 
         Page<Project> result = projectMapper.selectPage(page, wrapper);
-        List<ProjectVO> voList = result.getRecords().stream().map(ProjectConverter::toVO).toList();
+        List<ProjectVO> voList = result.getRecords().stream().map(this::toVO).toList();
 
         return new PageResult<>(result.getTotal(), pageRequest.getPageNum(),
                 pageRequest.getPageSize(), voList);
@@ -60,15 +69,27 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     public ProjectVO getProject(Long id) {
-        return ProjectConverter.toVO(requireProject(id));
+        return toVO(requireProject(id));
     }
 
     @Override
     public ProjectVO updateProject(Long id, UpdateProjectRequest request) {
         Project project = requireProject(id);
-        ProjectConverter.updateEntity(project, request);
+        if (request.getName() != null) {
+            project.setName(request.getName());
+        }
+        if (request.getRepoUrl() != null) {
+            project.setRepoUrl(request.getRepoUrl());
+        }
+        if (request.getDefaultBranch() != null) {
+            project.setDefaultBranch(request.getDefaultBranch());
+        }
+        if (request.getDescription() != null) {
+            project.setDescription(request.getDescription());
+        }
+        project.setUpdatedAt(LocalDateTime.now());
         projectMapper.updateById(project);
-        return ProjectConverter.toVO(project);
+        return toVO(project);
     }
 
     @Override
@@ -94,12 +115,25 @@ public class ProjectServiceImpl implements ProjectService {
         return gitService.getBranches(id);
     }
 
-    /** 按ID查询项目，不存在则抛出业务异常 */
     private Project requireProject(Long id) {
         Project project = projectMapper.selectById(id);
         if (project == null) {
             throw new BusinessException("404", "项目不存在: " + id);
         }
         return project;
+    }
+
+    private ProjectVO toVO(Project project) {
+        ProjectVO vo = new ProjectVO();
+        vo.setId(project.getId());
+        vo.setName(project.getName());
+        vo.setRepoUrl(project.getRepoUrl());
+        vo.setDefaultBranch(project.getDefaultBranch());
+        vo.setLocalPath(project.getLocalPath());
+        vo.setStatus(project.getStatus());
+        vo.setDescription(project.getDescription());
+        vo.setCreatedAt(project.getCreatedAt());
+        vo.setUpdatedAt(project.getUpdatedAt());
+        return vo;
     }
 }

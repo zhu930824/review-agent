@@ -23,7 +23,7 @@
           <span class="font-semibold text-indigo-600 dark:text-indigo-400">{{ progressPercent }}%</span>
         </div>
         <div class="h-3 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-          <div class="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
+          <div class="h-full bg-gradient-to-result from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
                :style="{ width: `${progressPercent}%` }"></div>
         </div>
       </div>
@@ -320,10 +320,10 @@ function handleProgressEvent(data: any) {
   switch (data.type) {
     case 'initial_state':
       if (data.modelResults) {
-        agentProgress.value = data.modelResults.map((r: any) => ({
-          role: r.role,
-          modelName: r.modelName,
-          status: r.status
+        agentProgress.value = data.modelResults.map((result: any) => ({
+          role: result.role,
+          modelName: result.modelName,
+          status: result.status
         }))
       }
       break

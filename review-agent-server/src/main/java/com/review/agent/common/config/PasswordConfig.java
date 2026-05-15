@@ -1,4 +1,4 @@
-package com.review.agent.infrastructure.config;
+package com.review.agent.common.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

@@ -17,7 +17,7 @@
         <div class="flex items-start justify-between gap-3">
           <div>
             <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">运营就绪度</p>
-            <p class="mt-2 text-3xl font-extrabold bg-gradient-to-r from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-purple-400 bg-clip-text text-transparent">{{ scorecard.operationalReadiness }}%</p>
+            <p class="mt-2 text-3xl font-extrabold bg-gradient-to-result from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-purple-400 bg-clip-text text-transparent">{{ scorecard.operationalReadiness }}%</p>
           </div>
           <div class="icon-soft icon-soft-primary"><UIcon name="i-heroicons-chart-bar" class="h-5 w-5" /></div>
         </div>

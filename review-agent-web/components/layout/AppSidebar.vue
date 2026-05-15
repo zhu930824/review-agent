@@ -18,7 +18,7 @@
           :to="item.to"
           class="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition-all duration-200"
           :class="isActive(item.to)
-            ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-md shadow-indigo-500/25'
+            ? 'bg-gradient-to-result from-indigo-500 to-purple-500 text-white shadow-md shadow-indigo-500/25'
             : 'text-slate-500 hover:bg-white hover:text-slate-800 hover:shadow-sm dark:text-slate-400 dark:hover:bg-slate-700/50 dark:hover:text-white'"
         >
           <UIcon :name="item.icon" class="h-5 w-5" />
@@ -29,7 +29,7 @@
 
     <!-- Footer -->
     <div class="px-3 py-3">
-      <div class="rounded-2xl bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 p-4">
+      <div class="rounded-2xl bg-gradient-to-result from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 p-4">
         <div class="flex items-center gap-3">
           <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-white shadow-sm dark:bg-slate-700/50">
             <UIcon name="i-heroicons-sparkles" class="h-5 w-5 text-indigo-500" />
