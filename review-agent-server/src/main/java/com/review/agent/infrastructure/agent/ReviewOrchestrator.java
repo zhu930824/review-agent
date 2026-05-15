@@ -8,8 +8,9 @@ import com.review.agent.domain.enums.ReviewStatus;
 import com.review.agent.infrastructure.agent.config.AgentConfig;
 import com.review.agent.infrastructure.agent.config.AgentPipelineConfig;
 import com.review.agent.infrastructure.persistence.ReviewModelResultMapper;
-import lombok.RequiredArgsConstructor;
+import com.review.agent.service.ReviewProgressService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -21,12 +22,23 @@ import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class ReviewOrchestrator {
 
     private final AgentFactory agentFactory;
     private final ReviewModelResultMapper reviewModelResultMapper;
+    private final ReviewProgressService reviewProgressService;
     private final Executor agentTaskExecutor;
+
+    public ReviewOrchestrator(
+            AgentFactory agentFactory,
+            ReviewModelResultMapper reviewModelResultMapper,
+            ReviewProgressService reviewProgressService,
+            @Qualifier("agentTaskExecutor") Executor agentTaskExecutor) {
+        this.agentFactory = agentFactory;
+        this.reviewModelResultMapper = reviewModelResultMapper;
+        this.reviewProgressService = reviewProgressService;
+        this.agentTaskExecutor = agentTaskExecutor;
+    }
 
     /** 执行 Agent 管道：按配置并发执行所有 Agent */
     public List<AgentExecutionResult> execute(Review review, List<FileChange> fileChanges,
@@ -48,6 +60,8 @@ public class ReviewOrchestrator {
                 final AgentConfig config = agentConfigs.get(i);
                 final ReviewModelResult modelResult = modelResults.get(i);
 
+                reviewProgressService.notifyAgentStarted(review.getId(), config.getRole(), config.getModelName());
+
                 CompletableFuture<AgentExecutionResult> future = CompletableFuture
                         .supplyAsync(() -> executeSingleAgent(review.getId(), batch, config, modelResult),
                                 agentTaskExecutor)
@@ -61,6 +75,10 @@ public class ReviewOrchestrator {
                     AgentExecutionResult result = futures.get(i).get();
                     allResults.add(result);
                     completeModelResult(modelResults.get(i), result);
+                    reviewProgressService.notifyAgentCompleted(review.getId(),
+                            agentConfigs.get(i).getRole(),
+                            agentConfigs.get(i).getModelName(),
+                            result.isSuccess() ? 1 : 0);
                 } catch (Exception e) {
                     log.error("Agent 执行异常: role={}", agentConfigs.get(i).getRole(), e);
                     AgentExecutionResult failed = AgentExecutionResult.failed(
@@ -69,10 +87,14 @@ public class ReviewOrchestrator {
                             "超时或执行异常: " + e.getMessage());
                     allResults.add(failed);
                     completeModelResult(modelResults.get(i), failed);
+                    reviewProgressService.notifyAgentFailed(review.getId(),
+                            agentConfigs.get(i).getRole(),
+                            "超时或执行异常: " + e.getMessage());
                 }
             }
         }
 
+        reviewProgressService.notifyReviewCompleted(review.getId());
         return allResults;
     }
 

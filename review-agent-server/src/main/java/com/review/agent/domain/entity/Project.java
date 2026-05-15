@@ -36,6 +36,9 @@ public class Project {
     /** 描述 */
     private String description;
 
+    /** 最近一次克隆失败信息 */
+    private String cloneErrorMessage;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

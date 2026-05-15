@@ -6,17 +6,26 @@ import com.review.agent.domain.dto.ReviewStrategyVO;
 
 import java.util.List;
 
-/**
- * 模型配置服务 —— 提供供应商、模型档案、审查策略的只读查询
- */
 public interface ModelConfigService {
 
-    /** 查询所有启用的模型供应商 */
+    // ModelProvider
     List<ModelProviderVO> listProviders();
+    ModelProviderVO getProvider(Long id);
+    ModelProviderVO createProvider(ModelProviderVO request);
+    ModelProviderVO updateProvider(Long id, ModelProviderVO request);
+    void deleteProvider(Long id);
 
-    /** 查询所有启用的模型档案 */
-    List<ModelProfileVO> listProfiles();
+    // ModelProfile
+    List<ModelProfileVO> listProfiles(Long providerId);
+    ModelProfileVO getProfile(Long id);
+    ModelProfileVO createProfile(ModelProfileVO request);
+    ModelProfileVO updateProfile(Long id, ModelProfileVO request);
+    void deleteProfile(Long id);
 
-    /** 查询所有启用的审查策略（含角色绑定与闸门策略） */
+    // ReviewStrategy
     List<ReviewStrategyVO> listStrategies();
+    ReviewStrategyVO getStrategy(Long id);
+    ReviewStrategyVO createStrategy(ReviewStrategyVO request);
+    ReviewStrategyVO updateStrategy(Long id, ReviewStrategyVO request);
+    void deleteStrategy(Long id);
 }

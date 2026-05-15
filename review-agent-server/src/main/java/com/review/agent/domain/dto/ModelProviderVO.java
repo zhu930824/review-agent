@@ -2,22 +2,26 @@ package com.review.agent.domain.dto;
 
 import lombok.Data;
 
-import java.time.LocalDateTime;
+import java.util.List;
 
-/**
- * 模型供应商视图对象
- */
 @Data
 public class ModelProviderVO {
 
     private Long id;
+
     private String providerKey;
+
     private String name;
-    private String kind;
+
+    private String providerType;
+
     private String endpoint;
+
     private String apiKeyEnv;
+
     private Boolean enabled;
+
     private String description;
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+
+    private List<ModelProfileVO> profiles;
 }

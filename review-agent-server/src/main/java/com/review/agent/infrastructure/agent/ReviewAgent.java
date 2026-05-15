@@ -6,7 +6,6 @@ import com.review.agent.domain.dto.diff.Hunk;
 import com.review.agent.infrastructure.agent.config.AgentConfig;
 import com.review.agent.infrastructure.agent.skill.SkillRegistry;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
-import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -39,7 +38,6 @@ public class ReviewAgent {
                 .model(chatModel)
                 .systemPrompt(fullSystemPrompt)
                 .tools(tools.toArray(new ToolCallback[0]))
-                .saver(new MemorySaver())
                 .build();
     }
 

@@ -1,8 +1,7 @@
-export interface BaseResult<T = unknown> {
-  code: number
-  msg: string
+export interface ApiResponse<T = unknown> {
+  code: number | string
+  message: string
   data: T
-  tips?: string
 }
 
 export interface PageParams {

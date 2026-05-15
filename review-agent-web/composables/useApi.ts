@@ -1,5 +1,4 @@
-// composables/useApi.ts - 统一的 HTTP 请求封装
-import type { BaseResult } from '~/types/api'
+import type { ApiResponse } from '~/types/api'
 
 function getBaseURL(): string {
   const config = useRuntimeConfig()
@@ -13,9 +12,24 @@ interface RequestOptions {
 }
 
 function buildHeaders(extra?: Record<string, string>): Record<string, string> {
-  return {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...extra,
+  }
+
+  const { token } = useAuth()
+  if (token.value) {
+    headers.Authorization = `Bearer ${token.value}`
+  }
+
+  return headers
+}
+
+async function handleUnauthorized() {
+  const { clearAuth } = useAuth()
+  clearAuth()
+  if (import.meta.client && useRoute().path !== '/login') {
+    await navigateTo('/login')
   }
 }
 
@@ -24,30 +38,34 @@ async function request<T>(
   url: string,
   body?: unknown,
   options?: RequestOptions,
-): Promise<BaseResult<T>> {
+): Promise<ApiResponse<T>> {
   const baseURL = getBaseURL()
   const retries = options?.retry ?? 0
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const response = await $fetch<BaseResult<T>>(url, {
+      return await $fetch<ApiResponse<T>>(url, {
         method,
         baseURL,
         headers: buildHeaders(options?.headers),
         body: body ?? undefined,
         timeout: options?.timeout ?? 30000,
       })
-      return response
-    } catch (error: unknown) {
+    } catch (error: any) {
+      if (error?.status === 401 || error?.statusCode === 401) {
+        await handleUnauthorized()
+      }
+
       if (attempt >= retries) {
-        console.error(`[useApi] ${method} ${url} 请求失败:`, error)
+        console.error(`[useApi] ${method} ${url} request failed:`, error)
         throw error
       }
-      await new Promise((r) => setTimeout(r, 500 * 2 ** attempt))
+
+      await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt))
     }
   }
 
-  throw new Error('请求失败，已达到最大重试次数')
+  throw new Error('Request failed after all retry attempts')
 }
 
 export function useApi() {

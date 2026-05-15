@@ -1,55 +1,82 @@
 <template>
-  <div class="space-y-6">
-    <div>
+  <div class="grid gap-6">
+    <div class="animate-slide-up">
       <UButton to="/projects" variant="ghost" color="gray" icon="i-heroicons-arrow-left" size="sm">返回</UButton>
-      <h2 class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{{ project?.name ?? '加载中...' }}</h2>
-      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ project?.description }}</p>
+      <h2 class="mt-2 text-2xl font-bold text-slate-800 dark:text-white">{{ project?.name ?? '加载中...' }}</h2>
     </div>
 
-    <UCard>
-      <template #header>
-        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">基本信息</h3>
-      </template>
-      <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <dt class="text-sm text-gray-500">仓库地址</dt>
-          <dd class="mt-1 text-sm text-gray-900 dark:text-white">{{ project?.repoUrl }}</dd>
+    <div class="panel-soft p-6 animate-slide-up stagger-2">
+      <div class="flex items-center justify-between mb-5">
+        <div class="flex items-center gap-3">
+          <div class="icon-soft icon-soft-info" style="width:40px;height:40px;border-radius:12px;">
+            <UIcon name="i-heroicons-information-circle" class="h-5 w-5" />
+          </div>
+          <h3 class="text-lg font-bold text-slate-800 dark:text-white">基本信息</h3>
+        </div>
+        <UButton
+          v-if="project?.status === 'ERROR'"
+          variant="solid"
+          size="sm"
+          icon="i-heroicons-arrow-path"
+          :loading="retrying"
+          @click="handleRetryClone"
+        >
+          重新克隆
+        </UButton>
+      </div>
+      <dl class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        <div class="sm:col-span-2">
+          <dt class="text-sm text-slate-500 font-medium">项目描述</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-800 dark:text-white">{{ project?.description || '暂无描述' }}</dd>
         </div>
         <div>
-          <dt class="text-sm text-gray-500">默认分支</dt>
-          <dd class="mt-1 text-sm text-gray-900 dark:text-white">{{ project?.defaultBranch }}</dd>
+          <dt class="text-sm text-slate-500 font-medium">仓库地址</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-800 dark:text-white">{{ project?.repoUrl }}</dd>
         </div>
         <div>
-          <dt class="text-sm text-gray-500">状态</dt>
-          <dd class="mt-1">
-            <UBadge :color="statusColor(project?.status ?? '')" :label="statusLabel(project?.status ?? '')" variant="subtle" size="xs" />
+          <dt class="text-sm text-slate-500 font-medium">默认分支</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-800 dark:text-white">{{ project?.defaultBranch }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm text-slate-500 font-medium">状态</dt>
+          <dd class="mt-1 flex items-center gap-2">
+            <span class="badge-soft" :class="statusBadgeClass(project?.status ?? '')">{{ statusLabel(project?.status ?? '') }}</span>
           </dd>
         </div>
         <div>
-          <dt class="text-sm text-gray-500">创建时间</dt>
-          <dd class="mt-1 text-sm text-gray-900 dark:text-white">{{ project?.createdAt }}</dd>
+          <dt class="text-sm text-slate-500 font-medium">创建时间</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-800 dark:text-white">{{ project?.createdAt }}</dd>
+        </div>
+        <div v-if="project?.status === 'ERROR' && project?.cloneErrorMessage" class="sm:col-span-2">
+          <dt class="text-sm text-slate-500 font-medium">克隆失败信息</dt>
+          <dd class="mt-1 rounded-2xl bg-red-50 px-4 py-3 text-sm font-medium leading-6 text-red-600 dark:bg-red-900/10 dark:text-red-300">{{ project.cloneErrorMessage }}</dd>
         </div>
       </dl>
-    </UCard>
+    </div>
 
-    <UCard>
-      <template #header>
-        <div class="flex items-center justify-between">
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">审查记录</h3>
-          <UButton :to="`/reviews/create?projectId=${project?.id}`" variant="solid" color="primary" size="sm" icon="i-heroicons-plus">
-            发起审查
-          </UButton>
+    <div class="soft-card-flat animate-slide-up stagger-3">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700/50">
+        <div class="flex items-center gap-3">
+          <div class="icon-soft icon-soft-success" style="width:40px;height:40px;border-radius:12px;">
+            <UIcon name="i-heroicons-magnifying-glass" class="h-5 w-5" />
+          </div>
+          <h3 class="text-lg font-bold text-slate-800 dark:text-white">审查记录</h3>
         </div>
-      </template>
-      <UTable :rows="reviews" :columns="reviewColumns" :loading="loading" :empty-state="{ icon: 'i-heroicons-magnifying-glass', label: '暂无审查记录' }">
-        <template #status-data="{ row }">
-          <UBadge :color="statusColor(row.status)" :label="statusLabel(row.status)" variant="subtle" size="xs" />
-        </template>
-        <template #actions-data="{ row }">
-          <UButton :to="`/reviews/${row.id}`" variant="ghost" color="primary" size="xs" icon="i-heroicons-arrow-right">查看</UButton>
-        </template>
-      </UTable>
-    </UCard>
+        <UButton :to="`/reviews/create?projectId=${project?.id}`" variant="solid" size="sm" icon="i-heroicons-plus">
+          发起审查
+        </UButton>
+      </div>
+      <div class="p-4">
+        <UTable :rows="reviews" :columns="reviewColumns" :loading="loading" :empty-state="{ icon: 'i-heroicons-magnifying-glass', label: '暂无审查记录' }">
+          <template #status-data="{ row }">
+            <span class="badge-soft" :class="statusBadgeClass(row.status)">{{ statusLabel(row.status) }}</span>
+          </template>
+          <template #actions-data="{ row }">
+            <UButton :to="`/reviews/${row.id}`" variant="ghost" size="xs" icon="i-heroicons-arrow-right">查看</UButton>
+          </template>
+        </UTable>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -59,9 +86,10 @@ import type { Review } from '~/types/review'
 import type { PageResult } from '~/types/api'
 
 const route = useRoute()
-const { get } = useApi()
+const { get, post } = useApi()
 const projectId = computed(() => Number(route.params.id))
 const loading = ref(false)
+const retrying = ref(false)
 const project = ref<Project | null>(null)
 const reviews = ref<Review[]>([])
 
@@ -74,12 +102,12 @@ const reviewColumns = [
   { key: 'actions', label: '操作' },
 ]
 
-function statusColor(status: string): string {
+function statusBadgeClass(status: string): string {
   const map: Record<string, string> = {
-    PENDING: 'orange', CLONING: 'blue', READY: 'green', ERROR: 'red',
-    RUNNING: 'blue', COMPLETED: 'green', FAILED: 'red',
+    PENDING: 'badge-soft-warning', CLONING: 'badge-soft-info', READY: 'badge-soft-success', ERROR: 'badge-soft-error',
+    RUNNING: 'badge-soft-info', COMPLETED: 'badge-soft-success', FAILED: 'badge-soft-error',
   }
-  return map[status] ?? 'gray'
+  return map[status] ?? 'badge-soft-info'
 }
 
 function statusLabel(status: string): string {
@@ -103,6 +131,18 @@ async function loadData() {
     console.error('加载项目详情失败', e)
   } finally {
     loading.value = false
+  }
+}
+
+async function handleRetryClone() {
+  retrying.value = true
+  try {
+    await post(`/projects/${projectId.value}/retry-clone`)
+    await loadData()
+  } catch {
+    // useApi 统一处理错误
+  } finally {
+    retrying.value = false
   }
 }
 

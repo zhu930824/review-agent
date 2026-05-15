@@ -68,17 +68,27 @@ public class GitOperations {
         }
     }
 
-    public String getDiff(String localPath, String sourceRef, String targetRef) {
+    public String getDiff(String localPath, String sourceBranch, String targetBranch) {
         try (Git git = openGit(localPath);
              RevWalk revWalk = new RevWalk(git.getRepository())) {
             Repository repo = git.getRepository();
-            CanonicalTreeParser oldTree = resolveRef(repo, revWalk, targetRef);
-            CanonicalTreeParser newTree = resolveRef(repo, revWalk, sourceRef);
+            CanonicalTreeParser oldTree = resolveTree(repo, revWalk, targetBranch);
+            CanonicalTreeParser newTree = resolveTree(repo, revWalk, sourceBranch);
             return formatDiff(git, oldTree, newTree);
-        } catch (IOException e) {
-            throw new BusinessException("GIT_DIFF_FAILED", "获取 diff 失败: " + e.getMessage(), e);
-        } catch (GitAPIException e) {
-            throw new RuntimeException(e);
+        } catch (IOException | GitAPIException e) {
+            throw new BusinessException("GIT_DIFF_FAILED", "获取分支 diff 失败: " + e.getMessage(), e);
+        }
+    }
+
+    public String getDiffByCommit(String localPath, String sourceCommit, String targetCommit) {
+        try (Git git = openGit(localPath);
+             RevWalk revWalk = new RevWalk(git.getRepository())) {
+            Repository repo = git.getRepository();
+            CanonicalTreeParser oldTree = resolveTreeByCommit(repo, revWalk, targetCommit);
+            CanonicalTreeParser newTree = resolveTreeByCommit(repo, revWalk, sourceCommit);
+            return formatDiff(git, oldTree, newTree);
+        } catch (IOException | GitAPIException e) {
+            throw new BusinessException("GIT_DIFF_FAILED", "获取提交 diff 失败: " + e.getMessage(), e);
         }
     }
 
@@ -125,10 +135,24 @@ public class GitOperations {
         }
     }
 
-    private CanonicalTreeParser resolveRef(Repository repo, RevWalk revWalk, String ref) throws IOException {
-        ObjectId objectId = repo.resolve(ref);
+    /**
+     * 通过分支名解析其指向的 tree
+     */
+    private CanonicalTreeParser resolveTree(Repository repo, RevWalk revWalk, String branch) throws IOException {
+        ObjectId objectId = repo.resolve(branch);
         if (objectId == null) {
-            throw new BusinessException("GIT_RESOLVE_FAILED", "无法解析引用: " + ref);
+            throw new BusinessException("GIT_RESOLVE_FAILED", "无法解析分支: " + branch);
+        }
+        return buildTreeParser(repo, revWalk, objectId);
+    }
+
+    /**
+     * 通过 commit SHA 解析其指向的 tree
+     */
+    private CanonicalTreeParser resolveTreeByCommit(Repository repo, RevWalk revWalk, String commitSha) throws IOException {
+        ObjectId objectId = repo.resolve(commitSha);
+        if (objectId == null) {
+            throw new BusinessException("GIT_RESOLVE_FAILED", "无法解析提交: " + commitSha);
         }
         return buildTreeParser(repo, revWalk, objectId);
     }

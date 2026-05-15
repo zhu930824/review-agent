@@ -1,9 +1,9 @@
 package com.review.agent.infrastructure.ai;
 
 import com.review.agent.domain.dto.diff.FileChange;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -13,12 +13,20 @@ import java.util.concurrent.Executor;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class AIReviewService {
 
     private final CodeReviewEngine codeReviewEngine;
     private final ChatClient.Builder chatClientBuilder;
     private final Executor reviewTaskExecutor;
+
+    public AIReviewService(
+            CodeReviewEngine codeReviewEngine,
+            ChatClient.Builder chatClientBuilder,
+            @Qualifier("reviewTaskExecutor") Executor reviewTaskExecutor) {
+        this.codeReviewEngine = codeReviewEngine;
+        this.chatClientBuilder = chatClientBuilder;
+        this.reviewTaskExecutor = reviewTaskExecutor;
+    }
 
     public List<ReviewFindingResult> reviewWithModel(List<FileChange> fileChanges, String modelName) {
         log.info("开始审查: model={}, fileCount={}", modelName, fileChanges.size());

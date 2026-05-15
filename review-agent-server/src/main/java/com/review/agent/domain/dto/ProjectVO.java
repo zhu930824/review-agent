@@ -18,6 +18,7 @@ public class ProjectVO {
     private String localPath;
     private ProjectStatus status;
     private String description;
+    private String cloneErrorMessage;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

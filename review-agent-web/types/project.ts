@@ -8,6 +8,7 @@ export interface Project {
   status: 'PENDING' | 'CLONING' | 'READY' | 'ERROR'
   createdAt: string
   updatedAt: string
+  cloneErrorMessage: string | null
 }
 
 export interface CreateProjectParams {

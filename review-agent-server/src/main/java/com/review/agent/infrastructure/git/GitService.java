@@ -10,6 +10,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -42,6 +43,17 @@ public class GitService {
         }
     }
 
+    public List<String> getBranches(Long projectId) {
+        Project project = projectMapper.selectById(projectId);
+        if (project == null) {
+            throw new BusinessException("PROJECT_NOT_FOUND", "项目不存在: " + projectId);
+        }
+        if (project.getStatus() != ProjectStatus.READY) {
+            throw new BusinessException("REPO_NOT_CLONED", "仓库尚未克隆完成");
+        }
+        return gitOperations.getBranches(project.getLocalPath());
+    }
+
     private void updateProjectStatus(Long projectId, ProjectStatus status, String errorMessage) {
         Project project = projectMapper.selectById(projectId);
         if (project == null) {
@@ -49,9 +61,7 @@ public class GitService {
         }
         project.setStatus(status);
         project.setUpdatedAt(LocalDateTime.now());
-        if (errorMessage != null) {
-            project.setDescription(errorMessage);
-        }
+        project.setCloneErrorMessage(errorMessage);
         projectMapper.updateById(project);
     }
 }

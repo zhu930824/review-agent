@@ -1,11 +1,11 @@
 <template>
-  <div class="space-y-6">
-    <div>
-      <h2 class="text-2xl font-bold text-gray-900 dark:text-white">创建项目</h2>
-      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">添加一个新的代码仓库进行审查</p>
+  <div class="grid gap-6">
+    <div class="animate-slide-up">
+      <h2 class="text-2xl font-bold text-slate-800 dark:text-white">创建项目</h2>
+      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">添加一个新的代码仓库进行审查</p>
     </div>
 
-    <UCard class="max-w-2xl">
+    <div class="soft-card-flat max-w-2xl p-6 animate-slide-up stagger-2">
       <form class="space-y-5" @submit.prevent="handleSubmit">
         <UFormGroup label="项目名称" name="name" required>
           <UInput v-model="form.name" placeholder="输入项目名称" icon="i-heroicons-folder" size="md" />
@@ -24,11 +24,11 @@
         </UFormGroup>
 
         <div class="flex items-center gap-3 pt-2">
-          <UButton type="submit" variant="solid" color="primary" :loading="submitting">创建项目</UButton>
+          <UButton type="submit" variant="solid" :loading="submitting">创建项目</UButton>
           <UButton to="/projects" variant="ghost" color="gray">取消</UButton>
         </div>
       </form>
-    </UCard>
+    </div>
   </div>
 </template>
 
