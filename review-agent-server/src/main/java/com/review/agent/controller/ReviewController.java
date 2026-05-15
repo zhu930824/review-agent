@@ -15,32 +15,32 @@ public class ReviewController {
     private final ReviewService reviewService;
 
     @PostMapping
-    public ApiResponse<ReviewVO> createReview(@Validated @RequestBody CreateReviewRequest request) {
-        return ApiResponse.success(reviewService.createReview(request));
+    public BaseResult<ReviewVO> createReview(@Validated @RequestBody CreateReviewRequest request) {
+        return BaseResult.success(reviewService.createReview(request));
     }
 
     @GetMapping("/{id}")
-    public ApiResponse<ReviewDetailVO> getReviewDetail(@PathVariable Long id) {
-        return ApiResponse.success(reviewService.getReviewDetail(id));
+    public BaseResult<ReviewDetailVO> getReviewDetail(@PathVariable Long id) {
+        return BaseResult.success(reviewService.getReviewDetail(id));
     }
 
     @GetMapping
-    public ApiResponse<PageResult<ReviewVO>> listReviews(
+    public BaseResult<PageResult<ReviewVO>> listReviews(
             @RequestParam(required = false) Long projectId,
             PageRequest pageRequest) {
-        return ApiResponse.success(reviewService.listReviews(projectId, pageRequest));
+        return BaseResult.success(reviewService.listReviews(projectId, pageRequest));
     }
 
     @PostMapping("/pre-pr")
-    public ApiResponse<ReviewDetailVO> createPrePrReview(@Validated @RequestBody CreatePrePrRequest request) {
-        return ApiResponse.success(reviewService.createPrePrReview(request));
+    public BaseResult<ReviewDetailVO> createPrePrReview(@Validated @RequestBody CreatePrePrRequest request) {
+        return BaseResult.success(reviewService.createPrePrReview(request));
     }
 
     @PatchMapping("/{id}/finding/{findingId}")
-    public ApiResponse<ReviewFindingVO> updateFindingStatus(
+    public BaseResult<ReviewFindingVO> updateFindingStatus(
             @PathVariable Long id,
             @PathVariable Long findingId,
             @Validated @RequestBody UpdateFindingStatusRequest request) {
-        return ApiResponse.success(reviewService.updateFindingStatus(findingId, request));
+        return BaseResult.success(reviewService.updateFindingStatus(findingId, request));
     }
 }

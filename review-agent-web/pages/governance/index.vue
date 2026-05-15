@@ -1,190 +1,288 @@
 <template>
   <div class="space-y-6">
-    <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-      <div>
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">治理中心</h2>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          对标 AI Review、质量门禁和安全扫描产品能力，把平台路线图转成可执行的规则包、集成和工作流。
-        </p>
+    <!-- 加载态 -->
+    <div v-if="loading" class="flex flex-col gap-4">
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <UCard v-for="n in 4" :key="n">
+          <USkeleton class="h-4 w-24" />
+          <USkeleton class="mt-3 h-8 w-16" />
+          <USkeleton class="mt-3 h-2 w-full" />
+        </UCard>
       </div>
-      <div class="flex flex-wrap gap-2">
-        <UButton to="/reviews/create" icon="i-heroicons-play" color="primary">按模板发起审查</UButton>
-        <UButton to="/settings/models" icon="i-heroicons-cog-6-tooth" variant="soft" color="gray">配置模型策略</UButton>
+      <div class="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <UCard><USkeleton class="h-64 w-full" /></UCard>
+        <UCard><USkeleton class="h-64 w-full" /></UCard>
       </div>
     </div>
 
-    <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-      <UCard>
-        <p class="text-sm text-gray-500 dark:text-gray-400">市场能力覆盖</p>
-        <div class="mt-3 flex items-end gap-2">
-          <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ coverage.coveragePercent }}%</p>
-          <p class="pb-1 text-xs text-gray-500">按已启用与部分具备折算</p>
+    <!-- 错误态 -->
+    <UAlert
+      v-else-if="error"
+      color="red"
+      variant="soft"
+      icon="i-heroicons-exclamation-triangle"
+      title="数据加载失败"
+      :description="error"
+      :actions="[{ label: '重试', onClick: fetchAllData }]"
+    />
+
+    <!-- 正常内容 -->
+    <template v-else>
+      <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h2 class="text-2xl font-bold text-gray-900 dark:text-white">治理中心</h2>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            对标 AI Review、质量门禁和安全扫描产品能力，把平台路线图转成可执行的规则包、集成和工作流。
+          </p>
         </div>
-        <UProgress :value="coverage.coveragePercent" color="primary" class="mt-3" />
-      </UCard>
+        <div class="flex flex-wrap gap-2">
+          <UButton to="/reviews/create" icon="i-heroicons-play" color="primary">按模板发起审查</UButton>
+          <UButton to="/settings/models" icon="i-heroicons-cog-6-tooth" variant="soft" color="gray">配置模型策略</UButton>
+        </div>
+      </div>
 
-      <UCard>
-        <p class="text-sm text-gray-500 dark:text-gray-400">已启用能力</p>
-        <p class="mt-3 text-3xl font-bold text-green-600 dark:text-green-300">{{ coverage.enabled }}</p>
-        <p class="mt-1 text-xs text-gray-500">PR 摘要、行级审查、质量门禁、效能分析</p>
-      </UCard>
-
-      <UCard>
-        <p class="text-sm text-gray-500 dark:text-gray-400">待补齐关键项</p>
-        <p class="mt-3 text-3xl font-bold text-orange-600 dark:text-orange-300">{{ coverage.partial + coverage.planned }}</p>
-        <p class="mt-1 text-xs text-gray-500">安全扫描、状态检查、SARIF、自动修复</p>
-      </UCard>
-
-      <UCard>
-        <p class="text-sm text-gray-500 dark:text-gray-400">工作流模板</p>
-        <p class="mt-3 text-3xl font-bold text-gray-900 dark:text-white">{{ workflowTemplates.length }}</p>
-        <p class="mt-1 text-xs text-gray-500">覆盖日常自查、发布门禁和架构评审</p>
-      </UCard>
-    </div>
-
-    <div class="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-      <UCard>
-        <template #header>
-          <div class="flex items-center justify-between gap-3">
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">市场能力对标</h3>
-            <UBadge :label="`${marketCapabilities.length} 项能力`" color="primary" variant="subtle" />
-          </div>
-        </template>
-
-        <UTable :rows="marketCapabilities" :columns="capabilityColumns">
-          <template #name-data="{ row }">
-            <div>
-              <p class="text-sm font-medium text-gray-900 dark:text-white">{{ row.name }}</p>
-              <p class="mt-1 text-xs leading-5 text-gray-500">{{ row.platformMove }}</p>
-            </div>
-          </template>
-          <template #category-data="{ row }">
-            <UBadge :label="categoryLabel(row.category)" color="gray" variant="subtle" size="xs" />
-          </template>
-          <template #status-data="{ row }">
-            <UBadge :label="statusLabel(row.status)" :color="statusColor(row.status)" variant="subtle" size="xs" />
-          </template>
-          <template #businessImpact-data="{ row }">
-            <UBadge :label="impactLabel(row.businessImpact)" :color="impactColor(row.businessImpact)" variant="subtle" size="xs" />
-          </template>
-          <template #sourceProducts-data="{ row }">
-            <div class="flex flex-wrap gap-1">
-              <UBadge v-for="product in row.sourceProducts" :key="product" :label="product" color="blue" variant="subtle" size="xs" />
-            </div>
-          </template>
-        </UTable>
-      </UCard>
-
-      <aside class="space-y-4">
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <UCard>
-          <template #header>
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">优先落地项</h3>
-          </template>
-          <div class="space-y-3">
-            <div v-for="action in recommendedActions" :key="action.id" class="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
-              <div class="flex items-start justify-between gap-3">
-                <div>
-                  <p class="text-sm font-semibold text-gray-900 dark:text-white">{{ action.name }}</p>
-                  <p class="mt-1 text-xs leading-5 text-gray-500">{{ action.platformMove }}</p>
-                </div>
-                <UBadge :label="String(action.priorityScore)" color="orange" variant="subtle" size="xs" />
-              </div>
-            </div>
+          <p class="text-sm text-gray-500 dark:text-gray-400">市场能力覆盖</p>
+          <div class="mt-3 flex items-end gap-2">
+            <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ coverage.coveragePercent }}%</p>
+            <p class="pb-1 text-xs text-gray-500">按已启用与部分具备折算</p>
           </div>
+          <UProgress :value="coverage.coveragePercent" color="primary" class="mt-3" />
         </UCard>
 
         <UCard>
-          <template #header>
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">发布门禁策略包</h3>
-          </template>
-          <div class="space-y-3">
-            <div>
-              <p class="text-xs text-gray-500">要求能力</p>
-              <div class="mt-2 flex flex-wrap gap-1">
-                <UBadge v-for="capability in releasePolicy.requiredCapabilities" :key="capability" :label="capability" color="red" variant="subtle" size="xs" />
-              </div>
-            </div>
-            <div>
-              <p class="text-xs text-gray-500">建议策略</p>
-              <div class="mt-2 flex flex-wrap gap-1">
-                <UBadge v-for="strategy in releasePolicy.suggestedStrategies" :key="strategy" :label="strategy" color="primary" variant="subtle" size="xs" />
-              </div>
-            </div>
-            <div>
-              <p class="text-xs text-gray-500">人工检查点</p>
-              <ul class="mt-2 space-y-1">
-                <li v-for="checkpoint in releasePolicy.requiredHumanCheckpoints" :key="checkpoint" class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
-                  <UIcon name="i-heroicons-user-circle" class="h-4 w-4 text-orange-500" />
-                  <span>{{ checkpoint }}</span>
-                </li>
-              </ul>
-            </div>
-          </div>
+          <p class="text-sm text-gray-500 dark:text-gray-400">已启用能力</p>
+          <p class="mt-3 text-3xl font-bold text-green-600 dark:text-green-300">{{ coverage.enabled }}</p>
+          <p class="mt-1 text-xs text-gray-500">PR 摘要、行级审查、质量门禁、效能分析</p>
         </UCard>
-      </aside>
-    </div>
 
-    <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
-      <UCard>
-        <template #header>
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">集成路线图</h3>
-        </template>
-        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div v-for="stage in rolloutStages" :key="stage.key" class="space-y-3">
-            <div class="flex items-center gap-2">
-              <UIcon :name="stage.icon" class="h-5 w-5" :class="stage.iconClass" />
-              <p class="text-sm font-semibold text-gray-900 dark:text-white">{{ stage.label }}</p>
-            </div>
-            <div v-for="connector in connectorsByStage[stage.key]" :key="connector.id" class="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
-              <p class="text-sm font-medium text-gray-900 dark:text-white">{{ connector.name }}</p>
-              <p class="mt-1 text-xs leading-5 text-gray-500">{{ connector.businessValue }}</p>
-              <p class="mt-2 text-xs text-gray-400">{{ connector.implementationHint }}</p>
-            </div>
-          </div>
-        </div>
-      </UCard>
+        <UCard>
+          <p class="text-sm text-gray-500 dark:text-gray-400">待补齐关键项</p>
+          <p class="mt-3 text-3xl font-bold text-orange-600 dark:text-orange-300">{{ coverage.partial + coverage.planned }}</p>
+          <p class="mt-1 text-xs text-gray-500">安全扫描、状态检查、SARIF、自动修复</p>
+        </UCard>
 
-      <UCard>
-        <template #header>
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">业务工作流模板</h3>
-        </template>
-        <div class="space-y-3">
-          <div v-for="workflow in workflowTemplates" :key="workflow.id" class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <UCard>
+          <p class="text-sm text-gray-500 dark:text-gray-400">工作流模板</p>
+          <p class="mt-3 text-3xl font-bold text-gray-900 dark:text-white">{{ workflows.length }}</p>
+          <p class="mt-1 text-xs text-gray-500">覆盖日常自查、发布门禁和架构评审</p>
+        </UCard>
+      </div>
+
+      <div class="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <UCard>
+          <template #header>
+            <div class="flex items-center justify-between gap-3">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white">市场能力对标</h3>
+              <UBadge :label="`${capabilities.length} 项能力`" color="primary" variant="subtle" />
+            </div>
+          </template>
+
+          <UTable :rows="capabilities" :columns="capabilityColumns">
+            <template #name-data="{ row }">
               <div>
-                <p class="text-sm font-semibold text-gray-900 dark:text-white">{{ workflow.name }}</p>
-                <p class="mt-1 text-xs leading-5 text-gray-500">{{ workflow.scenario }}</p>
+                <p class="text-sm font-medium text-gray-900 dark:text-white">{{ row.name }}</p>
+                <p class="mt-1 text-xs leading-5 text-gray-500">{{ row.platformMove }}</p>
               </div>
-              <UBadge :label="workflow.strategyId" color="primary" variant="subtle" size="xs" />
+            </template>
+            <template #category-data="{ row }">
+              <UBadge :label="categoryLabel(row.category)" color="gray" variant="subtle" size="xs" />
+            </template>
+            <template #status-data="{ row }">
+              <UBadge :label="statusLabel(row.status)" :color="statusColor(row.status)" variant="subtle" size="xs" />
+            </template>
+            <template #businessImpact-data="{ row }">
+              <UBadge :label="impactLabel(row.businessImpact)" :color="impactColor(row.businessImpact)" variant="subtle" size="xs" />
+            </template>
+            <template #sourceProducts-data="{ row }">
+              <div class="flex flex-wrap gap-1">
+                <UBadge v-for="product in row.sourceProducts" :key="product" :label="product" color="blue" variant="subtle" size="xs" />
+              </div>
+            </template>
+          </UTable>
+        </UCard>
+
+        <aside class="space-y-4">
+          <UCard>
+            <template #header>
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white">优先落地项</h3>
+            </template>
+            <div class="space-y-3">
+              <div v-for="action in recommendedActions" :key="action.id" class="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <p class="text-sm font-semibold text-gray-900 dark:text-white">{{ action.name }}</p>
+                    <p class="mt-1 text-xs leading-5 text-gray-500">{{ action.platformMove }}</p>
+                  </div>
+                  <UBadge :label="String(action.priorityScore)" color="orange" variant="subtle" size="xs" />
+                </div>
+              </div>
             </div>
-            <div class="mt-3 flex flex-wrap gap-1">
-              <UBadge v-for="packId in workflow.rulePackIds" :key="packId" :label="packId" color="gray" variant="subtle" size="xs" />
-              <UBadge v-for="integrationId in workflow.integrationIds" :key="integrationId" :label="integrationId" color="blue" variant="subtle" size="xs" />
+          </UCard>
+
+          <UCard>
+            <template #header>
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white">发布门禁策略包</h3>
+            </template>
+            <div class="space-y-3">
+              <div>
+                <p class="text-xs text-gray-500">要求能力</p>
+                <div class="mt-2 flex flex-wrap gap-1">
+                  <UBadge v-for="capability in releasePolicy.requiredCapabilities" :key="capability" :label="capability" color="red" variant="subtle" size="xs" />
+                </div>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500">建议策略</p>
+                <div class="mt-2 flex flex-wrap gap-1">
+                  <UBadge v-for="strategy in releasePolicy.suggestedStrategies" :key="strategy" :label="strategy" color="primary" variant="subtle" size="xs" />
+                </div>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500">人工检查点</p>
+                <ul class="mt-2 space-y-1">
+                  <li v-for="checkpoint in releasePolicy.requiredHumanCheckpoints" :key="checkpoint" class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+                    <UIcon name="i-heroicons-user-circle" class="h-4 w-4 text-orange-500" />
+                    <span>{{ checkpoint }}</span>
+                  </li>
+                </ul>
+              </div>
             </div>
-            <p class="mt-3 text-xs text-gray-500">{{ workflow.successMetric }}</p>
+          </UCard>
+        </aside>
+      </div>
+
+      <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <UCard>
+          <template #header>
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">集成路线图</h3>
+          </template>
+          <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div v-for="stage in rolloutStages" :key="stage.key" class="space-y-3">
+              <div class="flex items-center gap-2">
+                <UIcon :name="stage.icon" class="h-5 w-5" :class="stage.iconClass" />
+                <p class="text-sm font-semibold text-gray-900 dark:text-white">{{ stage.label }}</p>
+              </div>
+              <div v-for="connector in connectorsByStage[stage.key]" :key="connector.id" class="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+                <p class="text-sm font-medium text-gray-900 dark:text-white">{{ connector.name }}</p>
+                <p class="mt-1 text-xs leading-5 text-gray-500">{{ connector.businessValue }}</p>
+                <p class="mt-2 text-xs text-gray-400">{{ connector.implementationHint }}</p>
+              </div>
+            </div>
           </div>
-        </div>
-      </UCard>
-    </div>
+        </UCard>
+
+        <UCard>
+          <template #header>
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">业务工作流模板</h3>
+          </template>
+          <div class="space-y-3">
+            <div v-for="workflow in workflows" :key="workflow.id" class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p class="text-sm font-semibold text-gray-900 dark:text-white">{{ workflow.name }}</p>
+                  <p class="mt-1 text-xs leading-5 text-gray-500">{{ workflow.scenario }}</p>
+                </div>
+                <UBadge :label="workflow.strategyId" color="primary" variant="subtle" size="xs" />
+              </div>
+              <div class="mt-3 flex flex-wrap gap-1">
+                <UBadge v-for="packId in workflow.rulePackIds" :key="packId" :label="packId" color="gray" variant="subtle" size="xs" />
+                <UBadge v-for="integrationId in workflow.integrationIds" :key="integrationId" :label="integrationId" color="blue" variant="subtle" size="xs" />
+              </div>
+              <p class="mt-3 text-xs text-gray-500">{{ workflow.successMetric }}</p>
+            </div>
+          </div>
+        </UCard>
+      </div>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import type { BusinessImpact, CapabilityStatus, RolloutStage } from '~/types/governance'
-import {
-  compileGovernancePolicyPack,
-  getCapabilityCoverageSummary,
-  getConnectorsByStage,
-  getRecommendedNextActions,
-  marketCapabilities,
-  workflowTemplates,
-} from '~/utils/governanceCatalog'
+import { ref, computed, onMounted } from 'vue'
+import type {
+  BusinessImpact,
+  CapabilityStatus,
+  RolloutStage,
+  MarketCapability,
+  IntegrationConnector,
+  GovernanceRulePack,
+  WorkflowTemplate,
+  CapabilityCoverageSummary,
+  CompiledGovernancePolicyPack,
+} from '~/types/governance'
+import { useApi } from '~/composables/useApi'
 
-const coverage = getCapabilityCoverageSummary()
-const recommendedActions = getRecommendedNextActions(5)
-const connectorsByStage = getConnectorsByStage()
-const releasePolicy = compileGovernancePolicyPack(['security-release', 'ai-generated-code', 'compliance-evidence'])
+const { get } = useApi()
 
+// ---- 响应式数据 ----
+const capabilities = ref<MarketCapability[]>([])
+const connectors = ref<IntegrationConnector[]>([])
+const rulePacks = ref<GovernanceRulePack[]>([])
+const workflows = ref<WorkflowTemplate[]>([])
+const loading = ref(true)
+const error = ref<string | null>(null)
+
+// ---- 影响因子常量（用于优先级计算） ----
+const impactScore: Record<BusinessImpact, number> = { HIGH: 3, MEDIUM: 2, LOW: 1 }
+const statusScore: Record<CapabilityStatus, number> = { ENABLED: 0, PARTIAL: 1, PLANNED: 2 }
+
+// ---- 派生计算 ----
+const coverage = computed<CapabilityCoverageSummary>(() => {
+  const list = capabilities.value
+  const enabled = list.filter((c) => c.status === 'ENABLED').length
+  const partial = list.filter((c) => c.status === 'PARTIAL').length
+  const planned = list.filter((c) => c.status === 'PLANNED').length
+  const total = list.length
+  return {
+    total,
+    enabled,
+    partial,
+    planned,
+    coveragePercent: total === 0 ? 0 : Math.round(((enabled + partial * 0.5) / total) * 100),
+  }
+})
+
+const recommendedActions = computed(() => {
+  return capabilities.value
+    .filter((item) => item.status !== 'ENABLED' && item.businessImpact !== 'LOW')
+    .map((item) => ({
+      ...item,
+      priorityScore: impactScore[item.businessImpact] * 100 + statusScore[item.status] * 20 + item.readiness,
+    }))
+    .sort((a, b) => b.priorityScore - a.priorityScore)
+    .slice(0, 5)
+})
+
+const connectorsByStage = computed<Record<RolloutStage, IntegrationConnector[]>>(() => {
+  return connectors.value.reduce(
+    (groups, connector) => {
+      groups[connector.stage].push(connector)
+      return groups
+    },
+    { live: [], next: [], later: [] } as Record<RolloutStage, IntegrationConnector[]>,
+  )
+})
+
+/** 从后端 rulePacks 中选取指定 ID 的策略包并编译为门禁策略 */
+const releasePolicy = computed<CompiledGovernancePolicyPack>(() => {
+  const packIds = ['security-release', 'ai-generated-code', 'compliance-evidence']
+  const selectedPacks = packIds
+    .map((id) => rulePacks.value.find((p) => p.id === id))
+    .filter((p): p is GovernanceRulePack => p != null)
+
+  const unique = <T>(items: T[]): T[] => Array.from(new Set(items))
+
+  return {
+    packIds,
+    requiredCapabilities: unique(selectedPacks.flatMap((p) => p.capabilityIds)),
+    suggestedStrategies: unique(selectedPacks.flatMap((p) => p.suggestedStrategies)),
+    requiredHumanCheckpoints: unique(selectedPacks.flatMap((p) => p.humanCheckpoints)),
+    controls: unique(selectedPacks.flatMap((p) => p.controls)),
+  }
+})
+
+// ---- 表格列定义 ----
 const capabilityColumns = [
   { key: 'name', label: '能力' },
   { key: 'category', label: '类别' },
@@ -199,6 +297,7 @@ const rolloutStages: Array<{ key: RolloutStage; label: string; icon: string; ico
   { key: 'later', label: '后续扩展', icon: 'i-heroicons-clock', iconClass: 'text-gray-400' },
 ]
 
+// ---- 标签辅助函数 ----
 function statusLabel(status: CapabilityStatus) {
   const map: Record<CapabilityStatus, string> = {
     ENABLED: '已启用',
@@ -246,4 +345,59 @@ function categoryLabel(category: string) {
   }
   return map[category] ?? category
 }
+
+// ---- 数据加载 ----
+async function fetchAllData() {
+  loading.value = true
+  error.value = null
+
+  // 并行发起四个请求，各自捕获异常避免互相阻塞
+  const results = await Promise.allSettled([
+    get<MarketCapability[]>('/api/governance/capabilities'),
+    get<IntegrationConnector[]>('/api/governance/connectors'),
+    get<GovernanceRulePack[]>('/api/governance/rule-packs'),
+    get<WorkflowTemplate[]>('/api/governance/workflows'),
+  ])
+
+  // 收集所有错误信息
+  const errors: string[] = []
+
+  if (results[0].status === 'fulfilled') {
+    const res = results[0].value as { data: MarketCapability[] }
+    capabilities.value = res.data ?? []
+  } else {
+    errors.push('市场能力: ' + String(results[0].reason))
+  }
+
+  if (results[1].status === 'fulfilled') {
+    const res = results[1].value as { data: IntegrationConnector[] }
+    connectors.value = res.data ?? []
+  } else {
+    errors.push('集成连接器: ' + String(results[1].reason))
+  }
+
+  if (results[2].status === 'fulfilled') {
+    const res = results[2].value as { data: GovernanceRulePack[] }
+    rulePacks.value = res.data ?? []
+  } else {
+    errors.push('规则包: ' + String(results[2].reason))
+  }
+
+  if (results[3].status === 'fulfilled') {
+    const res = results[3].value as { data: WorkflowTemplate[] }
+    workflows.value = res.data ?? []
+  } else {
+    errors.push('工作流模板: ' + String(results[3].reason))
+  }
+
+  if (errors.length > 0) {
+    error.value = errors.join('；')
+  }
+
+  loading.value = false
+}
+
+onMounted(() => {
+  fetchAllData()
+})
 </script>

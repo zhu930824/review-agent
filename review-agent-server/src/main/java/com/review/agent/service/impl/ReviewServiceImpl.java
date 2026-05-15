@@ -5,7 +5,6 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.review.agent.domain.dto.*;
-import com.review.agent.domain.dto.convert.ReviewConverter;
 import com.review.agent.domain.dto.diff.FileChange;
 import com.review.agent.domain.entity.Review;
 import com.review.agent.domain.entity.ReviewFinding;
@@ -54,7 +53,17 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     public ReviewVO createReview(CreateReviewRequest request) {
-        Review review = ReviewConverter.toEntity(request);
+        Review review = new Review();
+        review.setProjectId(request.getProjectId());
+        review.setSourceBranch(request.getSourceBranch());
+        review.setTargetBranch(request.getTargetBranch());
+        review.setSourceCommit(request.getSourceCommit());
+        review.setTargetCommit(request.getTargetCommit());
+        review.setReviewMode(request.getReviewMode());
+        review.setModelsConfig(request.getModelsConfig());
+        review.setStatus(ReviewStatus.PENDING);
+        review.setCreatedAt(LocalDateTime.now());
+        review.setUpdatedAt(LocalDateTime.now());
 
         // 解析分支的最新 commit SHA
         if (request.getSourceBranch() != null && request.getTargetBranch() != null) {
@@ -68,7 +77,7 @@ public class ReviewServiceImpl implements ReviewService {
         // 简化为同步执行，后续可改为异步
         executeReview(review, request.getModelsConfig());
 
-        return ReviewConverter.toVO(review, getProjectName(review.getProjectId()));
+        return buildReviewVO(review, getProjectName(review.getProjectId()));
     }
 
     @Override
@@ -79,7 +88,7 @@ public class ReviewServiceImpl implements ReviewService {
                 new LambdaQueryWrapper<ReviewFinding>().eq(ReviewFinding::getReviewId, reviewId));
         List<ReviewModelResult> modelResults = reviewModelResultMapper.selectList(
                 new LambdaQueryWrapper<ReviewModelResult>().eq(ReviewModelResult::getReviewId, reviewId));
-        return ReviewConverter.toDetailVO(review, projectName, findings, modelResults);
+        return buildReviewDetailVO(review, projectName, findings, modelResults);
     }
 
     @Override
@@ -93,7 +102,7 @@ public class ReviewServiceImpl implements ReviewService {
 
         Page<Review> result = reviewMapper.selectPage(page, wrapper);
         List<ReviewVO> voList = result.getRecords().stream()
-                .map(r -> ReviewConverter.toVO(r, getProjectName(r.getProjectId())))
+                .map(r -> buildReviewVO(r, getProjectName(r.getProjectId())))
                 .toList();
 
         return new PageResult<>(result.getTotal(), pageRequest.getPageNum(),
@@ -108,7 +117,17 @@ public class ReviewServiceImpl implements ReviewService {
         reviewRequest.setTargetBranch(request.getTargetBranch());
         reviewRequest.setReviewMode(ReviewMode.SINGLE);
 
-        Review review = ReviewConverter.toEntity(reviewRequest);
+        Review review = new Review();
+        review.setProjectId(reviewRequest.getProjectId());
+        review.setSourceBranch(reviewRequest.getSourceBranch());
+        review.setTargetBranch(reviewRequest.getTargetBranch());
+        review.setSourceCommit(reviewRequest.getSourceCommit());
+        review.setTargetCommit(reviewRequest.getTargetCommit());
+        review.setReviewMode(reviewRequest.getReviewMode());
+        review.setModelsConfig(reviewRequest.getModelsConfig());
+        review.setStatus(ReviewStatus.PENDING);
+        review.setCreatedAt(LocalDateTime.now());
+        review.setUpdatedAt(LocalDateTime.now());
         review.setStatus(ReviewStatus.RUNNING);
         reviewMapper.insert(review);
 
@@ -139,7 +158,7 @@ public class ReviewServiceImpl implements ReviewService {
         String projectName = getProjectName(review.getProjectId());
         List<ReviewModelResult> modelResults = reviewModelResultMapper.selectList(
                 new LambdaQueryWrapper<ReviewModelResult>().eq(ReviewModelResult::getReviewId, review.getId()));
-        ReviewDetailVO detail = ReviewConverter.toDetailVO(review, projectName, findings, modelResults);
+        ReviewDetailVO detail = buildReviewDetailVO(review, projectName, findings, modelResults);
         detail.setBlockedReasons(blockedReasons);
         return detail;
     }
@@ -152,7 +171,7 @@ public class ReviewServiceImpl implements ReviewService {
         }
         finding.setHumanStatus(request.getHumanStatus());
         reviewFindingMapper.updateById(finding);
-        return ReviewConverter.toVO(finding);
+        return buildReviewFindingVO(finding);
     }
 
     /**
@@ -452,5 +471,92 @@ public class ReviewServiceImpl implements ReviewService {
         if (projectId == null) return null;
         var project = projectMapper.selectById(projectId);
         return project != null ? project.getName() : null;
+    }
+
+    private ReviewVO buildReviewVO(Review entity, String projectName) {
+        ReviewVO vo = new ReviewVO();
+        vo.setId(entity.getId());
+        vo.setProjectId(entity.getProjectId());
+        vo.setProjectName(projectName);
+        vo.setSourceBranch(entity.getSourceBranch());
+        vo.setTargetBranch(entity.getTargetBranch());
+        vo.setSourceCommit(entity.getSourceCommit());
+        vo.setTargetCommit(entity.getTargetCommit());
+        vo.setStatus(entity.getStatus());
+        vo.setReviewMode(entity.getReviewMode());
+        vo.setModelsConfig(entity.getModelsConfig());
+        vo.setSummary(entity.getSummary());
+        vo.setCreatedAt(entity.getCreatedAt());
+        vo.setUpdatedAt(entity.getUpdatedAt());
+        return vo;
+    }
+
+    private ReviewFindingVO buildReviewFindingVO(ReviewFinding entity) {
+        ReviewFindingVO vo = new ReviewFindingVO();
+        vo.setId(entity.getId());
+        vo.setReviewId(entity.getReviewId());
+        vo.setFilePath(entity.getFilePath());
+        vo.setLineStart(entity.getLineStart());
+        vo.setLineEnd(entity.getLineEnd());
+        vo.setCategory(entity.getCategory());
+        vo.setSeverity(entity.getSeverity());
+        vo.setTitle(entity.getTitle());
+        vo.setDescription(entity.getDescription());
+        vo.setSuggestion(entity.getSuggestion());
+        vo.setModelName(entity.getModelName());
+        vo.setConfidence(entity.getConfidence());
+        vo.setIsCrossHit(entity.getIsCrossHit());
+        vo.setHumanStatus(entity.getHumanStatus());
+        vo.setCreatedAt(entity.getCreatedAt());
+        return vo;
+    }
+
+    private ReviewModelResultVO buildReviewModelResultVO(ReviewModelResult entity) {
+        ReviewModelResultVO vo = new ReviewModelResultVO();
+        vo.setId(entity.getId());
+        vo.setReviewId(entity.getReviewId());
+        vo.setModelName(entity.getModelName());
+        vo.setRole(entity.getRole());
+        vo.setStatus(entity.getStatus());
+        vo.setRawResult(entity.getRawResult());
+        vo.setErrorMessage(entity.getErrorMessage());
+        vo.setStartedAt(entity.getStartedAt());
+        vo.setCompletedAt(entity.getCompletedAt());
+        return vo;
+    }
+
+    private ReviewDetailVO buildReviewDetailVO(Review review, String projectName,
+                                                List<ReviewFinding> findings,
+                                                List<ReviewModelResult> modelResults) {
+        ReviewDetailVO detail = new ReviewDetailVO();
+        detail.setReview(buildReviewVO(review, projectName));
+        detail.setFindings(findings.stream().map(this::buildReviewFindingVO).toList());
+        detail.setModelResults(modelResults.stream().map(this::buildReviewModelResultVO).toList());
+
+        int blocker = 0, major = 0, minor = 0, info = 0;
+        for (ReviewFinding f : findings) {
+            if (f.getSeverity() == null) continue;
+            switch (f.getSeverity()) {
+                case BLOCKER -> blocker++;
+                case MAJOR -> major++;
+                case MINOR -> minor++;
+                case INFO -> info++;
+            }
+        }
+        detail.setTotalFindings(findings.size());
+        detail.setBlockerCount(blocker);
+        detail.setMajorCount(major);
+        detail.setMinorCount(minor);
+        detail.setInfoCount(info);
+
+        String summary = review.getSummary();
+        if (summary != null) {
+            if (summary.contains("\"prePrStatus\":\"BLOCKED\"")) {
+                detail.setPrePrStatus("BLOCKED");
+            } else if (summary.contains("\"prePrStatus\":\"PASSED\"")) {
+                detail.setPrePrStatus("PASSED");
+            }
+        }
+        return detail;
     }
 }
