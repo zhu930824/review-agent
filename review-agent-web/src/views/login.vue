@@ -1,6 +1,8 @@
 <template>
-  <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)">
-    <a-card style="width: 420px; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.15)">
+  <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 40%, #ec4899 100%); position: relative; overflow: hidden">
+    <div style="position: absolute; top: -150px; right: -100px; width: 400px; height: 400px; background: radial-gradient(circle, rgba(255,255,255,0.2), transparent 60%); border-radius: 50%"></div>
+    <div style="position: absolute; bottom: -100px; left: -80px; width: 300px; height: 300px; background: radial-gradient(circle, rgba(255,255,255,0.15), transparent 60%); border-radius: 50%"></div>
+    <a-card class="glass-strong" style="width: 420px; border-radius: 20px !important">
       <div style="text-align: center; margin-bottom: 24px">
         <SafetyCertificateOutlined style="font-size: 36px; color: #4F46E5" />
         <h2 style="margin: 12px 0 4px; font-weight: 700">Review Agent</h2>

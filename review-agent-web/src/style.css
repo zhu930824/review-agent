@@ -71,6 +71,37 @@ body::after {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
+/* ====== Grid Card Layout ====== */
+.card-grid {
+  display: grid;
+  gap: 20px;
+}
+
+.card-grid-2 { grid-template-columns: repeat(2, 1fr) }
+.card-grid-3 { grid-template-columns: repeat(3, 1fr) }
+.card-grid-4 { grid-template-columns: repeat(4, 1fr) }
+
+@media (max-width: 1024px) {
+  .card-grid-3, .card-grid-4 { grid-template-columns: repeat(2, 1fr) }
+}
+@media (max-width: 640px) {
+  .card-grid-2, .card-grid-3, .card-grid-4 { grid-template-columns: 1fr }
+}
+
+.card-grid > *,
+.ant-row > .ant-col > * {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.card-grid > .glass-card,
+.card-grid > .ant-card,
+.ant-row > .ant-col > .glass-card,
+.ant-row > .ant-col > .ant-card {
+  height: 100%;
+}
+
 /* ====== Flat Design Elements ====== */
 .btn-flat {
   border-radius: 8px;

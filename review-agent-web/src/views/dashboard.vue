@@ -5,7 +5,8 @@
       <a-space direction="vertical" :size="4">
         <a-typography-title :level="3" style="margin: 0">质量驾驶舱</a-typography-title>
         <a-typography-text type="secondary">
-          跟踪 Pre-PR 通过率、阻断风险和多模型审查稳定性        </a-typography-text>
+          跟踪 Pre-PR 通过率、阻断风险和多模型审查稳定性
+        </a-typography-text>
       </a-space>
       <a-button type="primary" size="large" @click="router.push('/reviews/create')">
         <template #icon><PlayCircleOutlined /></template>
@@ -42,7 +43,7 @@
       </a-col>
     </a-row>
 
-    <!-- 主内容区域 -->
+    <!-- 主要内容区域 -->
     <a-row :gutter="[24, 24]">
       <!-- 左侧：最近审查表 -->
       <a-col :xs="24" :xl="16">
@@ -307,4 +308,3 @@ async function loadDashboard() {
 
 onMounted(loadDashboard)
 </script>
-
