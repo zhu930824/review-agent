@@ -1,7 +1,9 @@
 package com.review.agent.controller;
 
 import com.review.agent.common.result.Result;
+import com.review.agent.domain.dto.PrePrDecisionRequest;
 import com.review.agent.domain.dto.*;
+import com.review.agent.infrastructure.sarif.SarifLog;
 import com.review.agent.service.ReviewProgressService;
 import com.review.agent.service.ReviewService;
 import lombok.RequiredArgsConstructor;
@@ -52,5 +54,17 @@ public class ReviewController {
             @PathVariable("findingId") Long findingId,
             @Validated @RequestBody UpdateFindingStatusRequest request) {
         return Result.success(reviewService.updateFindingStatus(findingId, request));
+    }
+
+    @PatchMapping("/{id}/pre-pr-decision")
+    public Result<ReviewDetailVO> prePrDecision(
+            @PathVariable("id") Long id,
+            @Validated @RequestBody PrePrDecisionRequest request) {
+        return Result.success(reviewService.prePrDecision(id, request));
+    }
+
+    @GetMapping("/{id}/sarif")
+    public Result<SarifLog> exportSarif(@PathVariable("id") Long id) {
+        return Result.success(reviewService.exportSarif(id));
     }
 }

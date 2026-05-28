@@ -9,7 +9,7 @@ import {
   governanceRulePacks,
   marketCapabilities,
   workflowTemplates,
-} from '../utils/governanceCatalog'
+} from '../src/utils/governanceCatalog'
 
 test('market capability catalog covers core AI review product expectations', () => {
   const capabilityIds = marketCapabilities.map(item => item.id)
@@ -71,3 +71,4 @@ test('rule packs have measurable coverage metadata', () => {
   assert.ok(governanceRulePacks.every(pack => pack.controls.length > 0))
   assert.ok(governanceRulePacks.every(pack => pack.businessOutcome.length > 0))
 })
+

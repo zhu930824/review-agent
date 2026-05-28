@@ -4,10 +4,12 @@ import com.review.agent.domain.dto.CreatePrePrRequest;
 import com.review.agent.domain.dto.CreateReviewRequest;
 import com.review.agent.domain.dto.PageRequest;
 import com.review.agent.domain.dto.PageResult;
+import com.review.agent.domain.dto.PrePrDecisionRequest;
 import com.review.agent.domain.dto.ReviewDetailVO;
 import com.review.agent.domain.dto.ReviewFindingVO;
 import com.review.agent.domain.dto.ReviewVO;
 import com.review.agent.domain.dto.UpdateFindingStatusRequest;
+import com.review.agent.infrastructure.sarif.SarifLog;
 
 public interface ReviewService {
 
@@ -20,4 +22,8 @@ public interface ReviewService {
     ReviewDetailVO createPrePrReview(CreatePrePrRequest request);
 
     ReviewFindingVO updateFindingStatus(Long findingId, UpdateFindingStatusRequest request);
+
+    ReviewDetailVO prePrDecision(Long reviewId, PrePrDecisionRequest request);
+
+    SarifLog exportSarif(Long reviewId);
 }

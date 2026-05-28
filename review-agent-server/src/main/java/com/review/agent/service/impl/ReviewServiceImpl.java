@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.review.agent.common.exception.BizException;
 import com.review.agent.domain.dto.*;
 import com.review.agent.domain.dto.diff.FileChange;
+import com.review.agent.domain.entity.PrePrGate;
 import com.review.agent.domain.entity.Review;
 import com.review.agent.domain.entity.ReviewFinding;
 import com.review.agent.domain.entity.ReviewModelResult;
@@ -21,11 +22,19 @@ import com.review.agent.infrastructure.ai.JudgeEvaluation;
 import com.review.agent.infrastructure.ai.JudgeReviewResult;
 import com.review.agent.infrastructure.ai.ModelReviewResult;
 import com.review.agent.infrastructure.ai.ReviewFindingResult;
+import com.review.agent.infrastructure.auth.AuthContext;
+import com.review.agent.infrastructure.ci.CiStatusService;
 import com.review.agent.infrastructure.git.GitDiffService;
+import com.review.agent.infrastructure.persistence.PrePrGateMapper;
 import com.review.agent.infrastructure.persistence.ProjectMapper;
 import com.review.agent.infrastructure.persistence.ReviewFindingMapper;
 import com.review.agent.infrastructure.persistence.ReviewMapper;
 import com.review.agent.infrastructure.persistence.ReviewModelResultMapper;
+import com.review.agent.infrastructure.rule.RuleEngine;
+import com.review.agent.infrastructure.rule.RuleMatchResult;
+import com.review.agent.infrastructure.rule.RuleRepository;
+import com.review.agent.infrastructure.sarif.SarifConverter;
+import com.review.agent.infrastructure.sarif.SarifLog;
 import com.review.agent.service.AgentReviewService;
 import com.review.agent.service.ReviewProgressService;
 import com.review.agent.service.ReviewService;
@@ -48,11 +57,16 @@ public class ReviewServiceImpl implements ReviewService {
     private final ReviewMapper reviewMapper;
     private final ReviewFindingMapper reviewFindingMapper;
     private final ReviewModelResultMapper reviewModelResultMapper;
+    private final PrePrGateMapper prePrGateMapper;
     private final ProjectMapper projectMapper;
     private final GitDiffService gitDiffService;
     private final AIReviewService aiReviewService;
     private final AgentReviewService agentReviewService;
     private final ReviewProgressService reviewProgressService;
+    private final SarifConverter sarifConverter;
+    private final CiStatusService ciStatusService;
+    private final RuleEngine ruleEngine;
+    private final RuleRepository ruleRepository;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -154,12 +168,15 @@ public class ReviewServiceImpl implements ReviewService {
             }
         }
 
+        String gateStatus = blockedReasons.isEmpty() ? "PASSED" : "BLOCKED";
         if (!blockedReasons.isEmpty()) {
             review.setSummary("{\"prePrStatus\":\"BLOCKED\",\"blockerCount\":" + blockerCount + "}");
         } else {
             review.setSummary("{\"prePrStatus\":\"PASSED\"}");
         }
         reviewMapper.updateById(review);
+
+        persistPrePrGate(review.getId(), gateStatus, blockedReasons);
 
         String projectName = getProjectName(review.getProjectId());
         List<ReviewModelResult> modelResults = reviewModelResultMapper.selectList(
@@ -178,6 +195,87 @@ public class ReviewServiceImpl implements ReviewService {
         finding.setHumanStatus(request.getHumanStatus());
         reviewFindingMapper.updateById(finding);
         return buildReviewFindingVO(finding);
+    }
+
+    @Override
+    public ReviewDetailVO prePrDecision(Long reviewId, PrePrDecisionRequest request) {
+        Review review = requireReview(reviewId);
+        PrePrGate gate = prePrGateMapper.selectOne(
+                new LambdaQueryWrapper<PrePrGate>().eq(PrePrGate::getReviewId, reviewId));
+
+        if (gate == null) {
+            gate = new PrePrGate();
+            gate.setReviewId(reviewId);
+            gate.setCreatedAt(LocalDateTime.now());
+        }
+
+        String decision = request.getDecision().toUpperCase();
+        gate.setGateStatus(decision);
+        gate.setDecidedAt(LocalDateTime.now());
+        gate.setUpdatedAt(LocalDateTime.now());
+
+        var auth = AuthContext.get();
+        if (auth != null) {
+            gate.setDecidedBy(auth.username());
+        }
+
+        if (request.getComment() != null) {
+            gate.setSummary(request.getComment());
+        }
+
+        if (gate.getId() == null) {
+            prePrGateMapper.insert(gate);
+        } else {
+            prePrGateMapper.updateById(gate);
+        }
+
+        String summary = review.getSummary();
+        if (summary == null) {
+            summary = "{}";
+        }
+        summary = summary.replaceAll("\"prePrStatus\":\"[^\"]*\"",
+                "\"prePrStatus\":\"" + (decision.startsWith("APPROVE") ? "APPROVED" : decision) + "\"");
+        review.setSummary(summary);
+        reviewMapper.updateById(review);
+
+        if ("BLOCKED".equals(decision) || "REJECTED".equals(decision)) {
+            ciStatusService.reportBlock(reviewId,
+                    "人工决策: " + decision + (request.getComment() != null ? " - " + request.getComment() : ""));
+        } else {
+            ciStatusService.reportPass(reviewId,
+                    "人工决策: " + gate.getGateStatus());
+        }
+
+        return getReviewDetail(reviewId);
+    }
+
+    private void persistPrePrGate(Long reviewId, String gateStatus, List<String> blockedReasons) {
+        PrePrGate gate = new PrePrGate();
+        gate.setReviewId(reviewId);
+        gate.setGateStatus(gateStatus);
+        gate.setCreatedAt(LocalDateTime.now());
+        gate.setUpdatedAt(LocalDateTime.now());
+        try {
+            gate.setBlockedReasons(objectMapper.writeValueAsString(blockedReasons));
+        } catch (Exception e) {
+            log.error("序列化阻断原因失败", e);
+        }
+        prePrGateMapper.insert(gate);
+
+        if ("BLOCKED".equals(gateStatus)) {
+            ciStatusService.reportBlock(reviewId,
+                    "BLOCKER 级别发现 " + blockedReasons.size() + " 个");
+        } else {
+            ciStatusService.reportPass(reviewId, "Pre-PR 审查通过");
+        }
+    }
+
+    @Override
+    public SarifLog exportSarif(Long reviewId) {
+        Review review = requireReview(reviewId);
+        List<ReviewFinding> findings = reviewFindingMapper.selectList(
+                new LambdaQueryWrapper<ReviewFinding>().eq(ReviewFinding::getReviewId, reviewId));
+        return sarifConverter.convert(review, findings);
     }
 
     private void executeReview(Review review, String modelsConfig) {
@@ -205,11 +303,18 @@ public class ReviewServiceImpl implements ReviewService {
                 reviewFindingMapper.insert(toReviewFinding(review.getId(), finding));
             }
 
-            long blockerCount = aiFindings.stream().filter(f -> f.getSeverity() == Severity.BLOCKER).count();
+            List<RuleMatchResult> ruleMatches = ruleEngine.evaluate(
+                    fileChanges, ruleRepository.listEnabled());
+            for (RuleMatchResult match : ruleMatches) {
+                reviewFindingMapper.insert(toReviewFindingFromRule(review.getId(), match));
+            }
+
+            long blockerCount = aiFindings.stream().filter(f -> f.getSeverity() == Severity.BLOCKER).count()
+                    + ruleMatches.stream().filter(r -> "BLOCKER".equals(r.getSeverity())).count();
             long majorCount = aiFindings.stream().filter(f -> f.getSeverity() == Severity.MAJOR).count();
             review.setStatus(ReviewStatus.COMPLETED);
-            review.setSummary(String.format("{\"totalFindings\":%d,\"blockerCount\":%d,\"majorCount\":%d}",
-                    aiFindings.size(), blockerCount, majorCount));
+            review.setSummary(String.format("{\"totalFindings\":%d,\"blockerCount\":%d,\"majorCount\":%d,\"ruleMatches\":%d}",
+                    aiFindings.size() + ruleMatches.size(), blockerCount, majorCount, ruleMatches.size()));
             reviewMapper.updateById(review);
             reviewProgressService.notifyReviewCompleted(review.getId());
 
@@ -351,6 +456,46 @@ public class ReviewServiceImpl implements ReviewService {
         entity.setIsCrossHit(finding.isCrossHit());
         entity.setHumanStatus(HumanStatus.PENDING);
         return entity;
+    }
+
+    private ReviewFinding toReviewFindingFromRule(Long reviewId, RuleMatchResult match) {
+        ReviewFinding entity = new ReviewFinding();
+        entity.setReviewId(reviewId);
+        entity.setFilePath(match.getFilePath());
+        entity.setLineStart(match.getLineNumber());
+        entity.setLineEnd(match.getLineNumber());
+        entity.setCategory(parseCategory(match.getCategory()));
+        entity.setSeverity(parseSeverity(match.getSeverity()));
+        entity.setTitle(match.getRuleName());
+        entity.setDescription(match.getMessage());
+        entity.setSuggestion(match.getSuggestion());
+        entity.setModelName("rule-engine");
+        entity.setConfidence(BigDecimal.valueOf(0.95));
+        entity.setIsCrossHit(false);
+        entity.setHumanStatus(HumanStatus.PENDING);
+        return entity;
+    }
+
+    private FindingCategory parseCategory(String category) {
+        if (category == null) return FindingCategory.OTHER;
+        return switch (category.toUpperCase()) {
+            case "ARCHITECTURE" -> FindingCategory.CODE_STYLE;
+            case "SECURITY" -> FindingCategory.SECURITY;
+            case "PERFORMANCE" -> FindingCategory.PERFORMANCE;
+            case "CODE_STYLE" -> FindingCategory.CODE_STYLE;
+            case "EXCEPTION_HANDLING" -> FindingCategory.EXCEPTION_HANDLING;
+            default -> FindingCategory.OTHER;
+        };
+    }
+
+    private Severity parseSeverity(String severity) {
+        if (severity == null) return Severity.INFO;
+        return switch (severity.toUpperCase()) {
+            case "BLOCKER" -> Severity.BLOCKER;
+            case "MAJOR" -> Severity.MAJOR;
+            case "MINOR" -> Severity.MINOR;
+            default -> Severity.INFO;
+        };
     }
 
     private ReviewModelResult createModelResult(Long reviewId, String modelName, ModelRole role) {

@@ -1,0 +1,82 @@
+<template>
+  <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)">
+    <a-card style="width: 420px; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.15)">
+      <div style="text-align: center; margin-bottom: 24px">
+        <SafetyCertificateOutlined style="font-size: 36px; color: #4F46E5" />
+        <h2 style="margin: 12px 0 4px; font-weight: 700">创建账号</h2>
+        <p style="color: #999; font-size: 13px">加入 Review Agent 平台</p>
+      </div>
+
+      <a-form layout="vertical" :model="form" @finish="handleRegister">
+        <a-form-item label="用户名" required>
+          <a-input v-model:value="form.username" size="large" placeholder="请输入用户名">
+            <template #prefix><UserOutlined /></template>
+          </a-input>
+        </a-form-item>
+
+        <a-form-item label="邮箱" required>
+          <a-input v-model:value="form.email" size="large" placeholder="请输入邮箱">
+            <template #prefix><MailOutlined /></template>
+          </a-input>
+        </a-form-item>
+
+        <a-form-item label="密码" required>
+          <a-input-password v-model:value="form.password" size="large" placeholder="请输入密码">
+            <template #prefix><LockOutlined /></template>
+          </a-input-password>
+        </a-form-item>
+
+        <a-form-item label="确认密码" required>
+          <a-input-password v-model:value="form.confirmPassword" size="large" placeholder="请再次输入密码">
+            <template #prefix><LockOutlined /></template>
+          </a-input-password>
+        </a-form-item>
+
+        <a-alert v-if="errorMessage" type="error" :message="errorMessage" show-icon closable style="margin-bottom: 16px" @close="errorMessage = ''" />
+
+        <a-form-item>
+          <a-button type="primary" html-type="submit" size="large" block :loading="loading">注册</a-button>
+        </a-form-item>
+      </a-form>
+
+      <div style="text-align: center; font-size: 14px; color: #999; margin-top: 8px">
+        <span>已有账号？</span>
+        <router-link to="/login" style="font-weight: 700; color: #4F46E5; margin-left: 4px">立即登录</router-link>
+      </div>
+    </a-card>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuth } from '@/composables/useAuth'
+import { UserOutlined, MailOutlined, LockOutlined, SafetyCertificateOutlined } from '@ant-design/icons-vue'
+
+const router = useRouter()
+const { register } = useAuth()
+const loading = ref(false)
+const errorMessage = ref('')
+const form = reactive({ username: '', email: '', password: '', confirmPassword: '' })
+
+async function handleRegister() {
+  if (!form.username || !form.email || !form.password) {
+    errorMessage.value = '请填写所有必填项'
+    return
+  }
+  if (form.password !== form.confirmPassword) {
+    errorMessage.value = '两次密码不一致'
+    return
+  }
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    await register({ username: form.username, password: form.password, email: form.email })
+    await router.push('/')
+  } catch (error: any) {
+    errorMessage.value = error?.data?.message || '注册失败'
+  } finally {
+    loading.value = false
+  }
+}
+</script>

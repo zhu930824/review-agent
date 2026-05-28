@@ -11,7 +11,7 @@ import {
   getProviderModelCounts,
   getStrategyRoleLabels,
   getStrategySummaries,
-} from '../utils/modelStrategies'
+} from '../src/utils/modelStrategies'
 
 test('built-in model providers include DashScope and OpenAI compatible providers', () => {
   const providerIds = builtinModelProviders.map(provider => provider.id)
@@ -95,3 +95,4 @@ test('strategy summaries include model roles and gate rules', () => {
   assert.ok(qualityGate.roleLabels.length >= 5)
   assert.deepEqual(qualityGate.gatePolicy.blockOn, ['BLOCKER'])
 })
+

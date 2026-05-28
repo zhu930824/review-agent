@@ -1,0 +1,143 @@
+html, body, #app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+body {
+  background: linear-gradient(135deg, #e8eaf6 0%, #f3e5f5 25%, #e0f2f1 50%, #e8f5e9 75%, #e3f2fd 100%);
+  background-attachment: fixed;
+}
+
+/* 背景彩色光晕 */
+body::before {
+  content: '';
+  position: fixed;
+  top: -200px;
+  left: -150px;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.15), transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  bottom: -150px;
+  right: -100px;
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.12), transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+#app {
+  position: relative;
+  z-index: 1;
+}
+
+/* ====== Glassmorphism Base ====== */
+.glass {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+.glass-strong {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.glass-card:hover {
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+/* ====== Flat Design Elements ====== */
+.btn-flat {
+  border-radius: 8px;
+  border: none;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition: all 0.2s ease;
+}
+
+.btn-flat:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+.btn-flat:active {
+  transform: translateY(0);
+  filter: brightness(0.95);
+}
+
+/* ====== Scrollbar ====== */
+::-webkit-scrollbar { width: 6px; height: 6px }
+::-webkit-scrollbar-track { background: transparent }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 3px }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.22) }
+
+/* ====== Animations ====== */
+.animate-slide-up {
+  animation: slideUp 0.35s ease-out forwards;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px) }
+  to { opacity: 1; transform: translateY(0) }
+}
+
+/* ====== Ant Design Overrides for Glass ====== */
+.ant-card {
+  border-radius: 16px !important;
+}
+
+.ant-card-bordered {
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+
+.ant-btn-primary {
+  border-radius: 8px !important;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3) !important;
+}
+
+.ant-btn-primary:hover {
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4) !important;
+}
+
+.ant-tag {
+  border-radius: 6px !important;
+  border: none !important;
+}
+
+.ant-input, .ant-select-selector, .ant-picker {
+  border-radius: 10px !important;
+}
+
+.ant-table {
+  border-radius: 16px !important;
+  overflow: hidden;
+}
+
+.ant-modal-content {
+  border-radius: 20px !important;
+}

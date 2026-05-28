@@ -7,7 +7,7 @@ import {
   estimateReviewBusinessImpact,
   extractRuleLearningCandidates,
   summarizeRemediationQueue,
-} from '../utils/reviewOperations'
+} from '../src/utils/reviewOperations'
 
 const sampleFindings = [
   {
@@ -93,3 +93,4 @@ test('business impact estimate scales with review volume and avoided defects', (
   assert.ok(impact.avoidedReworkHours > impact.hoursSaved)
   assert.equal(impact.executiveSummary.includes('80'), true)
 })
+

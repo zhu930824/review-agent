@@ -49,7 +49,7 @@ logging:
     org.flywaydb: DEBUG
 
 review-agent:
-  repo-base-path: ${REPO_BASE_PATH:./repos}
+  repo-base-path: ${REPO_BASE_PATH:E:/code/repos}
   auth:
     jwt-secret: ${JWT_SECRET:review-agent-dev-secret-change-me-review-agent-dev-secret}
     jwt-expire-hours: ${JWT_EXPIRE_HOURS:168}

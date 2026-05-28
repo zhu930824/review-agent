@@ -6,7 +6,7 @@ import {
   deriveGateStatus,
   deriveModelSuccessRate,
   generateBlockedReasons,
-} from '../utils/reviewMetrics'
+} from '../src/utils/reviewMetrics'
 
 const reviews = [
   { status: 'COMPLETED', reviewMode: 'AGENT' },
@@ -52,3 +52,4 @@ test('blocked reasons include blocker and human review pressure', () => {
 test('model success rate is rounded percentage', () => {
   assert.equal(deriveModelSuccessRate(detail.modelResults), 67)
 })
+
