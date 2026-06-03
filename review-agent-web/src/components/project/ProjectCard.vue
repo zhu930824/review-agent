@@ -1,5 +1,5 @@
 <template>
-  <NuxtLink :to="`/projects/${project.id}`" style="display: block; text-decoration: none; color: inherit">
+  <RouterLink :to="`/projects/${project.id}`" style="display: block; text-decoration: none; color: inherit">
     <a-card hoverable :bordered="false" style="border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06)">
       <a-space direction="vertical" size="small" style="width: 100%">
         <div style="display: flex; align-items: center; justify-content: space-between">
@@ -32,7 +32,7 @@
         </div>
       </a-space>
     </a-card>
-  </NuxtLink>
+  </RouterLink>
 </template>
 
 <script setup lang="ts">

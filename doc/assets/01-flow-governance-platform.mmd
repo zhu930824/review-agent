@@ -1,0 +1,8 @@
+flowchart TB
+    A["研发入口<br/>Push / MR / PR / Pre-PR"] --> B["AI Governance Layer<br/>Rule / Policy / Gate"]
+    B --> C["Agent Runtime<br/>Role / Skill / Memory / Workflow"]
+    C --> D["Tool & MCP Layer<br/>Git / CI / Issue / Code Search"]
+    C --> E["Model Strategy<br/>Single / Multi / Judge / Agent"]
+    B --> F["Human Decision<br/>确认 / 驳回 / 例外放行"]
+    F --> G["Engineering Memory<br/>规则沉淀 / 经验复用 / 指标复盘"]
+    G --> B

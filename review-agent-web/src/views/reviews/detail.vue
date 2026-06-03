@@ -364,6 +364,7 @@ import { ArrowLeftOutlined, SyncOutlined, CheckOutlined, CloseOutlined, ClockCir
 import type { ReviewDetail, HumanStatus } from '@/types/review'
 import { deriveGateStatus, generateBlockedReasons } from '@/utils/reviewMetrics'
 import { useApi } from '@/composables/useApi'
+import { getApiBaseUrl } from '@/utils/apiConfig'
 import type { RiskAssessment } from '@/types/risk'
 import type { TestCoveragePlan } from '@/types/testgen'
 import type { RefactorPlan } from '@/types/refactor'
@@ -491,8 +492,7 @@ function addOutput(role: string, message: string, type: 'info' | 'error' = 'info
 
 function connectSSE() {
   if (eventSource) eventSource.close()
-  // Vite 环境变量替换 Nuxt useRuntimeConfig
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
+  const baseUrl = getApiBaseUrl()
   const url = `${baseUrl}/reviews/${reviewId.value}/progress`
   eventSource = new EventSource(url)
 
@@ -645,4 +645,3 @@ async function loadAnalysis(tab: string) {
   }
 }
 </script>
-

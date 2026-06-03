@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { getStoredAuthToken } from '@/utils/authStorage'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -25,7 +26,7 @@ const router = createRouter({
 })
 
 router.beforeEach((to, _from) => {
-  const token = localStorage.getItem('token')
+  const token = getStoredAuthToken()
   if (to.meta.guest) return true
   if (!token && to.name !== 'login') return '/login'
   return true

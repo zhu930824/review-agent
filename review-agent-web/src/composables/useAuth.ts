@@ -1,34 +1,28 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { clearStoredAuth, getStoredAuthToken, getStoredAuthUser, setStoredAuth } from '@/utils/authStorage'
 
 const API_BASE = '/api'
-const TOKEN_KEY = 'review-agent-token'
-const USER_KEY = 'review-agent-user'
 
 const token = ref<string | null>(null)
 const user = ref<any | null>(null)
 
 function restoreAuth() {
-  const stored = localStorage.getItem(TOKEN_KEY)
+  const stored = getStoredAuthToken()
   if (stored) token.value = stored
-  const storedUser = localStorage.getItem(USER_KEY)
-  if (storedUser) {
-    try { user.value = JSON.parse(storedUser) } catch { /* ignore */ }
-  }
+  user.value = getStoredAuthUser()
 }
 
 function setAuth(auth: { token: string; user: any }) {
   token.value = auth.token
   user.value = auth.user
-  localStorage.setItem(TOKEN_KEY, auth.token)
-  localStorage.setItem(USER_KEY, JSON.stringify(auth.user))
+  setStoredAuth(localStorage, auth)
 }
 
 function clearAuth() {
   token.value = null
   user.value = null
-  localStorage.removeItem(TOKEN_KEY)
-  localStorage.removeItem(USER_KEY)
+  clearStoredAuth()
 }
 
 export function useAuth() {

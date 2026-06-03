@@ -1,0 +1,8 @@
+flowchart LR
+    A["Git Diff"] --> B["规则扫描"]
+    B --> C["多角色 Agent Review"]
+    C --> D["Finding 聚合"]
+    D --> E["风险分级"]
+    E --> F["PR Summary"]
+    E --> G["人工确认"]
+    G --> H["通过 / 阻断 / 例外放行"]
