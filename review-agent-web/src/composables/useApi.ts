@@ -1,12 +1,11 @@
 import { useRouter } from 'vue-router'
 import { useAuth } from './useAuth'
 import { getApiBaseUrl } from '@/utils/apiConfig'
-import { clearStoredAuth } from '@/utils/authStorage'
 
 const API_BASE = getApiBaseUrl()
 
 async function request<T>(method: string, url: string, body?: any): Promise<{ code: number; data?: T; message?: string }> {
-  const { token } = useAuth()
+  const { token, clearAuth } = useAuth()
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (token.value) headers['Authorization'] = `Bearer ${token.value}`
 
@@ -18,7 +17,7 @@ async function request<T>(method: string, url: string, body?: any): Promise<{ co
 
   if (res.status === 401) {
     const router = useRouter()
-    clearStoredAuth()
+    clearAuth()
     router.push('/login')
     throw new Error('Unauthorized')
   }

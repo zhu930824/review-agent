@@ -63,6 +63,21 @@ public class ReviewController {
         return Result.success(reviewService.prePrDecision(id, request));
     }
 
+    @GetMapping("/{id}/gate")
+    public Result<PrePrGateVO> getPrePrGate(@PathVariable("id") Long id) {
+        return Result.success(reviewService.getPrePrGate(id));
+    }
+
+    @GetMapping("/{id}/pre-pr-report")
+    public Result<String> getPrePrReport(@PathVariable("id") Long id) {
+        return Result.success(reviewService.buildPrePrReport(id));
+    }
+
+    @PostMapping("/{id}/pre-pr-report/publish")
+    public Result<Boolean> publishPrePrReport(@PathVariable("id") Long id) {
+        return Result.success(reviewService.publishPrePrReport(id));
+    }
+
     @GetMapping("/{id}/sarif")
     public Result<SarifLog> exportSarif(@PathVariable("id") Long id) {
         return Result.success(reviewService.exportSarif(id));

@@ -25,6 +25,8 @@ import com.review.agent.infrastructure.ai.ReviewFindingResult;
 import com.review.agent.infrastructure.auth.AuthContext;
 import com.review.agent.infrastructure.ci.CiStatusService;
 import com.review.agent.infrastructure.git.GitDiffService;
+import com.review.agent.infrastructure.integration.PrePrReportMarkdownBuilder;
+import com.review.agent.infrastructure.integration.PrePrReportPublisher;
 import com.review.agent.infrastructure.persistence.PrePrGateMapper;
 import com.review.agent.infrastructure.persistence.ProjectMapper;
 import com.review.agent.infrastructure.persistence.ReviewFindingMapper;
@@ -67,6 +69,8 @@ public class ReviewServiceImpl implements ReviewService {
     private final CiStatusService ciStatusService;
     private final RuleEngine ruleEngine;
     private final RuleRepository ruleRepository;
+    private final PrePrReportMarkdownBuilder prePrReportMarkdownBuilder;
+    private final PrePrReportPublisher prePrReportPublisher;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -136,7 +140,8 @@ public class ReviewServiceImpl implements ReviewService {
         reviewRequest.setProjectId(request.getProjectId());
         reviewRequest.setSourceBranch(request.getSourceBranch());
         reviewRequest.setTargetBranch(request.getTargetBranch());
-        reviewRequest.setReviewMode(ReviewMode.SINGLE);
+        reviewRequest.setReviewMode(parseReviewMode(request.getReviewMode()));
+        reviewRequest.setModelsConfig(request.getModelsConfig());
 
         Review review = new Review();
         review.setProjectId(reviewRequest.getProjectId());
@@ -249,6 +254,23 @@ public class ReviewServiceImpl implements ReviewService {
         return getReviewDetail(reviewId);
     }
 
+    @Override
+    public PrePrGateVO getPrePrGate(Long reviewId) {
+        PrePrGate gate = prePrGateMapper.selectOne(
+                new LambdaQueryWrapper<PrePrGate>().eq(PrePrGate::getReviewId, reviewId));
+        return toPrePrGateVO(gate);
+    }
+
+    @Override
+    public String buildPrePrReport(Long reviewId) {
+        return prePrReportMarkdownBuilder.build(getReviewDetail(reviewId), getPrePrGate(reviewId));
+    }
+
+    @Override
+    public boolean publishPrePrReport(Long reviewId) {
+        return prePrReportPublisher.publish(reviewId, buildPrePrReport(reviewId));
+    }
+
     private void persistPrePrGate(Long reviewId, String gateStatus, List<String> blockedReasons) {
         PrePrGate gate = new PrePrGate();
         gate.setReviewId(reviewId);
@@ -267,6 +289,35 @@ public class ReviewServiceImpl implements ReviewService {
                     "BLOCKER 级别发现 " + blockedReasons.size() + " 个");
         } else {
             ciStatusService.reportPass(reviewId, "Pre-PR 审查通过");
+        }
+    }
+
+    private PrePrGateVO toPrePrGateVO(PrePrGate gate) {
+        if (gate == null) {
+            return null;
+        }
+        PrePrGateVO vo = new PrePrGateVO();
+        vo.setId(gate.getId());
+        vo.setReviewId(gate.getReviewId());
+        vo.setGateStatus(gate.getGateStatus());
+        vo.setSummary(gate.getSummary());
+        vo.setBlockedReasons(parseBlockedReasons(gate.getBlockedReasons()));
+        vo.setDecidedBy(gate.getDecidedBy());
+        vo.setDecidedAt(gate.getDecidedAt());
+        vo.setCreatedAt(gate.getCreatedAt());
+        vo.setUpdatedAt(gate.getUpdatedAt());
+        return vo;
+    }
+
+    private List<String> parseBlockedReasons(String blockedReasons) {
+        if (blockedReasons == null || blockedReasons.isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(blockedReasons, new TypeReference<>() {});
+        } catch (Exception e) {
+            log.warn("解析 Pre-PR 阻断原因失败: {}", blockedReasons, e);
+            return List.of(blockedReasons);
         }
     }
 
@@ -586,6 +637,18 @@ public class ReviewServiceImpl implements ReviewService {
                     .agents(agents)
                     .orchestrationStrategy("PARALLEL")
                     .build();
+        }
+    }
+
+    private ReviewMode parseReviewMode(String reviewMode) {
+        if (reviewMode == null || reviewMode.isBlank()) {
+            return ReviewMode.SINGLE;
+        }
+        try {
+            return ReviewMode.valueOf(reviewMode);
+        } catch (IllegalArgumentException e) {
+            log.warn("未知 Pre-PR 审查模式，使用 SINGLE: {}", reviewMode);
+            return ReviewMode.SINGLE;
         }
     }
 

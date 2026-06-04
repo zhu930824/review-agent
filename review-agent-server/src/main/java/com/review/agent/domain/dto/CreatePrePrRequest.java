@@ -15,4 +15,8 @@ public class CreatePrePrRequest {
 
     @NotBlank(message = "目标分支不能为空")
     private String targetBranch;
+
+    private String reviewMode;
+
+    private String modelsConfig;
 }

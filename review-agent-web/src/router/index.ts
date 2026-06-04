@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { getStoredAuthToken } from '@/utils/authStorage'
+import { resolveAuthRedirect } from './authGuard'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -27,9 +28,7 @@ const router = createRouter({
 
 router.beforeEach((to, _from) => {
   const token = getStoredAuthToken()
-  if (to.meta.guest) return true
-  if (!token && to.name !== 'login') return '/login'
-  return true
+  return resolveAuthRedirect(to, token)
 })
 
 export default router

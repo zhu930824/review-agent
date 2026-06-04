@@ -42,7 +42,7 @@
 
 ## Reviews
 
-来源：前端调用确认。对应部分后端源码当前不可稳定文本读取。
+来源：后端可读源码确认，`ReviewController`；前端调用位置用于补充使用场景。
 
 | Method | Path | 用途 | 前端使用位置 |
 | --- | --- | --- | --- |
@@ -51,15 +51,23 @@
 | `GET` | `/api/reviews/{id}` | 查询 Review 详情 | Review 详情页 |
 | `PATCH` | `/api/reviews/{reviewId}/finding/{findingId}` | 更新 Finding 人工状态 | Review 详情页 |
 | `GET` | `/api/reviews/{id}/progress` | SSE 审查进度 | Review 详情页 |
+| `POST` | `/api/reviews/pre-pr` | 创建 Pre-PR 专用审查并持久化 Gate | 待前端创建页切换 |
+| `GET` | `/api/reviews/{id}/gate` | 查询持久化 Pre-PR Gate 状态 | Review 详情页 |
+| `PATCH` | `/api/reviews/{id}/pre-pr-decision` | 记录人工门禁决策 | Review 详情页已接入 |
+| `GET` | `/api/reviews/{id}/sarif` | 导出 SARIF 日志 | Review 详情页下载入口 |
+| `GET` | `/api/reviews/{id}/pre-pr-report` | 生成 Pre-PR Markdown 审查报告 | Review 详情页复制/下载，后续 PR 评论写回 |
+| `POST` | `/api/reviews/{id}/pre-pr-report/publish` | 手动发布 Pre-PR Markdown 审查报告 | 默认关闭，可配置 HTTP 接收器 |
 | `GET` | `/api/reviews/{id}/risk` | 获取风险预测 | Review 详情页智能分析 |
 | `POST` | `/api/reviews/{id}/generate-tests` | 生成测试覆盖计划 | Review 详情页智能分析 |
 | `POST` | `/api/reviews/{id}/refactor-plan` | 生成重构计划 | Review 详情页智能分析 |
 
-当前演进建议：
+当前缺口：
 
-- 新增或明确 `POST /api/reviews/pre-pr`，专门表达 Pre-PR 审查创建。
-- 新增或明确 `GET /api/reviews/{id}/gate`，由后端返回持久化 Gate 状态。
-- 新增或明确 `PATCH /api/reviews/{id}/pre-pr-decision`，记录人工门禁决策。
+- Review 详情页已接入 Gate 状态、人工门禁决策、SARIF 下载和后端生成的 Pre-PR Markdown 报告；后端已提供手动报告发布接口和默认关闭的 HTTP publisher。
+- 前端已新增 Playwright E2E，覆盖未登录重定向、Pre-PR Gate 展示、人工门禁决策、SARIF 下载和 Pre-PR 报告下载。
+- 后端已新增 provider-neutral CI status payload 边界、GitHub/GitLab payload 转换、GitHub/GitLab commit status endpoint 动态装配和可配置 HTTP publisher，可稳定映射 `PASSED/BLOCKED/RUNNING` 到 provider 状态语义。
+- CI status HTTP publisher 默认关闭，可通过 `CI_STATUS_ENABLED`、`CI_STATUS_PROVIDER`、`CI_STATUS_API_BASE_URL`、`CI_STATUS_ENDPOINT`、`CI_STATUS_TOKEN`、`CI_STATUS_CONTEXT` 和 `CI_STATUS_TARGET_URL_TEMPLATE` 配置。
+- 后续需补真实 GitHub/GitLab 外部平台回写验证和分支保护链路联调。
 
 ## Model Config
 
@@ -129,18 +137,19 @@
 | Method | Path | 用途 | 前端使用位置 |
 | --- | --- | --- | --- |
 | `GET` | `/api/gateway/prompts` | 查询 Prompt 模板 | `views/gateway.vue` |
-| `GET` | `/api/gateway/stats` | 查询模型调用统计 | `views/gateway.vue` |
+| `GET` | `/api/gateway/stats` | 查询模型调用统计 | `views/gateway.vue`、`views/operations.vue` |
 
 ## 后续 API 演进优先级
 
 1. **Pre-PR Gate 后端化**
-   - `POST /api/reviews/pre-pr`
-   - `GET /api/reviews/{id}/gate`
-   - `PATCH /api/reviews/{id}/pre-pr-decision`
+   - `POST /api/reviews/pre-pr` 已存在，前端已接入。
+   - `GET /api/reviews/{id}/gate` 已存在，前端已接入。
+   - `PATCH /api/reviews/{id}/pre-pr-decision` 已存在，前端已接入。
 
-2. **CI 与代码扫描集成**
-   - GitHub/GitLab status check 回写。
-   - SARIF 导出和上传。
+2. **CI、代码扫描与报告集成**
+   - GitHub/GitLab commit status endpoint 已可按仓库 URL 和源 commit 装配；后续做外部平台回写验证。
+   - `GET /api/reviews/{id}/sarif` 已存在，前端已接入下载；后续再做上传。
+   - `GET /api/reviews/{id}/pre-pr-report` 已生成后端统一 Markdown 报告，Review 详情页已接入复制和下载；`POST /api/reviews/{id}/pre-pr-report/publish` 已提供默认关闭的 HTTP 发布边界，后续再接真实 PR 评论写回。
 
 3. **策略效果指标**
    - 模型调用耗时、失败率、成本、人工确认率。

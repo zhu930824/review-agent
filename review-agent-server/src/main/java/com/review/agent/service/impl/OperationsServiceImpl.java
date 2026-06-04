@@ -128,6 +128,8 @@ public class OperationsServiceImpl implements OperationsService {
         Review review = reviewMap.get(finding.getReviewId());
         if (review != null) {
             vo.setProjectName(projectNameMap.get(review.getProjectId()));
+            vo.setReviewMode(review.getReviewMode());
+            vo.setModelsConfig(review.getModelsConfig());
         }
 
         return vo;

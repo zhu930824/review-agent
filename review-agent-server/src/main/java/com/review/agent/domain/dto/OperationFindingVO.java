@@ -2,6 +2,7 @@ package com.review.agent.domain.dto;
 
 import com.review.agent.domain.enums.FindingCategory;
 import com.review.agent.domain.enums.HumanStatus;
+import com.review.agent.domain.enums.ReviewMode;
 import com.review.agent.domain.enums.Severity;
 import lombok.Data;
 
@@ -18,6 +19,8 @@ public class OperationFindingVO {
 
     /** 项目名称，通过关联 review -> project 查询 */
     private String projectName;
+    private ReviewMode reviewMode;
+    private String modelsConfig;
 
     private Severity severity;
     private FindingCategory category;

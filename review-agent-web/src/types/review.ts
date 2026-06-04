@@ -1,3 +1,5 @@
+import type { PrePrGateStatus } from '@/utils/prePrGate'
+
 export type ReviewStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED'
 export type ReviewMode = 'SINGLE' | 'MULTI' | 'JUDGE' | 'AGENT'
 export type SeverityLevel = 'BLOCKER' | 'MAJOR' | 'MINOR' | 'INFO'
@@ -77,6 +79,20 @@ export interface CreatePrePrParams {
   projectId: number
   sourceBranch: string
   targetBranch: string
+  reviewMode?: ReviewMode
+  modelsConfig?: string
+}
+
+export interface PrePrGate {
+  id: number
+  reviewId: number
+  gateStatus: PrePrGateStatus
+  summary?: string | null
+  blockedReasons: string[]
+  decidedBy?: string | null
+  decidedAt?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
 }
 
 export type AgentRole = 'SECURITY_AUDITOR' | 'PERFORMANCE_ANALYST' | 'CODE_STYLE_CHECKER' | 'EXCEPTION_HANDLER' | 'ARCHITECT_REVIEWER'

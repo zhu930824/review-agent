@@ -139,6 +139,34 @@
         </a-row>
       </a-card>
 
+      <!-- Pre-PR Gate -->
+      <a-card v-if="prePrGate" size="small">
+        <a-space :size="12" style="width:100%;justify-content:space-between;align-items:flex-start;flex-wrap:wrap">
+          <div>
+            <a-space :size="8" style="margin-bottom:8px">
+              <SafetyOutlined style="font-size:18px;color:#6366f1" />
+              <span style="font-weight:600">Pre-PR Gate</span>
+              <a-tag :color="getPrePrGateTone(prePrGate.gateStatus)">
+                {{ getPrePrGateLabel(prePrGate.gateStatus) }}
+              </a-tag>
+            </a-space>
+            <div v-if="prePrGate.summary" style="font-size:13px;color:#475569;line-height:1.5;max-width:720px">
+              {{ prePrGate.summary }}
+            </div>
+            <div v-if="prePrGate.decidedBy" style="margin-top:4px;font-size:12px;color:#94a3b8">
+              决策人：{{ prePrGate.decidedBy }} · {{ prePrGate.decidedAt || '-' }}
+            </div>
+          </div>
+          <a-space :size="8" wrap>
+            <a-button size="small" @click="downloadSarif">下载 SARIF</a-button>
+            <a-button size="small" @click="copyPrePrReport">复制报告</a-button>
+            <a-button size="small" @click="downloadPrePrReport">下载报告</a-button>
+            <a-button size="small" type="primary" @click="decidePrePrGate('PASSED', '人工确认通过')">人工通过</a-button>
+            <a-button size="small" danger @click="decidePrePrGate('BLOCKED', '人工确认阻断')">人工阻断</a-button>
+          </a-space>
+        </a-space>
+      </a-card>
+
       <!-- 阻断原因 -->
       <a-card v-if="blockedReasons.length" size="small">
         <template #title>
@@ -361,10 +389,12 @@
 import { ref, computed, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { ArrowLeftOutlined, SyncOutlined, CheckOutlined, CloseOutlined, ClockCircleOutlined, FileSearchOutlined, SafetyOutlined, ExclamationCircleOutlined, CheckCircleOutlined, ApiOutlined, TeamOutlined, FundViewOutlined } from '@ant-design/icons-vue'
-import type { ReviewDetail, HumanStatus } from '@/types/review'
+import type { ReviewDetail, HumanStatus, PrePrGate } from '@/types/review'
 import { deriveGateStatus, generateBlockedReasons } from '@/utils/reviewMetrics'
 import { useApi } from '@/composables/useApi'
 import { getApiBaseUrl } from '@/utils/apiConfig'
+import { buildPrePrDecisionPayload, buildSarifFilename, getPrePrGateLabel, getPrePrGateTone, type PrePrGateStatus } from '@/utils/prePrGate'
+import { buildPrePrReportFilename, buildPrePrReportMarkdown } from '@/utils/prePrReport'
 import type { RiskAssessment } from '@/types/risk'
 import type { TestCoveragePlan } from '@/types/testgen'
 import type { RefactorPlan } from '@/types/refactor'
@@ -389,6 +419,7 @@ const { get, patch, post } = useApi()
 const reviewId = computed(() => route.params.id as string)
 const loading = ref(false)
 const detail = ref<ReviewDetail | null>(null)
+const prePrGate = ref<PrePrGate | null>(null)
 const severityFilter = ref('all')
 const categoryFilter = ref('all')
 
@@ -412,8 +443,8 @@ const categoryOptions = [
   { label: '异常处理', value: 'EXCEPTION_HANDLING' },
 ]
 
-const gateStatus = computed(() => detail.value ? deriveGateStatus(detail.value) : 'RUNNING')
-const blockedReasons = computed(() => detail.value ? generateBlockedReasons(detail.value) : [])
+const gateStatus = computed(() => prePrGate.value?.gateStatus || (detail.value ? deriveGateStatus(detail.value) : 'RUNNING'))
+const blockedReasons = computed(() => prePrGate.value?.blockedReasons?.length ? prePrGate.value.blockedReasons : (detail.value ? generateBlockedReasons(detail.value) : []))
 const gateStatusLabel = computed(() => ({
   PASSED: 'Pre-PR 通过', BLOCKED: 'Pre-PR 阻断', NEEDS_HUMAN_REVIEW: '待人工复核', RUNNING: '审查中'
 }[gateStatus.value] ?? gateStatus.value))
@@ -572,8 +603,71 @@ async function loadDetail() {
   try {
     const res = await get<ReviewDetail>(`/reviews/${reviewId.value}`)
     if (res.data) detail.value = res.data
+    await loadPrePrGate()
   } catch (e) { console.error('加载审查详情失败', e) }
   finally { loading.value = false }
+}
+
+async function loadPrePrGate() {
+  try {
+    const res = await get<PrePrGate>(`/reviews/${reviewId.value}/gate`)
+    prePrGate.value = res.data || null
+  } catch (e) { console.error('加载 Pre-PR Gate 失败', e) }
+}
+
+async function decidePrePrGate(decision: PrePrGateStatus, comment = '') {
+  try {
+    await patch(`/reviews/${reviewId.value}/pre-pr-decision`, buildPrePrDecisionPayload(decision, comment))
+    await loadDetail()
+  } catch (e) { console.error('更新 Pre-PR Gate 决策失败', e) }
+}
+
+async function downloadSarif() {
+  try {
+    const res = await get(`/reviews/${reviewId.value}/sarif`)
+    const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/sarif+json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = buildSarifFilename(reviewId.value)
+    link.click()
+    URL.revokeObjectURL(url)
+  } catch (e) { console.error('下载 SARIF 失败', e) }
+}
+
+function fallbackPrePrReport(): string {
+  if (!detail.value) return ''
+  return buildPrePrReportMarkdown(detail.value, prePrGate.value)
+}
+
+async function currentPrePrReport(): Promise<string> {
+  try {
+    const res = await get<string>(`/reviews/${reviewId.value}/pre-pr-report`)
+    if (res.data) return res.data
+  } catch (e) {
+    console.error('获取后端 Pre-PR 报告失败，使用本地报告兜底', e)
+  }
+  return fallbackPrePrReport()
+}
+
+async function copyPrePrReport() {
+  const report = await currentPrePrReport()
+  if (!report) return
+  try {
+    await navigator.clipboard.writeText(report)
+  } catch (e) { console.error('复制 Pre-PR 报告失败', e) }
+}
+
+async function downloadPrePrReport() {
+  const report = await currentPrePrReport()
+  if (!report) return
+  const blob = new Blob([report], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = buildPrePrReportFilename(reviewId.value)
+  link.click()
+  URL.revokeObjectURL(url)
 }
 
 async function updateFindingStatus(findingId: number, status: HumanStatus) {

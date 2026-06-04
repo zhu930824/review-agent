@@ -4,21 +4,23 @@
 
 **Goal:** Turn review-agent into a business-facing AI Coding governance platform with multi-model strategy configuration, Pre-PR quality gates, and useful review dashboards.
 
-**Architecture:** Implement the first slice with frontend-first strategy models and pure TypeScript helpers that compile selected strategies into the existing backend `modelsConfig` JSON. Keep backend changes additive and safe because existing Java source files appear protected in this workspace.
+**Architecture:** Implement the first slice with strategy models and pure TypeScript helpers that compile selected strategies into the existing backend `modelsConfig` JSON. Keep backend changes additive and safe.
 
-**Tech Stack:** Nuxt 3, Vue 3, TypeScript, Nuxt UI, Spring Boot 3, MySQL/Flyway.
+**Tech Stack:** Vite, Vue 3, TypeScript, Ant Design Vue, Vue Router, Spring Boot 3.3.5, Java 21, MyBatis Plus, MySQL/Flyway.
+
+**Execution note:** This original May plan was written against an early Nuxt-oriented frontend shape. It has since been executed in the current Vite + Vue 3 codebase, using `src/` and `views/` paths instead of Nuxt `pages/`, `types/`, and `utils/` roots. The June evolution and Pre-PR plans extend this work with auth, API base configuration, persisted Pre-PR gate reads, SARIF actions, and verification.
 
 ---
 
 ### Task 1: Model Strategy Core
 
 **Files:**
-- Create: `review-agent-web/types/model-config.ts`
-- Create: `review-agent-web/utils/modelStrategies.ts`
-- Create: `review-agent-web/tests/modelStrategies.test.mjs`
+- Create: `review-agent-web/src/types/model-config.ts`
+- Create: `review-agent-web/src/utils/modelStrategies.ts`
+- Create: `review-agent-web/tests/modelStrategies.test.ts`
 - Modify: `review-agent-web/package.json`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create tests that import `utils/modelStrategies.ts` and verify:
 
@@ -27,7 +29,7 @@ Create tests that import `utils/modelStrategies.ts` and verify:
 - `compileStrategyConfig('cross-check')` returns MULTI-compatible config with at least two workers.
 - `deriveGatePolicy()` blocks on BLOCKER and requires human review for MAJOR.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run:
 
@@ -38,11 +40,11 @@ npm test
 
 Expected: fails because test script and helper files do not exist.
 
-- [ ] **Step 3: Implement model types and helpers**
+- [x] **Step 3: Implement model types and helpers**
 
 Add typed provider/profile/strategy definitions, built-in seed data, and pure helper functions.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run:
 
@@ -56,14 +58,14 @@ Expected: PASS.
 ### Task 2: Guided Review Creation
 
 **Files:**
-- Modify: `review-agent-web/pages/reviews/create.vue`
-- Modify: `review-agent-web/types/review.ts`
+- Modify: `review-agent-web/src/views/reviews/create.vue`
+- Modify: `review-agent-web/src/types/review.ts`
 
-- [ ] **Step 1: Add tests or type checks for compiled payload shape**
+- [x] **Step 1: Add tests or type checks for compiled payload shape**
 
-Extend `modelStrategies.test.mjs` to assert that every built-in strategy can produce a `modelsConfig` payload accepted by existing `CreateReviewParams`.
+Extend `modelStrategies.test.ts` to assert that every built-in strategy can produce a `modelsConfig` payload accepted by existing `CreateReviewParams`.
 
-- [ ] **Step 2: Run tests to verify failure before UI integration**
+- [x] **Step 2: Run tests to verify failure before UI integration**
 
 Run:
 
@@ -72,11 +74,11 @@ cd review-agent-web
 npm test
 ```
 
-- [ ] **Step 3: Replace raw JSON-first flow**
+- [x] **Step 3: Replace raw JSON-first flow**
 
 Add strategy cards, model profile previews, and an advanced JSON fallback. On submit, compile selected strategy into `modelsConfig`.
 
-- [ ] **Step 4: Verify tests and Nuxt build**
+- [x] **Step 4: Verify tests and Vite build**
 
 Run:
 
@@ -89,15 +91,15 @@ npm run build
 ### Task 3: Model Configuration Center
 
 **Files:**
-- Create: `review-agent-web/pages/settings/models.vue`
-- Modify: `review-agent-web/components/layout/AppSidebar.vue`
-- Modify: `review-agent-web/utils/modelStrategies.ts`
+- Create: `review-agent-web/src/views/models.vue`
+- Modify: `review-agent-web/src/components/layout/AppSidebar.vue`
+- Modify: `review-agent-web/src/utils/modelStrategies.ts`
 
-- [ ] **Step 1: Add tests for model summary helpers**
+- [x] **Step 1: Add tests for model summary helpers**
 
 Verify provider/profile summaries, enabled model filtering, and strategy role labels.
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run:
 
@@ -106,15 +108,15 @@ cd review-agent-web
 npm test
 ```
 
-- [ ] **Step 3: Build `/settings/models`**
+- [x] **Step 3: Build `/settings/models`**
 
 Add a dense operations-style page showing model providers, model profiles, review strategies, role bindings, and gate policies.
 
-- [ ] **Step 4: Add navigation link**
+- [x] **Step 4: Add navigation link**
 
 Add "模型配置" to the sidebar.
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Run:
 
@@ -127,16 +129,16 @@ npm run build
 ### Task 4: Pre-PR Detail And Dashboard
 
 **Files:**
-- Modify: `review-agent-web/pages/index.vue`
-- Modify: `review-agent-web/pages/reviews/[id].vue`
-- Create: `review-agent-web/utils/reviewMetrics.ts`
-- Create: `review-agent-web/tests/reviewMetrics.test.mjs`
+- Modify: `review-agent-web/src/views/dashboard.vue`
+- Modify: `review-agent-web/src/views/reviews/detail.vue`
+- Create: `review-agent-web/src/utils/reviewMetrics.ts`
+- Create: `review-agent-web/tests/reviewMetrics.test.ts`
 
-- [ ] **Step 1: Write tests for review metrics**
+- [x] **Step 1: Write tests for review metrics**
 
 Test derived metrics for total reviews, completed reviews, pending human confirmations, blockers, Pre-PR blocked count, and model success rate.
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run:
 
@@ -145,15 +147,15 @@ cd review-agent-web
 npm test
 ```
 
-- [ ] **Step 3: Implement review metric helpers**
+- [x] **Step 3: Implement review metric helpers**
 
 Add pure metric functions over review list/detail-like objects.
 
-- [ ] **Step 4: Upgrade dashboard and review detail text**
+- [x] **Step 4: Upgrade dashboard and review detail text**
 
 Replace mojibake text, show business readiness metrics, blocked reasons, PR summary panel, and clearer model execution status.
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Run:
 
@@ -169,7 +171,7 @@ npm run build
 - Create: `review-agent-server/src/main/resources/db/migration/V2__model_strategy_governance.sql`
 - Create: `doc/平台架构治理SOP.md`
 
-- [ ] **Step 1: Verify backend source access**
+- [x] **Step 1: Verify backend source access**
 
 Run:
 
@@ -180,15 +182,15 @@ mvn -q -DskipTests compile
 
 Expected: either PASS or a clear source-readability/build error.
 
-- [ ] **Step 2: Add migration SQL**
+- [x] **Step 2: Add migration SQL**
 
 Add additive tables for providers, profiles, strategies, strategy model bindings, and Pre-PR gates. Do not alter existing tables destructively.
 
-- [ ] **Step 3: Add governance SOP**
+- [x] **Step 3: Add governance SOP**
 
 Document current constraints, target layering, Pre-PR operating process, and backend migration path.
 
-- [ ] **Step 4: Verify backend compile if source is accessible**
+- [x] **Step 4: Verify backend compile if source is accessible**
 
 Run:
 

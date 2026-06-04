@@ -5,6 +5,7 @@ import com.review.agent.domain.dto.CreateReviewRequest;
 import com.review.agent.domain.dto.PageRequest;
 import com.review.agent.domain.dto.PageResult;
 import com.review.agent.domain.dto.PrePrDecisionRequest;
+import com.review.agent.domain.dto.PrePrGateVO;
 import com.review.agent.domain.dto.ReviewDetailVO;
 import com.review.agent.domain.dto.ReviewFindingVO;
 import com.review.agent.domain.dto.ReviewVO;
@@ -24,6 +25,12 @@ public interface ReviewService {
     ReviewFindingVO updateFindingStatus(Long findingId, UpdateFindingStatusRequest request);
 
     ReviewDetailVO prePrDecision(Long reviewId, PrePrDecisionRequest request);
+
+    PrePrGateVO getPrePrGate(Long reviewId);
+
+    String buildPrePrReport(Long reviewId);
+
+    boolean publishPrePrReport(Long reviewId);
 
     SarifLog exportSarif(Long reviewId);
 }

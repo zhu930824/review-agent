@@ -53,7 +53,7 @@
 - Create: `docs/superpowers/specs/2026-06-03-review-agent-evolution-design.md`
 - Create: `docs/superpowers/plans/2026-06-03-review-agent-evolution.md`
 
-- [ ] **Step 1: Write the evolution design document**
+- [x] **Step 1: Write the evolution design document**
 
 Add a document covering:
 
@@ -62,11 +62,11 @@ Add a document covering:
 - Four-stage evolution route.
 - Recommended priority path.
 
-- [ ] **Step 2: Write this implementation plan**
+- [x] **Step 2: Write this implementation plan**
 
 Add the executable plan with exact files, test commands, and verification commands.
 
-- [ ] **Step 3: Inspect the new documents**
+- [x] **Step 3: Inspect the new documents**
 
 Run:
 
@@ -86,7 +86,7 @@ Expected: Both files exist and contain no `TBD` or `TODO` placeholders.
 - Modify: `review-agent-web/src/composables/useApi.ts`
 - Modify: `review-agent-web/src/router/index.ts`
 
-- [ ] **Step 1: Write the failing auth storage test**
+- [x] **Step 1: Write the failing auth storage test**
 
 Create `review-agent-web/tests/authStorage.test.ts`:
 
@@ -140,7 +140,7 @@ test('clearStoredAuth removes token and user consistently', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run:
 
@@ -150,7 +150,7 @@ npm test -- tests/authStorage.test.ts
 
 Expected: FAIL because `../src/utils/authStorage` does not exist yet.
 
-- [ ] **Step 3: Implement auth storage helpers**
+- [x] **Step 3: Implement auth storage helpers**
 
 Create `review-agent-web/src/utils/authStorage.ts`:
 
@@ -191,7 +191,7 @@ export function clearStoredAuth(storage: StorageLike = localStorage): void {
 }
 ```
 
-- [ ] **Step 4: Run auth storage test to verify it passes**
+- [x] **Step 4: Run auth storage test to verify it passes**
 
 Run:
 
@@ -201,7 +201,7 @@ npm test -- tests/authStorage.test.ts
 
 Expected: PASS for the two auth storage tests.
 
-- [ ] **Step 5: Wire shared storage into production auth code**
+- [x] **Step 5: Wire shared storage into production auth code**
 
 Update:
 
@@ -209,7 +209,7 @@ Update:
 - `useApi.ts`: import `clearStoredAuth` and call it on 401.
 - `router/index.ts`: import `getStoredAuthToken` and use it in the guard.
 
-- [ ] **Step 6: Run frontend tests**
+- [x] **Step 6: Run frontend tests**
 
 Run:
 
@@ -224,7 +224,7 @@ Expected: all tests pass.
 **Files:**
 - Modify: `README.md`
 
-- [ ] **Step 1: Replace outdated stack and setup notes**
+- [x] **Step 1: Replace outdated stack and setup notes**
 
 Update README to describe:
 
@@ -233,7 +233,7 @@ Update README to describe:
 - API base: frontend development uses `/api`, typically proxied by Vite.
 - Verification commands: backend compile, frontend tests, frontend build.
 
-- [ ] **Step 2: Run README placeholder scan**
+- [x] **Step 2: Run README placeholder scan**
 
 Run:
 
@@ -248,7 +248,7 @@ Expected: no matches for outdated Nuxt references or placeholders.
 **Files:**
 - No new files.
 
-- [ ] **Step 1: Run frontend tests**
+- [x] **Step 1: Run frontend tests**
 
 Run:
 
@@ -258,7 +258,7 @@ npm test
 
 Expected: all tests pass.
 
-- [ ] **Step 2: Run frontend production build**
+- [x] **Step 2: Run frontend production build**
 
 Run:
 
@@ -268,7 +268,7 @@ npm run build
 
 Expected: Vite build exits with code 0.
 
-- [ ] **Step 3: Run backend compile**
+- [x] **Step 3: Run backend compile**
 
 Run:
 
@@ -278,7 +278,7 @@ mvn -q -DskipTests compile
 
 Expected: Maven compile exits with code 0.
 
-- [ ] **Step 4: Inspect git diff**
+- [x] **Step 4: Inspect git diff**
 
 Run:
 
@@ -451,6 +451,6 @@ Expected: all frontend tests pass and build exits with code 0.
 
 ## Self-Review
 
-- Spec coverage: The plan covers documentation, token key consistency, README correction, and verification. It intentionally defers full mojibake repair, CI status writeback, SARIF export, strategy telemetry, and Agent repair workflow to later stages.
+- Spec coverage: The plan covers documentation, token key consistency, README correction, and verification. Later follow-up work added readable-copy regression coverage for core business pages and Pre-PR reports. It still defers broad encoding audit, CI status writeback, external SARIF upload, deeper strategy telemetry persistence, and Agent repair workflow to later stages.
 - Placeholder scan: This plan contains no `TBD` or `TODO` placeholders.
 - Type consistency: `AUTH_TOKEN_KEY`, `AUTH_USER_KEY`, `getStoredAuthToken`, `getStoredAuthUser`, `setStoredAuth`, and `clearStoredAuth` are consistently named across tests and planned production usage.

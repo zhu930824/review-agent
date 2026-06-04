@@ -9,18 +9,31 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class HttpCiStatusService implements CiStatusService {
 
+    private final CiStatusPayloadFactory payloadFactory;
+    private final HttpCiStatusPublisher publisher;
+
     @Override
     public void reportPass(Long reviewId, String description) {
-        log.info("[CI-Status] review={} PASS: {}", reviewId, description);
+        logPayload(payloadFactory.pass(reviewId, description));
     }
 
     @Override
     public void reportBlock(Long reviewId, String description) {
-        log.info("[CI-Status] review={} BLOCK: {}", reviewId, description);
+        logPayload(payloadFactory.block(reviewId, description));
     }
 
     @Override
     public void reportRunning(Long reviewId, String description) {
-        log.info("[CI-Status] review={} RUNNING: {}", reviewId, description);
+        logPayload(payloadFactory.running(reviewId, description));
+    }
+
+    private void logPayload(CiStatusPayload payload) {
+        log.info("[CI-Status] review={} state={} context={} targetUrl={} description={}",
+                payload.reviewId(),
+                payload.state(),
+                payload.context(),
+                payload.targetUrl(),
+                payload.description());
+        publisher.publish(payload);
     }
 }

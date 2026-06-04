@@ -59,6 +59,51 @@ server: {
 http://localhost:3000
 ```
 
+## Browser E2E
+
+Frontend browser verification uses Playwright:
+
+```powershell
+cd review-agent-web
+npm run test:e2e
+```
+
+On a fresh machine, install the Chromium browser binary once before running E2E:
+
+```powershell
+cd review-agent-web
+npx playwright install chromium
+```
+
+## CI Status Callback
+
+Pre-PR status publishing is disabled by default. To post provider-neutral status payloads to an external receiver:
+
+```powershell
+$env:CI_STATUS_ENABLED='true'
+$env:CI_STATUS_PROVIDER='github'
+$env:CI_STATUS_API_BASE_URL='https://api.github.com'
+$env:CI_STATUS_ENDPOINT='https://example.internal/review-agent/status'
+$env:CI_STATUS_TOKEN='replace-me'
+$env:CI_STATUS_CONTEXT='review-agent/pre-pr'
+$env:CI_STATUS_TARGET_URL_TEMPLATE='https://review-agent.example/reviews/{reviewId}'
+```
+
+`CI_STATUS_PROVIDER` supports `generic`, `github`, and `gitlab`. `generic` posts to `CI_STATUS_ENDPOINT`.
+For `github` and `gitlab`, `CI_STATUS_API_BASE_URL` enables dynamic commit status endpoint assembly from the project repository URL and review source commit; `CI_STATUS_ENDPOINT` remains a fallback for local receivers. GitLab project paths keep the full namespace, so multi-level groups such as `platform/tools/review-agent` are encoded correctly.
+
+## Pre-PR Report Publishing
+
+Pre-PR Markdown report publishing is also disabled by default. To post the backend-generated report to an internal PR comment gateway or another external receiver:
+
+```powershell
+$env:PRE_PR_REPORT_PUBLISH_ENABLED='true'
+$env:PRE_PR_REPORT_PUBLISH_ENDPOINT='https://example.internal/review-agent/pre-pr-report'
+$env:PRE_PR_REPORT_PUBLISH_TOKEN='replace-me'
+```
+
+Manual publishing uses `POST /api/reviews/{id}/pre-pr-report/publish`. The HTTP publisher sends JSON with `reviewId`, `format: "MARKDOWN"`, and `body`.
+
 ## 后端环境
 
 后端需要：

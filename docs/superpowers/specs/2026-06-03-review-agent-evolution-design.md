@@ -39,17 +39,27 @@
 
 截至 2026-06-03 的本地验证结果：
 
-- `review-agent-web`: `npm test` 通过，49 个测试通过。
-- `review-agent-web`: `npm run build` 通过，但主 chunk 约 1.5 MB，存在拆包优化空间。
+- `review-agent-web`: `npm test` 通过，79 个测试通过。
+- `review-agent-web`: `npm run build` 通过，Vue、Ant Design Vue 和 review utils 已拆分 chunk；当前剩余大包警告集中在 Ant Design Vue vendor chunk。
 - `review-agent-server`: `mvn -q -DskipTests compile` 通过。
+
+### 第一阶段已完成项
+
+- 登录态 token key 已统一为 `review-agent-token`，并由 `authStorage.ts` 集中管理。
+- API base URL 已集中到 `apiConfig.ts`，普通 API 和 Review SSE 进度都复用同一配置入口。
+- 路由守卫已抽为可测试函数，覆盖未登录跳转、已登录访问业务页和访客页回首页。
+- Review 创建 payload 编译已抽为可测试工具函数，覆盖模型名映射、Gate policy、override 配置和提交 payload。
+- README、API 清单和开发环境说明已与当前 Vite + Vue 3 + Ant Design Vue 项目状态对齐。
+- Vite 已配置 `vue-vendor`、`ant-design-vue`、`review-utils` 手工拆包。
+- 第二阶段已开始执行：新增 `GET /api/reviews/{id}/gate`，前端创建页切到 `/api/reviews/pre-pr`，Review 详情页接入 Gate 状态、人工决策、SARIF 下载、Pre-PR Markdown 报告复制和下载。
+- 第三阶段已开始执行：运营中心从硬编码样例切换为后端 `/api/operations/dashboard` 数据源，修复队列、SLA、规则学习和业务收益估算基于真实 Finding 聚合；同时接入 `/api/gateway/stats`，新增模型调用健康、失败率、平均耗时、Token 与成本估算看板；运营聚合数据已带出 `reviewMode/modelsConfig`，前端可按 `strategyId` 展示策略效果、确认率、误报倾向和交叉命中率。
 
 ## 主要短板
 
 ### 产品可信度
 
-- README 中描述的前端技术栈是 Nuxt 3/Nuxt UI，但真实项目是 Vite、Vue 3、Ant Design Vue。
-- 多处中文文案、注释和文档存在 mojibake，影响演示、协作和维护。
-- 前端登录态存在 token key 不一致风险：路由守卫读取 `token`，认证模块写入 `review-agent-token`。
+- 核心业务页面和 Pre-PR 报告已新增可读文案回归测试；更广范围的注释、历史文档和终端编码显示仍需后续审计。
+- 前端 UI 已新增 Playwright E2E，覆盖登录态重定向、Pre-PR Gate 展示、人工门禁决策、SARIF 导出和 Pre-PR 报告下载；后续仍需接入真实后端环境和外部平台回写验证。
 
 ### 后端源码资产风险
 
@@ -59,14 +69,17 @@
 
 ### Pre-PR 闭环不完整
 
-- 当前 Gate 状态主要由前端推导，`pre_pr_gate` 尚未形成完整后端状态闭环。
-- 缺少 GitHub/GitLab Checks 或 Commit Status 回写，暂未进入真实分支保护链路。
-- SARIF 导出、PR 摘要写回、Issue 同步等交付链路能力仍处在规划或半实现状态。
+- 后端已有 `pre_pr_gate` 表、`PrePrGate` 实体、`POST /api/reviews/pre-pr`、`PATCH /api/reviews/{id}/pre-pr-decision` 和 `GET /api/reviews/{id}/sarif` 雏形。
+- Review 详情已接入独立 `GET /api/reviews/{id}/gate` 契约，并保留 `ReviewDetailVO.prePrStatus` 作为兼容数据。
+- Pre-PR 创建页已切换到 `/api/reviews/pre-pr` 专用接口，后端 `CreatePrePrRequest` 已兼容可选 `reviewMode` 和 `modelsConfig`。
+- 后端已具备 provider-neutral CI status payload 边界、GitHub/GitLab payload 转换、Commit Status endpoint 动态装配和可配置 HTTP publisher；GitHub/GitLab 外部平台验证和真实分支保护链路仍待接入。
+- SARIF 导出后端接口、前端下载入口和浏览器级下载验证已存在，后续需要代码扫描平台上传能力。
+- 后端已提供 `GET /api/reviews/{id}/pre-pr-report` 统一生成 Pre-PR Markdown 报告，并提供默认关闭的 `POST /api/reviews/{id}/pre-pr-report/publish` HTTP 发布边界；Review 详情页已接入复制和下载，真实 PR 摘要评论写回和 Issue 同步仍处在规划或半实现状态。
 
 ### 策略效果缺少反馈
 
-- 模型调用成功率、成本、耗时、误报率、人工确认率没有完整沉淀。
-- 人工确认/忽略结果尚未系统性转化为规则学习候选。
+- 模型调用成功率、成本、耗时已经接入运营中心看板；策略维度确认率、误报倾向和交叉命中率已接入第一版运营看板，后续需要沉淀到后端历史指标表。
+- 人工确认/忽略结果已经在运营中心转化为规则学习候选，后续需要沉淀为可保存、可审批的规则包变更。
 - 治理中心更接近能力展示，还未成为规则运营和策略改进工作台。
 
 ## 推荐演进路线
@@ -96,11 +109,12 @@
 
 重点任务：
 
-- 后端落地 `pre_pr_gate` 服务层，让 Gate 状态由后端持久化和返回。
-- 明确或新增 `POST /reviews/pre-pr`、`GET /reviews/{id}/gate`、`PATCH /reviews/{id}/pre-pr-decision`。
-- 接入 GitHub/GitLab status check，让 BLOCKED/PASSED 回写到 PR。
-- 增加 SARIF 导出，把 Finding 接入代码扫描生态。
-- Review 详情页支持生成、复制、导出 PR 摘要和审查报告。
+- 巩固已有 `pre_pr_gate` 服务逻辑，让 Gate 状态具备独立读取契约和稳定前端展示。
+- 明确 `POST /api/reviews/pre-pr`、新增 `GET /api/reviews/{id}/gate`、继续使用 `PATCH /api/reviews/{id}/pre-pr-decision`。
+- 前端创建页按 Pre-PR 场景调用专用接口，并保留策略配置的可演进入口。
+- 接入 GitHub/GitLab status check HTTP 写回，让 BLOCKED/PASSED 回写到 PR；当前已完成 provider-neutral payload 边界、provider-specific payload 转换、Commit Status endpoint 动态装配和可配置 HTTP publisher。
+- 前端补齐 SARIF 下载入口，把 Finding 接入代码扫描生态。
+- Review 详情页支持生成、复制、导出 PR 摘要和审查报告；当前已补后端统一 Markdown 报告接口和默认关闭的 HTTP 发布边界，后续补真实外部平台写回。
 
 ### 第三阶段：策略效果与治理运营
 
@@ -110,10 +124,10 @@
 
 重点任务：
 
-- 沉淀模型调用指标：耗时、失败率、token、成本、命中数量、人工确认率。
-- 增加策略效果看板：策略阻断风险、模型误报、规则命中、Judge 分歧。
+- 沉淀模型调用指标：耗时、失败率、token、成本已进入运营中心；命中数量和长期历史趋势仍需补齐。
+- 增加策略效果看板：策略阻断风险、确认率、误报倾向和交叉命中率已进入运营中心；规则命中和 Judge 分歧仍需补齐。
 - 把人工确认结果转化为规则学习候选。
-- Operations 页面升级为治理工作台：待确认队列、SLA、owner、规则学习候选、业务影响估算。
+- Operations 页面升级为治理工作台：待确认队列、SLA、owner、规则学习候选、业务影响估算、模型调用健康和策略效果已接入后端运营聚合数据。
 
 ### 第四阶段：Agent 化和修复闭环
 
@@ -138,3 +152,12 @@
 3. 最后把策略效果、规则学习、修复草案和 Agent 工具链串成闭环。
 
 这个路径风险最低，也最符合当前项目状态：平台方向已经清楚，下一步最值钱的是让 Pre-PR Gate 真正进入交付链路，而不是继续堆展示型页面。
+
+## 下一份执行计划
+
+第二阶段执行计划已拆到 `docs/superpowers/plans/2026-06-03-pre-pr-closed-loop.md`。该计划优先做四件事：
+
+1. 纠正并冻结 Pre-PR API 契约。
+2. 增加 `GET /api/reviews/{id}/gate` 独立读取接口。
+3. 前端 Review 详情页接入后端 Gate 状态、人工决策和 SARIF 下载。
+4. 增加轻量 CI status adapter，为 GitHub/GitLab 回写做可替换边界。

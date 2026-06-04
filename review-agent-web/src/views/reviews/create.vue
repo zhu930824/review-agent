@@ -221,6 +221,7 @@ import { SettingOutlined, ApiOutlined, PlayCircleOutlined, SafetyOutlined, CodeO
 import type { Project } from '@/types/project'
 import type { Review } from '@/types/review'
 import type { PageResult } from '@/types/api'
+import { buildReviewCreatePayload, compileReviewCreateConfig, getReviewCreateEndpoint, getReviewCreateRoleLabels } from '@/utils/reviewCreate'
 
 interface ApiReviewStrategy {
   id: number
@@ -265,33 +266,11 @@ const gatePolicy = computed(() => ({
   advisoryOn: selectedStrategy.value?.advisoryOn || [],
 }))
 const selectedRoleLabels = computed(() => {
-  if (selectedStrategy.value?.roleBindings?.length) {
-    return selectedStrategy.value.roleBindings.map(b => `${roleLabel(b.role)} · ${b.modelProfileName || '未知模型'}`)
-  }
-  return []
+  return getReviewCreateRoleLabels(selectedStrategy.value)
 })
 
-const compiledConfig = computed(() => ({
-  reviewMode: selectedStrategy.value?.reviewMode || 'AGENT',
-  modelsConfig: {
-    agents: selectedStrategy.value?.roleBindings?.map(b => ({ role: b.role, modelName: getModelName(b.modelProfileName), skills: [], temperature: 0.3 })) || [],
-    orchestrationStrategy: 'PARALLEL',
-    mcpEnabled: form.mcpEnabled,
-    gatePolicy: gatePolicy.value,
-  },
-}))
+const compiledConfig = computed(() => compileReviewCreateConfig(selectedStrategy.value, form.mcpEnabled))
 const compiledJsonPreview = computed(() => JSON.stringify(compiledConfig.value.modelsConfig, null, 2))
-
-function roleLabel(role: string): string {
-  const labels: Record<string, string> = { WORKER: '审查模型', JUDGE: 'Judge 模型', SECURITY_AUDITOR: '安全审计员', PERFORMANCE_ANALYST: '性能分析员', CODE_STYLE_CHECKER: '代码规范检查员', EXCEPTION_HANDLER: '异常处理专家', ARCHITECT_REVIEWER: '架构评审员' }
-  return labels[role] || role
-}
-
-function getModelName(displayName: string | undefined): string {
-  if (!displayName) return 'qwen-plus'
-  const nameMap: Record<string, string> = { '通义千问 Plus': 'qwen-plus', '通义千问 Max': 'qwen-max', 'DeepSeek V3': 'deepseek-v3', 'Kimi K2': 'kimi-k2', '本地代码模型': 'local-coder' }
-  return nameMap[displayName] || displayName.toLowerCase().replace(/\s+/g, '-')
-}
 
 function selectStrategy(strategy: ApiReviewStrategy) {
   form.strategyId = strategy.strategyKey
@@ -351,13 +330,7 @@ async function handleSubmit() {
   if (!form.projectId || !form.sourceBranch || !form.targetBranch || !form.strategyKey) return
   submitting.value = true
   try {
-    const res = await post<Review>('/reviews', {
-      projectId: Number(form.projectId),
-      sourceBranch: form.sourceBranch,
-      targetBranch: form.targetBranch,
-      reviewMode: compiledConfig.value.reviewMode,
-      modelsConfig: form.modelsConfigOverride.trim() || JSON.stringify(compiledConfig.value.modelsConfig),
-    })
+    const res = await post<Review>(getReviewCreateEndpoint(true), buildReviewCreatePayload(form, selectedStrategy.value!))
     if (res.data) router.push(`/reviews/${res.data.id}`)
   } catch { }
   finally { submitting.value = false }

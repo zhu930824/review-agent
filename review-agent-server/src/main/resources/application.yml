@@ -85,3 +85,16 @@ review-agent:
     server:
       enabled: false
       port: 5001
+  ci-status:
+    enabled: ${CI_STATUS_ENABLED:false}
+    # Supported values: generic, github, gitlab
+    provider: ${CI_STATUS_PROVIDER:generic}
+    api-base-url: ${CI_STATUS_API_BASE_URL:}
+    endpoint: ${CI_STATUS_ENDPOINT:}
+    token: ${CI_STATUS_TOKEN:}
+    context: ${CI_STATUS_CONTEXT:review-agent/pre-pr}
+    target-url-template: ${CI_STATUS_TARGET_URL_TEMPLATE:}
+  pre-pr-report-publish:
+    enabled: ${PRE_PR_REPORT_PUBLISH_ENABLED:false}
+    endpoint: ${PRE_PR_REPORT_PUBLISH_ENDPOINT:}
+    token: ${PRE_PR_REPORT_PUBLISH_TOKEN:}

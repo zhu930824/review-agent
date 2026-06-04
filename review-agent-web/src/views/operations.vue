@@ -22,6 +22,10 @@
       </a-space>
     </a-space>
 
+    <div v-if="loading" style="text-align:center;padding:48px 0">
+      <a-spin size="large" />
+    </div>
+
     <!-- KPI 卡片 -->
     <a-row :gutter="16">
       <a-col :xl="6" :md="12" :span="24" style="margin-bottom:16px">
@@ -79,6 +83,100 @@
       </a-col>
     </a-row>
 
+    <a-card size="small">
+      <template #title>
+        <a-space :size="8">
+          <BarChartOutlined style="font-size:20px;color:#6366f1" />
+          <span style="font-weight:600">模型调用健康</span>
+        </a-space>
+      </template>
+      <template #extra>
+        <a-tag :color="modelHealth.tone === 'critical' ? 'red' : modelHealth.tone === 'warning' ? 'orange' : 'green'">
+          {{ modelHealth.tone === 'critical' ? '需关注' : modelHealth.tone === 'warning' ? '观察中' : '稳定' }}
+        </a-tag>
+      </template>
+      <a-row :gutter="16">
+        <a-col :xl="6" :md="12" :span="24" style="margin-bottom:12px">
+          <div style="padding:16px;border-radius:8px;background:#f8fafc">
+            <div style="font-size:12px;color:#94a3b8;font-weight:600">健康分</div>
+            <div style="font-size:26px;font-weight:800;color:#4f46e5;margin-top:4px">{{ modelHealth.healthScore }}%</div>
+            <a-progress :percent="modelHealth.healthScore" :show-info="false" size="small" style="margin-top:8px" />
+          </div>
+        </a-col>
+        <a-col :xl="6" :md="12" :span="24" style="margin-bottom:12px">
+          <div style="padding:16px;border-radius:8px;background:#fff7ed">
+            <div style="font-size:12px;color:#94a3b8;font-weight:600">失败率</div>
+            <div style="font-size:26px;font-weight:800;color:#d97706;margin-top:4px">{{ modelHealth.failureRate }}%</div>
+            <div style="font-size:12px;color:#94a3b8;margin-top:4px">{{ modelHealth.failedCalls }} / {{ modelHealth.totalCalls }} 次失败</div>
+          </div>
+        </a-col>
+        <a-col :xl="6" :md="12" :span="24" style="margin-bottom:12px">
+          <div style="padding:16px;border-radius:8px;background:#eef2ff">
+            <div style="font-size:12px;color:#94a3b8;font-weight:600">平均耗时</div>
+            <div style="font-size:26px;font-weight:800;color:#6366f1;margin-top:4px">{{ Math.round(modelHealth.avgLatencyMs) }}ms</div>
+            <div style="font-size:12px;color:#94a3b8;margin-top:4px">模型调用响应时间</div>
+          </div>
+        </a-col>
+        <a-col :xl="6" :md="12" :span="24" style="margin-bottom:12px">
+          <div style="padding:16px;border-radius:8px;background:#ecfdf5">
+            <div style="font-size:12px;color:#94a3b8;font-weight:600">Token / 成本</div>
+            <div style="font-size:26px;font-weight:800;color:#059669;margin-top:4px">{{ modelHealth.formattedTokens }}</div>
+            <div style="font-size:12px;color:#94a3b8;margin-top:4px">约 ${{ modelHealth.estimatedCostUsd.toFixed(4) }}</div>
+          </div>
+        </a-col>
+      </a-row>
+      <div style="font-size:13px;color:#475569;line-height:1.5">{{ modelHealth.summary }}</div>
+    </a-card>
+
+    <a-card size="small">
+      <template #title>
+        <a-space :size="8">
+          <ExperimentOutlined style="font-size:20px;color:#059669" />
+          <span style="font-weight:600">策略效果</span>
+        </a-space>
+      </template>
+      <template #extra>
+        <a-tag color="processing">{{ strategyEffects.length }} 个策略</a-tag>
+      </template>
+      <a-row v-if="strategyEffects.length" :gutter="16">
+        <a-col v-for="strategy in strategyEffects" :key="`${strategy.strategyId}-${strategy.reviewMode}`" :xl="6" :md="12" :span="24" style="margin-bottom:12px">
+          <div style="padding:16px;border-radius:8px;background:#f8fafc">
+            <a-space style="width:100%;justify-content:space-between;align-items:flex-start">
+              <div>
+                <div style="font-weight:700;font-size:14px">{{ strategy.strategyId }}</div>
+                <div style="font-size:12px;color:#94a3b8;margin-top:2px">{{ strategy.reviewMode }} · {{ strategy.findingCount }} 项</div>
+              </div>
+              <a-tag :color="strategy.effectivenessScore >= 75 ? 'green' : strategy.effectivenessScore >= 55 ? 'orange' : 'red'">
+                {{ strategy.effectivenessScore }}
+              </a-tag>
+            </a-space>
+            <a-progress :percent="strategy.effectivenessScore" :show-info="false" size="small" style="margin-top:10px" />
+            <a-row :gutter="8" style="margin-top:12px">
+              <a-col :span="12">
+                <div style="font-size:12px;color:#94a3b8">阻断风险</div>
+                <div style="font-size:16px;font-weight:700;color:#dc2626">{{ strategy.blockerCount }}</div>
+              </a-col>
+              <a-col :span="12">
+                <div style="font-size:12px;color:#94a3b8">确认率</div>
+                <div style="font-size:16px;font-weight:700;color:#059669">{{ strategy.confirmationRate }}%</div>
+              </a-col>
+              <a-col :span="12" style="margin-top:8px">
+                <div style="font-size:12px;color:#94a3b8">误报倾向</div>
+                <div style="font-size:16px;font-weight:700;color:#d97706">{{ strategy.falsePositiveRate }}%</div>
+              </a-col>
+              <a-col :span="12" style="margin-top:8px">
+                <div style="font-size:12px;color:#94a3b8">交叉命中</div>
+                <div style="font-size:16px;font-weight:700;color:#6366f1">{{ strategy.crossHitRate }}%</div>
+              </a-col>
+            </a-row>
+          </div>
+        </a-col>
+      </a-row>
+      <div v-else style="text-align:center;padding:32px 0;color:#94a3b8">
+        暂无策略效果数据
+      </div>
+    </a-card>
+
     <!-- 主内容区 -->
     <a-row :gutter="16">
       <!-- 修复队列表格 -->
@@ -121,6 +219,9 @@
               </template>
             </template>
           </a-table>
+          <div v-if="!remediationQueue.length" style="text-align:center;padding:32px 0;color:#94a3b8">
+            暂无待处理风险项
+          </div>
         </a-card>
       </a-col>
 
@@ -203,24 +304,34 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { BarChartOutlined, ExclamationCircleOutlined, ClockCircleOutlined, RiseOutlined, UnorderedListOutlined, TeamOutlined, ExperimentOutlined, CalendarOutlined, AppstoreOutlined, PlayCircleOutlined, SafetyCertificateOutlined, RocketOutlined } from '@ant-design/icons-vue'
-import type { OperationalFinding } from '@/types/operations'
+import type { ModelCallStats, OperationDashboard, OperationalFinding } from '@/types/operations'
 import type { SeverityLevel } from '@/types/review'
+import { deriveModelCallHealth } from '@/utils/modelTelemetry'
 import { buildRemediationQueue, deriveOperationsScorecard, estimateReviewBusinessImpact, extractRuleLearningCandidates, summarizeRemediationQueue } from '@/utils/reviewOperations'
+import { summarizeStrategyEffects } from '@/utils/strategyEffects'
+import { useApi } from '@/composables/useApi'
 
-const sampleFindings: OperationalFinding[] = [
-  { id: 1, reviewId: 1001, projectName: 'payment-core', severity: 'BLOCKER', category: 'SECURITY', title: 'Token can be reused after logout', humanStatus: 'CONFIRMED', confidence: 0.92, isCrossHit: true },
-  { id: 2, reviewId: 1001, projectName: 'payment-core', severity: 'MAJOR', category: 'PERFORMANCE', title: 'Settlement list has N+1 query risk', humanStatus: 'PENDING', confidence: 0.82 },
-  { id: 3, reviewId: 1002, projectName: 'order-service', severity: 'MAJOR', category: 'EXCEPTION_HANDLING', title: 'External timeout is not mapped to business error', humanStatus: 'CONFIRMED', confidence: 0.88, isCrossHit: true },
-  { id: 4, reviewId: 1003, projectName: 'web-console', severity: 'MINOR', category: 'CODE_STYLE', title: 'Naming can be clearer', humanStatus: 'DISMISSED', confidence: 0.41 },
-]
+const { get } = useApi()
+const loading = ref(false)
+const dashboard = ref<OperationDashboard | null>(null)
+const modelCallStats = ref<ModelCallStats | null>(null)
 
-const remediationQueue = buildRemediationQueue(sampleFindings)
-const queueSummary = summarizeRemediationQueue(remediationQueue)
-const learningCandidates = extractRuleLearningCandidates(sampleFindings)
-const scorecard = deriveOperationsScorecard(sampleFindings)
-const businessImpact = estimateReviewBusinessImpact({ monthlyReviews: 80, averageManualReviewMinutes: 35, automationCoveragePercent: 65, blockerFindings: 6, majorFindings: 18 })
+const findings = computed<OperationalFinding[]>(() => dashboard.value?.findings || [])
+const modelHealth = computed(() => deriveModelCallHealth(modelCallStats.value))
+const strategyEffects = computed(() => summarizeStrategyEffects(findings.value))
+const remediationQueue = computed(() => buildRemediationQueue(findings.value))
+const queueSummary = computed(() => summarizeRemediationQueue(remediationQueue.value))
+const learningCandidates = computed(() => extractRuleLearningCandidates(findings.value))
+const scorecard = computed(() => deriveOperationsScorecard(findings.value))
+const businessImpact = computed(() => estimateReviewBusinessImpact({
+  monthlyReviews: Math.max(20, dashboard.value?.totalFindings || findings.value.length),
+  averageManualReviewMinutes: 35,
+  automationCoveragePercent: 65,
+  blockerFindings: dashboard.value?.blockerCount || 0,
+  majorFindings: dashboard.value?.majorCount || 0,
+}))
 
 const queueColumns = [
   { title: '风险项', key: 'title', dataIndex: 'title' },
@@ -229,7 +340,7 @@ const queueColumns = [
   { title: 'SLA', key: 'slaHours', dataIndex: 'slaHours' },
   { title: '优先级', key: 'priorityScore', dataIndex: 'priorityScore' },
 ]
-const ownerLoad = computed(() => Object.entries(queueSummary.byOwner).map(([role, count]) => ({ role, count, percent: queueSummary.total ? Math.round((count / queueSummary.total) * 100) : 0 })))
+const ownerLoad = computed(() => Object.entries(queueSummary.value.byOwner).map(([role, count]) => ({ role, count, percent: queueSummary.value.total ? Math.round((count / queueSummary.value.total) * 100) : 0 })))
 
 const operatingCadences = [
   { name: '每日风险清理', iconComp: SafetyCertificateOutlined, description: '每天处理 BLOCKER 和 24 小时内到期项，避免风险穿透到正式 PR。' },
@@ -238,4 +349,22 @@ const operatingCadences = [
 ]
 
 function severityColor(severity: SeverityLevel) { return { BLOCKER: 'red', MAJOR: 'orange', MINOR: 'blue', INFO: 'default' }[severity] }
+
+async function loadOperationsDashboard() {
+  loading.value = true
+  try {
+    const [dashboardRes, statsRes] = await Promise.all([
+      get<OperationDashboard>('/operations/dashboard'),
+      get<ModelCallStats>('/gateway/stats'),
+    ])
+    dashboard.value = dashboardRes.data || null
+    modelCallStats.value = statsRes.data || null
+  } catch (e) {
+    console.error('加载运营中心数据失败', e)
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadOperationsDashboard)
 </script>

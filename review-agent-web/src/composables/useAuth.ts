@@ -1,8 +1,9 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { getApiBaseUrl } from '@/utils/apiConfig'
 import { clearStoredAuth, getStoredAuthToken, getStoredAuthUser, setStoredAuth } from '@/utils/authStorage'
 
-const API_BASE = '/api'
+const API_BASE = getApiBaseUrl()
 
 const token = ref<string | null>(null)
 const user = ref<any | null>(null)
