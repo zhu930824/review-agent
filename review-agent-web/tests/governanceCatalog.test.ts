@@ -4,6 +4,7 @@ import test from 'node:test'
 import {
   compileGovernancePolicyPack,
   getCapabilityCoverageSummary,
+  getCiStatusIntegrationReadiness,
   getConnectorsByStage,
   getRecommendedNextActions,
   governanceRulePacks,
@@ -70,5 +71,19 @@ test('rule packs have measurable coverage metadata', () => {
   assert.ok(governanceRulePacks.length >= 5)
   assert.ok(governanceRulePacks.every(pack => pack.controls.length > 0))
   assert.ok(governanceRulePacks.every(pack => pack.businessOutcome.length > 0))
+})
+
+test('ci status integration readiness exposes next implementation contract', () => {
+  const readiness = getCiStatusIntegrationReadiness()
+
+  assert.equal(readiness.connectorId, 'github-checks')
+  assert.equal(readiness.stage, 'next')
+  assert.ok(readiness.requiredCapabilityIds.includes('ci-status-check'))
+  assert.ok(readiness.requiredCapabilityIds.includes('quality-gate'))
+  assert.ok(readiness.requiredCapabilityIds.includes('sarif-export'))
+  assert.ok(readiness.backendSignals.includes('reportPass'))
+  assert.ok(readiness.backendSignals.includes('reportBlock'))
+  assert.ok(readiness.backendSignals.includes('reportRunning'))
+  assert.ok(readiness.nextActions.some(action => action.includes('GitHub Checks')))
 })
 

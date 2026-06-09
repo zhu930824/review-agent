@@ -219,7 +219,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useApi } from '@/composables/useApi'
 import { SettingOutlined, ApiOutlined, PlayCircleOutlined, SafetyOutlined, CodeOutlined } from '@ant-design/icons-vue'
 import type { Project } from '@/types/project'
-import type { Review } from '@/types/review'
+import type { ReviewDetailResponse } from '@/types/review'
 import type { PageResult } from '@/types/api'
 
 interface ApiReviewStrategy {
@@ -351,18 +351,15 @@ async function handleSubmit() {
   if (!form.projectId || !form.sourceBranch || !form.targetBranch || !form.strategyKey) return
   submitting.value = true
   try {
-    const res = await post<Review>('/reviews', {
+    const res = await post<ReviewDetailResponse>('/reviews/pre-pr', {
       projectId: Number(form.projectId),
       sourceBranch: form.sourceBranch,
       targetBranch: form.targetBranch,
-      reviewMode: compiledConfig.value.reviewMode,
-      modelsConfig: form.modelsConfigOverride.trim() || JSON.stringify(compiledConfig.value.modelsConfig),
     })
-    if (res.data) router.push(`/reviews/${res.data.id}`)
+    if (res.data?.review?.id) router.push(`/reviews/${res.data.review.id}`)
   } catch { }
   finally { submitting.value = false }
 }
 
 onMounted(() => { loadProjects(); loadStrategies(); if (form.projectId) loadBranches(form.projectId) })
 </script>
-

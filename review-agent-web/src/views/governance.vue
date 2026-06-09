@@ -157,7 +157,7 @@
         </a-card>
 
         <!-- 发布门禁策略包 -->
-        <a-card size="small">
+        <a-card size="small" style="margin-bottom:16px">
           <template #title>
             <a-space :size="8">
               <SafetyOutlined style="font-size:16px;color:#ef4444" />
@@ -186,6 +186,74 @@
                 </a-space>
               </a-space>
             </div>
+          </a-space>
+        </a-card>
+
+        <a-card size="small">
+          <template #title>
+            <a-space :size="8">
+              <SyncOutlined style="font-size:16px;color:#6366f1" />
+              <span style="font-weight:600;font-size:14px">CI 回写就绪度</span>
+            </a-space>
+          </template>
+          <a-space direction="vertical" :size="12" style="width:100%">
+            <a-space :size="6" wrap>
+              <a-tag color="processing">{{ ciStatusReadiness.name }}</a-tag>
+              <a-tag :color="statusColor(ciStatusReadiness.status)">{{ statusLabel(ciStatusReadiness.status) }}</a-tag>
+              <a-tag>{{ ciStatusReadiness.stage }}</a-tag>
+            </a-space>
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:6px">依赖能力</div>
+              <a-space :size="4" wrap>
+                <a-tag v-for="capability in ciStatusReadiness.requiredCapabilityIds" :key="capability" color="blue">{{ capability }}</a-tag>
+              </a-space>
+            </div>
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:6px">后端回写信号</div>
+              <a-space :size="4" wrap>
+                <a-tag v-for="signal in ciStatusReadiness.backendSignals" :key="signal" color="green">{{ signal }}</a-tag>
+              </a-space>
+            </div>
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:6px">下一步</div>
+              <a-space direction="vertical" :size="4">
+                <span v-for="action in ciStatusReadiness.nextActions" :key="action" style="font-size:12px;color:#475569;line-height:1.5">{{ action }}</span>
+              </a-space>
+            </div>
+            <a-form layout="vertical" size="small" style="margin-top:4px">
+              <a-row :gutter="8">
+                <a-col :span="12">
+                  <a-form-item label="Repo Owner">
+                    <a-input v-model:value="ciConfigForm.repoOwner" placeholder="zhu930824" />
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="Repo Name">
+                    <a-input v-model:value="ciConfigForm.repoName" placeholder="review-agent" />
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-form-item label="Status Context">
+                <a-input v-model:value="ciConfigForm.statusContext" placeholder="Review Agent" />
+              </a-form-item>
+              <a-row :gutter="8">
+                <a-col :span="12">
+                  <a-form-item label="API Token">
+                    <a-input-password v-model:value="ciConfigForm.apiToken" :placeholder="ciConfigForm.tokenConfigured ? '已配置，留空则不更新' : 'GitHub token'" />
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="Webhook Secret">
+                    <a-input-password v-model:value="ciConfigForm.webhookSecret" :placeholder="ciConfigForm.webhookSecretConfigured ? '已配置，留空则不更新' : 'Webhook secret'" />
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-space :size="12" wrap>
+                <a-checkbox v-model:checked="ciConfigForm.checksEnabled">启用 Checks 回写</a-checkbox>
+                <a-checkbox v-model:checked="ciConfigForm.sarifUploadEnabled">启用 SARIF 上传</a-checkbox>
+                <a-button type="primary" size="small" :loading="ciConfigSaving" @click="saveCiStatusConfig">保存配置</a-button>
+              </a-space>
+            </a-form>
           </a-space>
         </a-card>
       </a-col>
@@ -258,14 +326,86 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted, reactive, ref } from 'vue'
 import { BarChartOutlined, CheckCircleOutlined, ExclamationCircleOutlined, AppstoreOutlined, ThunderboltOutlined, SafetyOutlined, UserOutlined, EnvironmentOutlined, SyncOutlined, PlayCircleOutlined, SettingOutlined, ClockCircleOutlined } from '@ant-design/icons-vue'
-import type { BusinessImpact, CapabilityStatus, RolloutStage } from '@/types/governance'
-import { compileGovernancePolicyPack, getCapabilityCoverageSummary, getConnectorsByStage, getRecommendedNextActions, marketCapabilities, workflowTemplates } from '@/utils/governanceCatalog'
+import type { BusinessImpact, CapabilityStatus, CiStatusConfigVO, RolloutStage } from '@/types/governance'
+import { useApi } from '@/composables/useApi'
+import { compileGovernancePolicyPack, getCapabilityCoverageSummary, getCiStatusIntegrationReadiness, getConnectorsByStage, getRecommendedNextActions, marketCapabilities, workflowTemplates } from '@/utils/governanceCatalog'
 
+const { get, put } = useApi()
 const coverage = getCapabilityCoverageSummary()
 const recommendedActions = getRecommendedNextActions(5)
 const connectorsByStage = getConnectorsByStage()
 const releasePolicy = compileGovernancePolicyPack(['security-release', 'ai-generated-code', 'compliance-evidence'])
+const ciStatusReadiness = getCiStatusIntegrationReadiness()
+const ciConfigSaving = ref(false)
+const ciConfigForm = reactive({
+  connectorKey: 'github-checks',
+  provider: 'GITHUB',
+  repoOwner: '',
+  repoName: '',
+  repoUrl: '',
+  defaultBranch: 'main',
+  statusContext: 'Review Agent',
+  checksEnabled: true,
+  sarifUploadEnabled: false,
+  apiToken: '',
+  webhookSecret: '',
+  tokenConfigured: false,
+  webhookSecretConfigured: false,
+})
+
+function applyCiStatusConfig(config: CiStatusConfigVO) {
+  ciConfigForm.connectorKey = config.connectorKey || 'github-checks'
+  ciConfigForm.provider = config.provider || 'GITHUB'
+  ciConfigForm.repoOwner = config.repoOwner || ''
+  ciConfigForm.repoName = config.repoName || ''
+  ciConfigForm.repoUrl = config.repoUrl || ''
+  ciConfigForm.defaultBranch = config.defaultBranch || 'main'
+  ciConfigForm.statusContext = config.statusContext || 'Review Agent'
+  ciConfigForm.checksEnabled = config.checksEnabled ?? true
+  ciConfigForm.sarifUploadEnabled = config.sarifUploadEnabled ?? false
+  ciConfigForm.tokenConfigured = config.tokenConfigured
+  ciConfigForm.webhookSecretConfigured = config.webhookSecretConfigured
+  ciConfigForm.apiToken = ''
+  ciConfigForm.webhookSecret = ''
+}
+
+async function loadCiStatusConfig() {
+  try {
+    const res = await get<CiStatusConfigVO>('/integration/ci-config')
+    if (res.data) applyCiStatusConfig(res.data)
+  } catch (e) {
+    console.error('加载 CI 回写配置失败', e)
+  }
+}
+
+async function saveCiStatusConfig() {
+  ciConfigSaving.value = true
+  try {
+    const payload = {
+      connectorKey: ciConfigForm.connectorKey,
+      provider: ciConfigForm.provider,
+      repoOwner: ciConfigForm.repoOwner,
+      repoName: ciConfigForm.repoName,
+      repoUrl: ciConfigForm.repoUrl,
+      defaultBranch: ciConfigForm.defaultBranch,
+      statusContext: ciConfigForm.statusContext,
+      checksEnabled: ciConfigForm.checksEnabled,
+      sarifUploadEnabled: ciConfigForm.sarifUploadEnabled,
+      apiToken: ciConfigForm.apiToken,
+      webhookSecret: ciConfigForm.webhookSecret,
+    }
+    const res = await put<CiStatusConfigVO>('/integration/ci-config', payload)
+    if (res.data) applyCiStatusConfig(res.data)
+  } catch (e) {
+    console.error('保存 CI 回写配置失败', e)
+  } finally {
+    ciConfigSaving.value = false
+  }
+}
+
+onMounted(loadCiStatusConfig)
 
 const capabilityColumns = [
   { title: '能力', key: 'name', dataIndex: 'name' },

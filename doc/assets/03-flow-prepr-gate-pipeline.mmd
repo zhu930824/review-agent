@@ -1,0 +1,11 @@
+flowchart LR
+    A["选择项目与分支"] --> B["生成 Diff 上下文"]
+    B --> C["规则扫描"]
+    C --> D["多角色 AI Review"]
+    D --> E["Finding 聚合"]
+    E --> F["风险分级"]
+    F --> G["生成 PR Summary"]
+    F --> H["Gate 决策"]
+    H --> I["PASSED"]
+    H --> J["BLOCKED"]
+    H --> K["NEEDS_HUMAN_REVIEW"]

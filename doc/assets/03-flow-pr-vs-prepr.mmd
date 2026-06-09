@@ -1,0 +1,15 @@
+flowchart TB
+    subgraph Old["传统 PR 后置审查"]
+        A1["开发完成"] --> A2["提交 PR"]
+        A2 --> A3["人工 Review"]
+        A3 --> A4["发现基础问题"]
+        A4 --> A5["返工修改"]
+        A5 --> A2
+    end
+    subgraph New["Pre-PR 前置审查"]
+        B1["本地/分支变更"] --> B2["AI Pre-PR 自查"]
+        B2 --> B3["修复基础问题"]
+        B3 --> B4["生成 PR Summary"]
+        B4 --> B5["提交高质量 PR"]
+        B5 --> B6["人工聚焦业务判断"]
+    end

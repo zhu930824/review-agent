@@ -1,5 +1,6 @@
 import type {
   CapabilityCoverageSummary,
+  CiStatusIntegrationReadiness,
   CompiledGovernancePolicyPack,
   GovernanceRulePack,
   IntegrationConnector,
@@ -328,6 +329,28 @@ export function getConnectorsByStage(): Record<RolloutStage, IntegrationConnecto
     },
     { live: [], next: [], later: [] } as Record<RolloutStage, IntegrationConnector[]>,
   )
+}
+
+export function getCiStatusIntegrationReadiness(): CiStatusIntegrationReadiness {
+  const connector = integrationConnectors.find(item => item.id === 'github-checks')
+  if (!connector) {
+    throw new Error('github-checks connector is missing')
+  }
+
+  return {
+    connectorId: connector.id,
+    name: connector.name,
+    stage: connector.stage,
+    status: connector.status,
+    requiredCapabilityIds: ['ci-status-check', 'quality-gate', 'sarif-export'],
+    backendSignals: ['reportRunning', 'reportPass', 'reportBlock'],
+    nextActions: [
+      '实现 GitHub Checks 凭据配置和仓库绑定',
+      '将 Pre-PR Gate 的 RUNNING/PASSED/BLOCKED 映射到 GitHub Checks',
+      '把 SARIF 导出结果上传到 GitHub Code Scanning',
+      '记录回写失败并支持重试',
+    ],
+  }
 }
 
 export function compileGovernancePolicyPack(packIds: string[]): CompiledGovernancePolicyPack {

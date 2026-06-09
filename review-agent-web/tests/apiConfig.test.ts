@@ -22,3 +22,10 @@ test('review progress sse uses shared api base helper', () => {
   assert.match(detailView, /getApiBaseUrl/)
   assert.doesNotMatch(detailView, /VITE_API_BASE_URL\s*\|\|/)
 })
+
+test('auth requests use shared api base helper', () => {
+  const authComposable = readFileSync(join(process.cwd(), 'src/composables/useAuth.ts'), 'utf8')
+
+  assert.match(authComposable, /getApiBaseUrl/)
+  assert.doesNotMatch(authComposable, /const API_BASE = ['"]\/api['"]/)
+})

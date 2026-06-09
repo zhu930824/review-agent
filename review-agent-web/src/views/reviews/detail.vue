@@ -122,6 +122,10 @@
             </div>
           </div>
           <a-space :size="4" wrap>
+            <a-button size="small" :loading="downloadingSarif" @click="downloadSarif">
+              <template #icon><DownloadOutlined /></template>
+              SARIF
+            </a-button>
             <a-tag :color="statusColor(detail.status)">{{ statusLabel(detail.status) }}</a-tag>
             <a-tag :color="gateStatusColor">{{ gateStatusLabel }}</a-tag>
             <a-tag>{{ detail.reviewMode }}</a-tag>
@@ -145,6 +149,26 @@
           <a-space :size="8">
             <SafetyOutlined style="font-size:18px;color:#dc2626" />
             <span style="color:#dc2626;font-weight:600">Pre-PR 阻断原因</span>
+          </a-space>
+        </template>
+        <template #extra>
+          <a-space :size="8">
+            <a-button
+              size="small"
+              type="primary"
+              :loading="prePrDecisionLoading"
+              @click="submitPrePrDecision({ decision: 'APPROVE_WITH_RISK', comment: '人工确认风险可接受，允许进入后续流程' })"
+            >
+              人工放行
+            </a-button>
+            <a-button
+              size="small"
+              danger
+              :loading="prePrDecisionLoading"
+              @click="submitPrePrDecision({ decision: 'BLOCKED', comment: '人工确认继续阻断' })"
+            >
+              维持阻断
+            </a-button>
           </a-space>
         </template>
         <a-space direction="vertical" :size="4" style="width:100%">
@@ -360,7 +384,7 @@
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { ArrowLeftOutlined, SyncOutlined, CheckOutlined, CloseOutlined, ClockCircleOutlined, FileSearchOutlined, SafetyOutlined, ExclamationCircleOutlined, CheckCircleOutlined, ApiOutlined, TeamOutlined, FundViewOutlined } from '@ant-design/icons-vue'
+import { ArrowLeftOutlined, SyncOutlined, CheckOutlined, CloseOutlined, ClockCircleOutlined, FileSearchOutlined, SafetyOutlined, ExclamationCircleOutlined, CheckCircleOutlined, ApiOutlined, TeamOutlined, FundViewOutlined, DownloadOutlined } from '@ant-design/icons-vue'
 import type { ReviewDetail, HumanStatus } from '@/types/review'
 import { deriveGateStatus, generateBlockedReasons } from '@/utils/reviewMetrics'
 import { useApi } from '@/composables/useApi'
@@ -388,6 +412,8 @@ const route = useRoute()
 const { get, patch, post } = useApi()
 const reviewId = computed(() => route.params.id as string)
 const loading = ref(false)
+const downloadingSarif = ref(false)
+const prePrDecisionLoading = ref(false)
 const detail = ref<ReviewDetail | null>(null)
 const severityFilter = ref('all')
 const categoryFilter = ref('all')
@@ -581,6 +607,40 @@ async function updateFindingStatus(findingId: number, status: HumanStatus) {
     await patch(`/reviews/${reviewId.value}/finding/${findingId}`, { humanStatus: status })
     await loadDetail()
   } catch (e) { console.error('更新问题状态失败', e) }
+}
+
+async function submitPrePrDecision(payload: { decision: string; comment: string }) {
+  prePrDecisionLoading.value = true
+  try {
+    const res = await patch<ReviewDetail>(`/reviews/${reviewId.value}/pre-pr-decision`, payload)
+    if (res.data) detail.value = res.data
+  } catch (e) {
+    console.error('提交 Pre-PR 人工决策失败', e)
+  } finally {
+    prePrDecisionLoading.value = false
+  }
+}
+
+async function downloadSarif() {
+  downloadingSarif.value = true
+  try {
+    const res = await get<unknown>(`/reviews/${reviewId.value}/sarif`)
+    if (!res.data) return
+
+    const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/sarif+json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `review-${reviewId.value}.sarif`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    console.error('导出 SARIF 失败', e)
+  } finally {
+    downloadingSarif.value = false
+  }
 }
 
 onMounted(() => {

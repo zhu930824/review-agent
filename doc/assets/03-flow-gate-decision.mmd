@@ -1,0 +1,8 @@
+flowchart TB
+    A["Review Findings"] --> B{"是否存在 BLOCKER"}
+    B -->|"是"| C["BLOCKED<br/>必须修复"]
+    B -->|"否"| D{"是否存在 MAJOR"}
+    D -->|"是"| E["NEEDS_HUMAN_REVIEW<br/>人工确认"]
+    D -->|"否"| F{"是否只有 MINOR / INFO"}
+    F -->|"是"| G["PASSED<br/>带建议放行"]
+    F -->|"否"| H["PASSED<br/>无风险放行"]

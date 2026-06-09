@@ -63,6 +63,19 @@ export interface ReviewDetail extends Review {
   blockedReasons: string[] | null
 }
 
+export interface ReviewDetailResponse {
+  review: Review
+  findings: ReviewFinding[]
+  modelResults: ReviewModelResult[]
+  totalFindings: number
+  blockerCount: number
+  majorCount: number
+  minorCount: number
+  infoCount: number
+  prePrStatus: string | null
+  blockedReasons: string[] | null
+}
+
 export interface CreateReviewParams {
   projectId: number
   sourceBranch?: string

@@ -15,6 +15,7 @@ type ModelResultLike = {
 
 type ReviewDetailLike = {
   status?: string | null
+  prePrStatus?: string | null
   findings?: FindingLike[]
   modelResults?: ModelResultLike[]
   blockedReasons?: string[] | null
@@ -41,8 +42,19 @@ export function deriveModelSuccessRate(modelResults: ModelResultLike[] = []): nu
   return Math.round((completed / modelResults.length) * 100)
 }
 
+function normalizePersistedGateStatus(status?: string | null): GateStatus | null {
+  if (!status) return null
+  if (status === 'APPROVED') return 'PASSED'
+  if (status === 'PASSED' || status === 'BLOCKED' || status === 'NEEDS_HUMAN_REVIEW' || status === 'RUNNING') {
+    return status
+  }
+  return null
+}
+
 export function deriveGateStatus(detail: ReviewDetailLike): GateStatus {
   if (detail.status === 'RUNNING' || detail.status === 'PENDING') return 'RUNNING'
+  const persistedGateStatus = normalizePersistedGateStatus(detail.prePrStatus)
+  if (persistedGateStatus) return persistedGateStatus
 
   const findings = detail.findings ?? []
   if (findings.some(finding => finding.severity === 'BLOCKER')) return 'BLOCKED'
@@ -53,10 +65,14 @@ export function deriveGateStatus(detail: ReviewDetailLike): GateStatus {
 }
 
 export function generateBlockedReasons(detail: ReviewDetailLike): string[] {
+  if (detail.blockedReasons?.length) {
+    return Array.from(new Set(detail.blockedReasons))
+  }
+
   const findings = detail.findings ?? []
   const blockerCount = findings.filter(finding => finding.severity === 'BLOCKER').length
   const pendingMajorCount = findings.filter(finding => finding.severity === 'MAJOR' && finding.humanStatus === 'PENDING').length
-  const reasons = [...(detail.blockedReasons ?? [])]
+  const reasons: string[] = []
 
   if (blockerCount > 0) {
     reasons.push(`存在 ${blockerCount} 个 BLOCKER 级别问题，Pre-PR 暂不可通过。`)

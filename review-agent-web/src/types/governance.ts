@@ -64,3 +64,28 @@ export interface CompiledGovernancePolicyPack {
   requiredHumanCheckpoints: string[]
   controls: string[]
 }
+
+export interface CiStatusIntegrationReadiness {
+  connectorId: string
+  name: string
+  stage: RolloutStage
+  status: CapabilityStatus
+  requiredCapabilityIds: string[]
+  backendSignals: string[]
+  nextActions: string[]
+}
+
+export interface CiStatusConfigVO {
+  id: number | null
+  connectorKey: string
+  provider: string
+  repoOwner: string | null
+  repoName: string | null
+  repoUrl: string | null
+  defaultBranch: string | null
+  statusContext: string
+  checksEnabled: boolean
+  sarifUploadEnabled: boolean
+  tokenConfigured: boolean
+  webhookSecretConfigured: boolean
+}

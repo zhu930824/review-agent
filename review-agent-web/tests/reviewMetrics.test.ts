@@ -42,6 +42,16 @@ test('gate status blocks when blocker findings exist', () => {
   assert.equal(deriveGateStatus(detail), 'BLOCKED')
 })
 
+test('gate status prefers persisted backend pre-pr decision', () => {
+  assert.equal(deriveGateStatus({
+    status: 'COMPLETED',
+    prePrStatus: 'PASSED',
+    findings: [
+      { severity: 'BLOCKER', humanStatus: 'PENDING', title: 'legacy blocker already waived' },
+    ],
+  }), 'PASSED')
+})
+
 test('blocked reasons include blocker and human review pressure', () => {
   const reasons = generateBlockedReasons(detail)
 
@@ -49,7 +59,19 @@ test('blocked reasons include blocker and human review pressure', () => {
   assert.ok(reasons.some(reason => reason.includes('人工复核')))
 })
 
+test('blocked reasons prefer persisted backend reasons', () => {
+  const reasons = generateBlockedReasons({
+    status: 'COMPLETED',
+    prePrStatus: 'BLOCKED',
+    blockedReasons: ['backend persisted gate reason'],
+    findings: [
+      { severity: 'BLOCKER', humanStatus: 'PENDING', title: 'duplicate local blocker' },
+    ],
+  })
+
+  assert.deepEqual(reasons, ['backend persisted gate reason'])
+})
+
 test('model success rate is rounded percentage', () => {
   assert.equal(deriveModelSuccessRate(detail.modelResults), 67)
 })
-
