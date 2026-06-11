@@ -1,6 +1,6 @@
 # Review Agent API 清单
 
-> 更新时间：2026-06-03
+> 更新时间：2026-06-11
 
 本文档汇总当前项目已确认的 API。来源分为两类：
 
@@ -46,7 +46,8 @@
 
 | Method | Path | 用途 | 前端使用位置 |
 | --- | --- | --- | --- |
-| `POST` | `/api/reviews` | 创建 Review / Pre-PR 审查 | `views/reviews/create.vue` |
+| `POST` | `/api/reviews` | 创建普通 Review | 旧入口，后端源码当前受保护 |
+| `POST` | `/api/reviews/pre-pr` | 创建 Pre-PR 审查 | `views/reviews/create.vue`；创建成功后前端初始化 Gate |
 | `GET` | `/api/reviews` | 分页查询 Review | Dashboard、项目详情 |
 | `GET` | `/api/reviews/{id}` | 查询 Review 详情 | Review 详情页 |
 | `PATCH` | `/api/reviews/{reviewId}/finding/{findingId}` | 更新 Finding 人工状态 | Review 详情页 |
@@ -55,11 +56,41 @@
 | `POST` | `/api/reviews/{id}/generate-tests` | 生成测试覆盖计划 | Review 详情页智能分析 |
 | `POST` | `/api/reviews/{id}/refactor-plan` | 生成重构计划 | Review 详情页智能分析 |
 
-当前演进建议：
+### Pre-PR Gate
 
-- 新增或明确 `POST /api/reviews/pre-pr`，专门表达 Pre-PR 审查创建。
-- 新增或明确 `GET /api/reviews/{id}/gate`，由后端返回持久化 Gate 状态。
-- 新增或明确 `PATCH /api/reviews/{id}/pre-pr-decision`，记录人工门禁决策。
+来源：后端可读源码确认，`PrePrGateController`；前端 Review 详情页已接入。
+
+| Method | Path | 用途 | 备注 |
+| --- | --- | --- | --- |
+| `GET` | `/api/reviews/{id}/gate` | 查询或初始化后端持久化 Gate 状态 | 优先读取 `pre_pr_gate`，不存在时按 Review/Finding 计算并写入 |
+| `POST` | `/api/reviews/{id}/gate/initialize` | 初始化 Pre-PR Gate | Pre-PR 创建成功后调用；写入 `pre_pr_gate_history` 初始化事件；不发布 CI |
+| `POST` | `/api/reviews/{id}/gate/refresh` | 重新计算并持久化 Gate 状态 | Finding 人工状态变化后使用；成功后自动发布 CI 状态 |
+| `POST` | `/api/reviews/{id}/gate/publish-ci` | 将持久化 Gate 状态发布到 CI/PR 状态系统 | `PASSED` -> success，`BLOCKED` / `NEEDS_HUMAN_REVIEW` -> failure，`RUNNING` -> pending；Review 详情页提供手动重发入口 |
+| `PATCH` | `/api/reviews/{id}/pre-pr-decision` | 记录人工 Gate 决策 | 请求体：`PrePrGateDecisionRequest`；写入 `pre_pr_gate_history` 决策事件；成功后自动发布 CI 状态 |
+
+`PrePrGateDecisionRequest`：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `gateStatus` | string | `PASSED`、`BLOCKED`、`NEEDS_HUMAN_REVIEW`，兼容 `APPROVED` -> `PASSED` |
+| `reason` | string | 人工决策原因 |
+| `decidedBy` | string | 决策人 |
+
+`PrePrGateVO`：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `reviewId` | number | Review ID |
+| `gateStatus` | string | `PASSED`、`BLOCKED`、`NEEDS_HUMAN_REVIEW`、`RUNNING` |
+| `blockedReasons` | string[] | 后端持久化阻断或人工决策原因 |
+| `decidedBy` | string \| null | 人工决策人 |
+| `decidedAt` | string \| null | 人工决策时间 |
+
+当前阶段状态：
+
+- `POST /api/reviews/pre-pr` 已由前端创建页使用，后端源码当前受保护，按调用契约记录。
+- Pre-PR 创建成功后，前端调用 `POST /api/reviews/{id}/gate/initialize`，确保进入详情页前已有持久化 Gate 和初始化历史。
+- GitHub Status 回写已读取持久化 Gate；GitHub Checks API / GitLab 回写仍属于下一阶段。
 
 ## Model Config
 
@@ -135,8 +166,10 @@
 
 1. **Pre-PR Gate 后端化**
    - `POST /api/reviews/pre-pr`
-   - `GET /api/reviews/{id}/gate`
-   - `PATCH /api/reviews/{id}/pre-pr-decision`
+   - 已落地：`GET /api/reviews/{id}/gate`
+   - 已落地：`POST /api/reviews/{id}/gate/refresh`
+   - 已落地：`POST /api/reviews/{id}/gate/publish-ci`
+   - 已落地：`PATCH /api/reviews/{id}/pre-pr-decision`
 
 2. **CI 与代码扫描集成**
    - GitHub/GitLab status check 回写。

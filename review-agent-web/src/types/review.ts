@@ -76,6 +76,18 @@ export interface ReviewDetailResponse {
   blockedReasons: string[] | null
 }
 
+export interface PrePrGate {
+  id: number | null
+  reviewId: number
+  gateStatus: string
+  summary: string | null
+  blockedReasons: string[]
+  decidedBy: string | null
+  decidedAt: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
 export interface CreateReviewParams {
   projectId: number
   sourceBranch?: string

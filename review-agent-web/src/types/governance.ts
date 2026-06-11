@@ -89,3 +89,19 @@ export interface CiStatusConfigVO {
   tokenConfigured: boolean
   webhookSecretConfigured: boolean
 }
+
+export interface CiStatusWritebackLogVO {
+  id: number
+  connectorKey: string
+  provider: string
+  reviewId: number | null
+  commitSha: string | null
+  state: string | null
+  writebackStatus: 'SUCCESS' | 'FAILED' | 'SKIPPED'
+  requestUrl: string | null
+  errorMessage: string | null
+  retryCount: number
+  nextRetryAt: string | null
+  createdAt: string
+  updatedAt: string
+}

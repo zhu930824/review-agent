@@ -254,6 +254,31 @@
                 <a-button type="primary" size="small" :loading="ciConfigSaving" @click="saveCiStatusConfig">保存配置</a-button>
               </a-space>
             </a-form>
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:6px">最近回写</div>
+              <a-space v-if="ciWritebacks.length" direction="vertical" :size="6" style="width:100%">
+                <a-card
+                  v-for="item in ciWritebacks"
+                  :key="item.id"
+                  size="small"
+                  :body-style="{ padding: '10px 12px' }"
+                  style="background:#f8fafc"
+                >
+                  <a-space :size="8" style="width:100%;justify-content:space-between;align-items:flex-start">
+                    <div style="min-width:0">
+                      <div style="font-size:12px;font-weight:600">#{{ item.reviewId || '-' }} · {{ item.state || '-' }}</div>
+                      <div style="font-size:12px;color:#94a3b8;margin-top:2px;word-break:break-all">{{ item.commitSha || 'no commit' }}</div>
+                      <div v-if="item.errorMessage" style="font-size:12px;color:#dc2626;margin-top:2px;line-height:1.4">{{ item.errorMessage }}</div>
+                    </div>
+                    <a-space :size="4" wrap style="justify-content:flex-end">
+                      <a-tag :color="writebackStatusColor(item.writebackStatus)">{{ item.writebackStatus }}</a-tag>
+                      <a-tag>retry {{ item.retryCount }}</a-tag>
+                    </a-space>
+                  </a-space>
+                </a-card>
+              </a-space>
+              <div v-else style="font-size:12px;color:#94a3b8">暂无回写记录</div>
+            </div>
           </a-space>
         </a-card>
       </a-col>
@@ -328,7 +353,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { BarChartOutlined, CheckCircleOutlined, ExclamationCircleOutlined, AppstoreOutlined, ThunderboltOutlined, SafetyOutlined, UserOutlined, EnvironmentOutlined, SyncOutlined, PlayCircleOutlined, SettingOutlined, ClockCircleOutlined } from '@ant-design/icons-vue'
-import type { BusinessImpact, CapabilityStatus, CiStatusConfigVO, RolloutStage } from '@/types/governance'
+import type { BusinessImpact, CapabilityStatus, CiStatusConfigVO, CiStatusWritebackLogVO, RolloutStage } from '@/types/governance'
 import { useApi } from '@/composables/useApi'
 import { compileGovernancePolicyPack, getCapabilityCoverageSummary, getCiStatusIntegrationReadiness, getConnectorsByStage, getRecommendedNextActions, marketCapabilities, workflowTemplates } from '@/utils/governanceCatalog'
 
@@ -339,6 +364,7 @@ const connectorsByStage = getConnectorsByStage()
 const releasePolicy = compileGovernancePolicyPack(['security-release', 'ai-generated-code', 'compliance-evidence'])
 const ciStatusReadiness = getCiStatusIntegrationReadiness()
 const ciConfigSaving = ref(false)
+const ciWritebacks = ref<CiStatusWritebackLogVO[]>([])
 const ciConfigForm = reactive({
   connectorKey: 'github-checks',
   provider: 'GITHUB',
@@ -380,6 +406,15 @@ async function loadCiStatusConfig() {
   }
 }
 
+async function loadCiWritebacks() {
+  try {
+    const res = await get<CiStatusWritebackLogVO[]>('/integration/ci-config/writebacks')
+    ciWritebacks.value = res.data ?? []
+  } catch (e) {
+    console.error('加载 CI 回写记录失败', e)
+  }
+}
+
 async function saveCiStatusConfig() {
   ciConfigSaving.value = true
   try {
@@ -398,6 +433,7 @@ async function saveCiStatusConfig() {
     }
     const res = await put<CiStatusConfigVO>('/integration/ci-config', payload)
     if (res.data) applyCiStatusConfig(res.data)
+    await loadCiWritebacks()
   } catch (e) {
     console.error('保存 CI 回写配置失败', e)
   } finally {
@@ -405,7 +441,10 @@ async function saveCiStatusConfig() {
   }
 }
 
-onMounted(loadCiStatusConfig)
+onMounted(() => {
+  loadCiStatusConfig()
+  loadCiWritebacks()
+})
 
 const capabilityColumns = [
   { title: '能力', key: 'name', dataIndex: 'name' },
@@ -426,4 +465,5 @@ function statusColor(status: CapabilityStatus) { return { ENABLED: 'green', PART
 function impactLabel(impact: BusinessImpact) { return { HIGH: '高', MEDIUM: '中', LOW: '低' }[impact] }
 function impactColor(impact: BusinessImpact) { return { HIGH: 'red', MEDIUM: 'blue', LOW: 'default' }[impact] }
 function categoryLabel(category: string) { return { AI_REVIEW: 'AI 审查', QUALITY: '质量', SECURITY: '安全', INTEGRATION: '集成', KNOWLEDGE: '知识库', ANALYTICS: '分析' }[category] ?? category }
+function writebackStatusColor(status: string) { return { SUCCESS: 'green', FAILED: 'red', SKIPPED: 'default' }[status] ?? 'default' }
 </script>

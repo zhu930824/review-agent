@@ -126,6 +126,10 @@
               <template #icon><DownloadOutlined /></template>
               SARIF
             </a-button>
+            <a-button size="small" :loading="ciRepublishLoading" @click="republishCiStatus">
+              <template #icon><SyncOutlined /></template>
+              重发 CI
+            </a-button>
             <a-tag :color="statusColor(detail.status)">{{ statusLabel(detail.status) }}</a-tag>
             <a-tag :color="gateStatusColor">{{ gateStatusLabel }}</a-tag>
             <a-tag>{{ detail.reviewMode }}</a-tag>
@@ -157,7 +161,7 @@
               size="small"
               type="primary"
               :loading="prePrDecisionLoading"
-              @click="submitPrePrDecision({ decision: 'APPROVE_WITH_RISK', comment: '人工确认风险可接受，允许进入后续流程' })"
+              @click="submitPrePrDecision({ gateStatus: 'PASSED', reason: '人工确认风险可接受，允许进入后续流程' })"
             >
               人工放行
             </a-button>
@@ -165,7 +169,7 @@
               size="small"
               danger
               :loading="prePrDecisionLoading"
-              @click="submitPrePrDecision({ decision: 'BLOCKED', comment: '人工确认继续阻断' })"
+              @click="submitPrePrDecision({ gateStatus: 'BLOCKED', reason: '人工确认继续阻断' })"
             >
               维持阻断
             </a-button>
@@ -385,7 +389,7 @@
 import { ref, computed, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { ArrowLeftOutlined, SyncOutlined, CheckOutlined, CloseOutlined, ClockCircleOutlined, FileSearchOutlined, SafetyOutlined, ExclamationCircleOutlined, CheckCircleOutlined, ApiOutlined, TeamOutlined, FundViewOutlined, DownloadOutlined } from '@ant-design/icons-vue'
-import type { ReviewDetail, HumanStatus } from '@/types/review'
+import type { ReviewDetail, HumanStatus, PrePrGate } from '@/types/review'
 import { deriveGateStatus, generateBlockedReasons } from '@/utils/reviewMetrics'
 import { useApi } from '@/composables/useApi'
 import { getApiBaseUrl } from '@/utils/apiConfig'
@@ -414,6 +418,7 @@ const reviewId = computed(() => route.params.id as string)
 const loading = ref(false)
 const downloadingSarif = ref(false)
 const prePrDecisionLoading = ref(false)
+const ciRepublishLoading = ref(false)
 const detail = ref<ReviewDetail | null>(null)
 const severityFilter = ref('all')
 const categoryFilter = ref('all')
@@ -597,27 +602,65 @@ async function loadDetail() {
   loading.value = true
   try {
     const res = await get<ReviewDetail>(`/reviews/${reviewId.value}`)
-    if (res.data) detail.value = res.data
+    if (res.data) {
+      detail.value = res.data
+      await loadGate()
+    }
   } catch (e) { console.error('加载审查详情失败', e) }
   finally { loading.value = false }
+}
+
+async function loadGate() {
+  if (!detail.value) return
+  try {
+    const res = await get<PrePrGate>(`/reviews/${reviewId.value}/gate`)
+    if (res.data) applyGate(res.data)
+  } catch (e) {
+    console.error('加载后端 Gate 状态失败，将使用本地推导', e)
+  }
+}
+
+function applyGate(gate: PrePrGate) {
+  if (!detail.value) return
+  detail.value = {
+    ...detail.value,
+    prePrStatus: gate.gateStatus,
+    blockedReasons: gate.blockedReasons,
+  }
 }
 
 async function updateFindingStatus(findingId: number, status: HumanStatus) {
   try {
     await patch(`/reviews/${reviewId.value}/finding/${findingId}`, { humanStatus: status })
     await loadDetail()
+    await post<PrePrGate>(`/reviews/${reviewId.value}/gate/refresh`)
+    await loadGate()
   } catch (e) { console.error('更新问题状态失败', e) }
 }
 
-async function submitPrePrDecision(payload: { decision: string; comment: string }) {
+async function submitPrePrDecision(payload: { gateStatus: string; reason: string }) {
   prePrDecisionLoading.value = true
   try {
-    const res = await patch<ReviewDetail>(`/reviews/${reviewId.value}/pre-pr-decision`, payload)
-    if (res.data) detail.value = res.data
+    const res = await patch<PrePrGate>(`/reviews/${reviewId.value}/pre-pr-decision`, {
+      ...payload,
+      decidedBy: 'manual-reviewer',
+    })
+    if (res.data) applyGate(res.data)
   } catch (e) {
     console.error('提交 Pre-PR 人工决策失败', e)
   } finally {
     prePrDecisionLoading.value = false
+  }
+}
+
+async function republishCiStatus() {
+  ciRepublishLoading.value = true
+  try {
+    await post<unknown>(`/reviews/${reviewId.value}/gate/publish-ci`)
+  } catch (e) {
+    console.error('重新发布 CI 状态失败', e)
+  } finally {
+    ciRepublishLoading.value = false
   }
 }
 

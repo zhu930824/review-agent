@@ -219,7 +219,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useApi } from '@/composables/useApi'
 import { SettingOutlined, ApiOutlined, PlayCircleOutlined, SafetyOutlined, CodeOutlined } from '@ant-design/icons-vue'
 import type { Project } from '@/types/project'
-import type { ReviewDetailResponse } from '@/types/review'
+import type { PrePrGate, ReviewDetailResponse } from '@/types/review'
 import type { PageResult } from '@/types/api'
 
 interface ApiReviewStrategy {
@@ -356,9 +356,20 @@ async function handleSubmit() {
       sourceBranch: form.sourceBranch,
       targetBranch: form.targetBranch,
     })
-    if (res.data?.review?.id) router.push(`/reviews/${res.data.review.id}`)
+    if (res.data?.review?.id) {
+      await initializePrePrGate(res.data.review.id)
+      router.push(`/reviews/${res.data.review.id}`)
+    }
   } catch { }
   finally { submitting.value = false }
+}
+
+async function initializePrePrGate(reviewId: number) {
+  try {
+    await post<PrePrGate>(`/reviews/${reviewId}/gate/initialize`)
+  } catch (e) {
+    console.error('初始化 Pre-PR Gate 失败，详情页将继续按后端查询兜底', e)
+  }
 }
 
 onMounted(() => { loadProjects(); loadStrategies(); if (form.projectId) loadBranches(form.projectId) })
