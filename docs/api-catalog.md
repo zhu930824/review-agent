@@ -145,6 +145,20 @@
 | --- | --- | --- |
 | `GET` | `/api/operations/dashboard` | 查询运营中心数据 |
 
+## Integration
+
+来源：后端可读源码确认，`CiStatusConfigController`；前端治理中心已接入。
+
+| Method | Path | 用途 | 备注 |
+| --- | --- | --- | --- |
+| `GET` | `/api/integration/ci-config` | 查询 CI 回写配置 | 默认 `connectorKey=github-checks` |
+| `PUT` | `/api/integration/ci-config` | 保存 CI 回写配置 | token 和 webhook secret 不在响应中明文返回 |
+| `GET` | `/api/integration/ci-config/writebacks` | 查询最近 CI 回写记录 | 参数：`limit`，最大 50 |
+| `POST` | `/api/integration/ci-config/writebacks/{id}/retry` | 手动重试失败回写 | 仅允许 `FAILED` 记录；重发当前持久化 Gate 状态；到期 `nextRetryAt` 记录也会由后端调度自动重试 |
+| `POST` | `/api/integration/webhooks/github` | 接收 GitHub webhook 投递 | 校验 `X-Hub-Signature-256`；使用 `X-GitHub-Delivery` 做幂等；写入投递日志 |
+| `POST` | `/api/integration/sarif/upload` | 上传 SARIF 到 GitHub Code Scanning | 读取 GitHub 集成配置；请求体包含 `commitSha`、`ref`、`sarif` |
+| `POST` | `/api/integration/pr-summary/comment` | 回写 PR Summary 评论 | 使用 GitHub Issues comments API；请求体包含 `pullNumber`、`body` |
+
 ## Knowledge
 
 来源：前端调用确认。
@@ -172,8 +186,11 @@
    - 已落地：`PATCH /api/reviews/{id}/pre-pr-decision`
 
 2. **CI 与代码扫描集成**
-   - GitHub/GitLab status check 回写。
-   - SARIF 导出和上传。
+   - 已落地：GitHub Commit Status 回写。
+   - 已落地：CI 回写配置、最近回写日志、失败记录手动重试和到期自动重试。
+   - 已落地：GitHub webhook 签名校验、delivery 幂等和投递日志。
+   - 已落地：SARIF 导出和 GitHub Code Scanning 上传入口。
+   - 已落地：PR Summary 对话区评论回写入口。
 
 3. **策略效果指标**
    - 模型调用耗时、失败率、成本、人工确认率。

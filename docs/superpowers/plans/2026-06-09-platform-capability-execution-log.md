@@ -248,3 +248,148 @@
 1. 进入阶段 2：优先补治理中心最近回写列表的手动重试入口和后端重试服务。
 2. 推进 Webhook 签名、幂等和投递日志。
 3. 推进 SARIF 上传和 PR Summary 回写。
+
+## 2026-06-11 阶段 2 启动
+
+### 已完成切片
+
+1. CI 回写失败手动重试服务
+   - 新增 `CiStatusWritebackRetryService`，按 `integration_ci_writeback_log.id` 读取失败记录。
+   - 仅允许 `FAILED` 记录重试；非失败记录或缺少 review id 时拒绝重试。
+   - 重试时增加原日志 `retryCount`，清空 `nextRetryAt`，再通过 `PrePrGateCiStatusPublisher` 重发当前持久化 Gate 状态。
+   - 新增 `CiStatusWritebackRetryRepository`，隔离 MyBatis Plus 的日志读取和更新。
+
+2. 治理中心手动重试入口
+   - `POST /api/integration/ci-config/writebacks/{id}/retry` 暴露失败回写重试端点。
+   - 治理中心最近回写列表对 `FAILED` 记录显示“重试”按钮。
+   - 增加 `ciWritebackRetryingIds` loading 状态，重试完成后刷新最近回写列表。
+
+3. API 文档同步
+   - `docs/api-catalog.md` 新增 Integration / CI 配置与回写日志接口清单。
+
+### 验证记录
+
+- `mvn -q "-Dtest=CiStatusWritebackRetryServiceImplTest,CiStatusWritebackRetryControllerTest" test`：后端重试服务和 Controller 合同测试通过。
+- `npx tsx --test tests/ciWritebackObservability.test.ts`：4 个前端/合同测试通过。
+- `mvn -q test`：后端测试通过。
+- `npm test`：前端 79 个测试通过。
+- `npm run build`：前端构建成功；仍存在 Ant Design Vue chunk 超过 500 kB 的既有体积警告。
+
+### 下一步建议
+
+1. 增加到期失败回写的自动重试调度，消费 `next_retry_at`。
+2. 推进 Webhook 签名校验、幂等 key 和投递日志。
+3. 推进 SARIF 上传到 GitHub Code Scanning。
+
+## 2026-06-12 阶段 2 继续
+
+### 已完成切片
+
+1. CI 回写失败自动重试调度
+   - `CiStatusWritebackRetryService` 新增 `retryDueWritebacks()`，批量读取 `FAILED` 且 `nextRetryAt <= now` 的回写记录。
+   - 自动重试复用手动重试主链路：增加 `retryCount`、清空 `nextRetryAt`，再通过 `PrePrGateCiStatusPublisher` 重发当前持久化 Gate 状态。
+   - `CiStatusWritebackRetryRepository` 新增 `findDueFailedWritebacks(now, limit)`，按 `nextRetryAt` 升序最多消费 20 条。
+   - 新增 `CiStatusWritebackRetryScheduler`，默认每 60 秒触发一次；间隔可通过 `review-agent.ci-writeback.retry-delay-ms` 配置。
+   - 新增独立 `CiWritebackSchedulingConfig` 启用 Spring Scheduling，避免修改受保护主应用入口。
+   - 自动批处理按单条日志隔离异常；缺少 review id 等不可重试记录会跳过，不阻断后续到期记录。
+
+2. API 文档同步
+   - `docs/api-catalog.md` 标记 CI 回写失败记录已支持手动重试和到期自动重试。
+
+### 验证记录
+
+- `mvn -q "-Dtest=CiStatusWritebackRetryServiceImplTest,CiStatusWritebackRetrySchedulerTest,CiStatusWritebackRetryControllerTest" test`：自动重试服务、调度委托和手动重试 Controller 合同测试通过。
+- `mvn -q test`：后端测试通过；自动重试批处理中不可重试记录会输出预期 warn 并继续。
+- `npx tsx --test tests/ciWritebackObservability.test.ts`：4 个治理中心 CI 回写合同测试通过。
+- `npm test`：前端 79 个测试通过。
+- `npm run build`：前端构建成功；仍存在 Ant Design Vue chunk 超过 500 kB 的既有体积警告。
+
+### 下一步建议
+
+1. 推进 Webhook 签名校验、幂等 key 和投递日志。
+2. 推进 SARIF 上传到 GitHub Code Scanning。
+3. 为自动重试补充运维侧开关、批次指标和失败告警。
+
+## 2026-06-12 阶段 2 Webhook 强化
+
+### 已完成切片
+
+1. GitHub Webhook 可信接入
+   - 新增 `POST /api/integration/webhooks/github`，读取 `X-GitHub-Delivery`、`X-GitHub-Event` 和 `X-Hub-Signature-256`。
+   - 新增 `GitHubWebhookSignatureVerifier`，按 GitHub `sha256=` HMAC-SHA256 规则校验请求体签名。
+   - 复用 `integration_ci_config.webhook_secret` 作为签名密钥来源，保持密钥仍由治理中心 CI 配置维护。
+
+2. 幂等与投递日志
+   - 新增 `integration_webhook_delivery_log` 表，记录 connector、provider、delivery id、事件类型、状态、签名、payload digest、错误信息和处理时间。
+   - 新增 `IntegrationWebhookDeliveryService`，对重复 `deliveryId` 返回 `DUPLICATE`，避免重复处理同一次外部投递。
+   - 签名失败会写入 `REJECTED` 投递日志并拒绝请求；签名通过写入 `ACCEPTED`。
+   - 新增可维护的 `IntegrationWebhookController`，避免直接修改受保护旧 `WebhookController` / handler 源码。
+
+3. API 文档同步
+   - `docs/api-catalog.md` 记录 GitHub webhook 接收端点和签名、幂等、投递日志约束。
+
+### 验证记录
+
+- `mvn -q "-Dtest=GitHubWebhookSignatureVerifierTest,IntegrationWebhookDeliveryServiceImplTest,IntegrationWebhookControllerTest" test`：签名校验、幂等投递日志和 Controller 合同测试通过。
+
+### 下一步建议
+
+1. 推进 SARIF 上传到 GitHub Code Scanning。
+2. 将 webhook ACCEPTED 事件接入更细的业务处理器，例如 PR opened/synchronize 后触发 Review/Gate 刷新。
+3. 为 webhook 投递日志补治理中心查询视图和失败重放入口。
+
+## 2026-06-12 阶段 2 SARIF 上传
+
+### 已完成切片
+
+1. GitHub Code Scanning SARIF 上传入口
+   - 新增 `POST /api/integration/sarif/upload`，请求体包含 `commitSha`、`ref` 和 SARIF JSON 字符串。
+   - 新增 `GitHubSarifUploadRequestFactory`，按 GitHub Code Scanning REST API 构造 `POST /repos/{owner}/{repo}/code-scanning/sarifs` 请求。
+   - SARIF 内容按 GitHub 要求先 gzip，再 Base64 编码后写入请求体 `sarif` 字段。
+   - 请求体包含 `commit_sha`、`ref`、`tool_name=Review Agent` 和 `validate=true`。
+   - 新增 `GitHubSarifUploadService`，读取 `github-checks` 集成配置；仅在 `sarifUploadEnabled=true` 且 GitHub 仓库和 token 配置完整时上传。
+   - 上传 client 独立为 `GitHubSarifUploadClient`，测试中不访问真实 GitHub。
+
+2. 受保护源码隔离
+   - 现有 Review SARIF 导出链路仍在受保护源码附近，本轮不直接改动。
+   - 新入口可供现有 SARIF 导出结果、后续后台任务或详情页操作复用。
+
+3. API 文档同步
+   - `docs/api-catalog.md` 将 SARIF 导出与 GitHub Code Scanning 上传入口标记为已落地。
+
+### 验证记录
+
+- `mvn -q "-Dtest=GitHubSarifUploadRequestFactoryTest,GitHubSarifUploadServiceImplTest,IntegrationSarifControllerTest" test`：SARIF 上传请求构造、配置跳过和 Controller 合同测试通过。
+
+### 下一步建议
+
+1. 将 Review 详情页的 SARIF 导出结果串接到 `/api/integration/sarif/upload`，形成一键上传操作。
+2. 补 SARIF 上传日志和治理中心最近上传记录。
+3. 推进 PR Summary 回写。
+
+## 2026-06-12 阶段 2 PR Summary 回写
+
+### 已完成切片
+
+1. GitHub PR Summary 评论入口
+   - 新增 `POST /api/integration/pr-summary/comment`，请求体包含 `pullNumber` 和 Markdown `body`。
+   - 新增 `GitHubPrSummaryCommentRequestFactory`，按 GitHub 一般 PR 对话评论合同构造 `POST /repos/{owner}/{repo}/issues/{pullNumber}/comments` 请求。
+   - 使用治理中心 `github-checks` 集成配置中的 GitHub 仓库和 token。
+   - 新增 `GitHubPrSummaryCommentClient` 隔离真实 GitHub 网络调用，便于后续接入日志、重试或 mock。
+
+2. 接口边界
+   - 本轮实现的是 PR 对话区 summary comment，不是代码行级 review comment。
+   - 未直接改动受保护 Review 主流程；后续可由 Review 完成事件、Webhook 事件或详情页操作调用该入口。
+
+3. API 文档同步
+   - `docs/api-catalog.md` 记录 PR Summary 评论回写入口，并注明使用 GitHub Issues comments API。
+
+### 验证记录
+
+- `mvn -q "-Dtest=GitHubPrSummaryCommentRequestFactoryTest,GitHubPrSummaryCommentServiceImplTest,IntegrationPrSummaryControllerTest" test`：PR Summary 请求构造、配置跳过和 Controller 合同测试通过。
+
+### 下一步建议
+
+1. 将 Review 完成事件或详情页操作串接到 PR Summary 评论入口。
+2. 为 PR Summary 回写增加日志、幂等 marker 和失败重试。
+3. 进入阶段 3：模型调用遥测与策略效果看板的最小数据结构。

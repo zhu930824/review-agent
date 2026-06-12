@@ -273,6 +273,14 @@
                     <a-space :size="4" wrap style="justify-content:flex-end">
                       <a-tag :color="writebackStatusColor(item.writebackStatus)">{{ item.writebackStatus }}</a-tag>
                       <a-tag>retry {{ item.retryCount }}</a-tag>
+                      <a-button
+                        v-if="item.writebackStatus === 'FAILED'"
+                        size="small"
+                        :loading="ciWritebackRetryingIds.has(item.id)"
+                        @click="retryCiWriteback(item)"
+                      >
+                        重试
+                      </a-button>
                     </a-space>
                   </a-space>
                 </a-card>
@@ -357,7 +365,7 @@ import type { BusinessImpact, CapabilityStatus, CiStatusConfigVO, CiStatusWriteb
 import { useApi } from '@/composables/useApi'
 import { compileGovernancePolicyPack, getCapabilityCoverageSummary, getCiStatusIntegrationReadiness, getConnectorsByStage, getRecommendedNextActions, marketCapabilities, workflowTemplates } from '@/utils/governanceCatalog'
 
-const { get, put } = useApi()
+const { get, post, put } = useApi()
 const coverage = getCapabilityCoverageSummary()
 const recommendedActions = getRecommendedNextActions(5)
 const connectorsByStage = getConnectorsByStage()
@@ -365,6 +373,7 @@ const releasePolicy = compileGovernancePolicyPack(['security-release', 'ai-gener
 const ciStatusReadiness = getCiStatusIntegrationReadiness()
 const ciConfigSaving = ref(false)
 const ciWritebacks = ref<CiStatusWritebackLogVO[]>([])
+const ciWritebackRetryingIds = ref<Set<number>>(new Set())
 const ciConfigForm = reactive({
   connectorKey: 'github-checks',
   provider: 'GITHUB',
@@ -438,6 +447,20 @@ async function saveCiStatusConfig() {
     console.error('保存 CI 回写配置失败', e)
   } finally {
     ciConfigSaving.value = false
+  }
+}
+
+async function retryCiWriteback(item: CiStatusWritebackLogVO) {
+  ciWritebackRetryingIds.value = new Set(ciWritebackRetryingIds.value).add(item.id)
+  try {
+    await post<unknown>(`/integration/ci-config/writebacks/${item.id}/retry`)
+    await loadCiWritebacks()
+  } catch (e) {
+    console.error('重试 CI 回写失败', e)
+  } finally {
+    const next = new Set(ciWritebackRetryingIds.value)
+    next.delete(item.id)
+    ciWritebackRetryingIds.value = next
   }
 }
 

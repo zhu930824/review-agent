@@ -39,3 +39,13 @@ test('governance page loads and renders recent ci writebacks', () => {
   assert.match(governanceView, /writebackStatus/)
   assert.match(governanceView, /retryCount/)
 })
+
+test('governance page can manually retry failed ci writebacks', () => {
+  const governanceView = readFileSync(join(process.cwd(), 'src/views/governance.vue'), 'utf8')
+
+  assert.match(governanceView, /retryCiWriteback/)
+  assert.match(governanceView, /ciWritebackRetryingIds/)
+  assert.match(governanceView, /重试/)
+  assert.match(governanceView, /post<unknown>\(`\/integration\/ci-config\/writebacks\/\$\{item\.id\}\/retry`\)/)
+  assert.match(governanceView, /item\.writebackStatus === 'FAILED'/)
+})
