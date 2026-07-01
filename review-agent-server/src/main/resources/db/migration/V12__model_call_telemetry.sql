@@ -1,0 +1,23 @@
+CREATE TABLE IF NOT EXISTS model_call_telemetry (
+    id                  BIGINT        NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT 'Primary key',
+    review_id           BIGINT        DEFAULT NULL COMMENT 'Related review id',
+    strategy_key        VARCHAR(100)  DEFAULT NULL COMMENT 'Review strategy key',
+    provider            VARCHAR(100)  DEFAULT NULL COMMENT 'Model provider',
+    model_name          VARCHAR(200)  DEFAULT NULL COMMENT 'Model name',
+    role                VARCHAR(100)  DEFAULT NULL COMMENT 'Model or agent role',
+    prompt_version      VARCHAR(100)  DEFAULT NULL COMMENT 'Prompt/template version',
+    status              VARCHAR(30)   NOT NULL COMMENT 'SUCCESS/FAILED/SKIPPED',
+    latency_ms          INT           DEFAULT NULL COMMENT 'Model call latency in milliseconds',
+    prompt_tokens       INT           DEFAULT NULL COMMENT 'Prompt token count',
+    completion_tokens   INT           DEFAULT NULL COMMENT 'Completion token count',
+    total_tokens        INT           DEFAULT NULL COMMENT 'Total token count',
+    cost_micro_cents    INT           DEFAULT NULL COMMENT 'Estimated cost in micro cents',
+    error_message       VARCHAR(2000) DEFAULT NULL COMMENT 'Failure reason',
+    created_at          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Created time',
+    updated_at          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Updated time',
+    INDEX idx_model_call_review (review_id),
+    INDEX idx_model_call_strategy (strategy_key),
+    INDEX idx_model_call_provider (provider),
+    INDEX idx_model_call_status (status),
+    INDEX idx_model_call_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Model call telemetry';

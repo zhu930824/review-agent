@@ -1,6 +1,6 @@
 # Review Agent API 清单
 
-> 更新时间：2026-06-11
+> 更新时间：2026-07-01
 
 本文档汇总当前项目已确认的 API。来源分为两类：
 
@@ -139,11 +139,20 @@
 
 ## Operations
 
-来源：后端可读源码确认，`OperationsController`。
+来源：后端可读源码确认，`OperationsController`；前端运营中心读取 Operations 聚合接口形成策略压力视图。
 
 | Method | Path | 用途 |
 | --- | --- | --- |
 | `GET` | `/api/operations/dashboard` | 查询运营中心数据 |
+| `GET` | `/api/operations/strategy-pressure` | 查询策略成本/质量压力排行 | 基于模型遥测 summary 生成压力分、压力等级和运营建议 |
+| `GET` | `/api/operations/remediation-queue` | 查询运营中心修复队列 | 参数：`limit`，默认 50；返回未驳回 Finding，包含 Review、项目、严重度、人工状态、置信度和跨模型命中信息 |
+| `GET` | `/api/operations/owner-load` | 查询运营责任人负载 | 返回按 Finding 分类映射的责任人、数量和占比 |
+| `GET` | `/api/operations/rule-learning-candidates` | 查询规则学习候选 | 参数：`limit`，默认 20；返回 `PROMOTE_TO_RULE` / `SUPPRESS_PATTERN` 候选 |
+
+当前前端接入状态：
+
+- 运营中心全局 KPI 优先读取 `/api/operations/dashboard`，修复队列读取 `/api/operations/remediation-queue`，责任人负载读取 `/api/operations/owner-load`，规则学习视图读取 `/api/operations/rule-learning-candidates`；责任人负载和规则学习候选均保留本地推导兜底，业务收益估算仍保留本地运营假设。
+- 运营中心“策略成本/质量压力”面板调用 `/api/operations/strategy-pressure`，按失败率、误报代理、确认率、策略命中率、Judge 失败率、平均成本和延迟展示后端生成的策略压力分、压力等级和运营建议，并展示跨模型命中率。
 
 ## Integration
 
@@ -158,6 +167,13 @@
 | `POST` | `/api/integration/webhooks/github` | 接收 GitHub webhook 投递 | 校验 `X-Hub-Signature-256`；使用 `X-GitHub-Delivery` 做幂等；写入投递日志 |
 | `POST` | `/api/integration/sarif/upload` | 上传 SARIF 到 GitHub Code Scanning | 读取 GitHub 集成配置；请求体包含 `commitSha`、`ref`、`sarif` |
 | `POST` | `/api/integration/pr-summary/comment` | 回写 PR Summary 评论 | 使用 GitHub Issues comments API；请求体包含 `pullNumber`、`body` |
+| `GET` | `/api/integration/actions` | 查询最近集成动作日志 | 参数：`limit`，最大 50；覆盖 SARIF 上传、PR Summary 评论等外部动作 |
+
+当前前端接入状态：
+
+- Review 详情页保留本地 SARIF 下载，同时新增“一键上传扫描”，会读取当前 Review 的 SARIF、`sourceCommit/targetCommit` 和分支 ref 后调用 `/api/integration/sarif/upload`。
+- Review 详情页新增 “PR Summary” 操作，用户输入 Pull Request 编号后，将当前 Review 摘要、Gate 状态、严重度统计和前 5 条 Finding 组合成 Markdown 并调用 `/api/integration/pr-summary/comment`。
+- 治理中心 “CI 回写就绪度” 面板新增最近集成动作列表，调用 `/api/integration/actions` 展示 `SARIF_UPLOAD`、`PR_SUMMARY_COMMENT` 的 `UPLOADED`、`POSTED`、`SKIPPED`、`FAILED` 状态。
 
 ## Knowledge
 
@@ -176,6 +192,21 @@
 | `GET` | `/api/gateway/prompts` | 查询 Prompt 模板 | `views/gateway.vue` |
 | `GET` | `/api/gateway/stats` | 查询模型调用统计 | `views/gateway.vue` |
 
+## Model Telemetry
+
+来源：后端可读源码确认，`ModelTelemetryController`；前端 AI Gateway 已优先接入 summary。
+
+| Method | Path | 用途 | 备注 |
+| --- | --- | --- | --- |
+| `POST` | `/api/model-telemetry/records` | 记录一次模型调用遥测 | 请求体包含 review、strategy、provider、model、role、promptVersion、status、latency、token、cost、error |
+| `GET` | `/api/model-telemetry/summary` | 查询模型调用汇总 | 返回总调用、失败数、失败率、总 token、估算成本、平均成本、平均延迟、策略维度调用表现，以及按 review finding 人工状态聚合的确认/误报代理、策略命中、跨模型命中、模型覆盖和 Judge 健康指标 |
+
+当前阶段状态：
+
+- `model_call_telemetry` 表已落地，用于承接后续真实模型调用链路的耗时、token、成本和失败信息。
+- AI Gateway 页面优先读取 `/api/model-telemetry/summary` 展示调用统计、总失败率、平均成本和策略效果；策略卡片展示调用量、token、平均延迟、平均成本、失败率、确认/驳回/待处理 Finding 数、确认率、误报代理率、策略命中率、跨模型命中率、模型覆盖数和 Judge 失败率；若新接口失败，仍保留旧 `/api/gateway/stats` 兜底。
+- 受保护 Gateway / Review 主流程当前不直接修改；后续可在可维护调用点直接接入 `POST /api/model-telemetry/records`，或在服务层使用 `ModelTelemetryRecorder.recordCall(...)` 包装真实模型调用，自动记录成功/失败、耗时、token 和成本。
+
 ## 后续 API 演进优先级
 
 1. **Pre-PR Gate 后端化**
@@ -193,8 +224,10 @@
    - 已落地：PR Summary 对话区评论回写入口。
 
 3. **策略效果指标**
-   - 模型调用耗时、失败率、成本、人工确认率。
-   - 策略命中、Judge 分歧、跨模型命中。
+   - 已落地：模型调用耗时、失败率、token、成本的遥测表、记录接口、汇总接口和 AI Gateway 汇总视图。
+   - 已落地：按策略关联 review finding 人工状态，汇总有效 Finding 数、确认率和误报代理指标。
+   - 已落地：策略命中率、跨模型命中率、模型覆盖数和 Judge 调用失败率代理指标。
+   - 待推进：Judge 分歧的真实裁决差异、跨模型 Finding 归因明细。
 
 4. **修复闭环**
    - Finding 生成 Fix Draft。

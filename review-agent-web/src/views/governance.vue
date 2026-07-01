@@ -287,6 +287,30 @@
               </a-space>
               <div v-else style="font-size:12px;color:#94a3b8">暂无回写记录</div>
             </div>
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:6px">最近集成动作</div>
+              <a-space v-if="integrationActions.length" direction="vertical" :size="6" style="width:100%">
+                <a-card
+                  v-for="item in integrationActions"
+                  :key="item.id"
+                  size="small"
+                  :body-style="{ padding: '10px 12px' }"
+                  style="background:#f8fafc"
+                >
+                  <a-space :size="8" style="width:100%;justify-content:space-between;align-items:flex-start">
+                    <div style="min-width:0">
+                      <div style="font-size:12px;font-weight:600">{{ item.actionType }}</div>
+                      <div style="font-size:12px;color:#94a3b8;margin-top:2px;word-break:break-all">
+                        {{ item.targetKey || item.commitSha || 'no target' }}
+                      </div>
+                      <div v-if="item.errorMessage" style="font-size:12px;color:#dc2626;margin-top:2px;line-height:1.4">{{ item.errorMessage }}</div>
+                    </div>
+                    <a-tag :color="actionStatusColor(item.actionStatus)">{{ item.actionStatus }}</a-tag>
+                  </a-space>
+                </a-card>
+              </a-space>
+              <div v-else style="font-size:12px;color:#94a3b8">暂无集成动作</div>
+            </div>
           </a-space>
         </a-card>
       </a-col>
@@ -361,7 +385,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { BarChartOutlined, CheckCircleOutlined, ExclamationCircleOutlined, AppstoreOutlined, ThunderboltOutlined, SafetyOutlined, UserOutlined, EnvironmentOutlined, SyncOutlined, PlayCircleOutlined, SettingOutlined, ClockCircleOutlined } from '@ant-design/icons-vue'
-import type { BusinessImpact, CapabilityStatus, CiStatusConfigVO, CiStatusWritebackLogVO, RolloutStage } from '@/types/governance'
+import type { BusinessImpact, CapabilityStatus, CiStatusConfigVO, CiStatusWritebackLogVO, IntegrationActionLogVO, RolloutStage } from '@/types/governance'
 import { useApi } from '@/composables/useApi'
 import { compileGovernancePolicyPack, getCapabilityCoverageSummary, getCiStatusIntegrationReadiness, getConnectorsByStage, getRecommendedNextActions, marketCapabilities, workflowTemplates } from '@/utils/governanceCatalog'
 
@@ -373,6 +397,7 @@ const releasePolicy = compileGovernancePolicyPack(['security-release', 'ai-gener
 const ciStatusReadiness = getCiStatusIntegrationReadiness()
 const ciConfigSaving = ref(false)
 const ciWritebacks = ref<CiStatusWritebackLogVO[]>([])
+const integrationActions = ref<IntegrationActionLogVO[]>([])
 const ciWritebackRetryingIds = ref<Set<number>>(new Set())
 const ciConfigForm = reactive({
   connectorKey: 'github-checks',
@@ -424,6 +449,15 @@ async function loadCiWritebacks() {
   }
 }
 
+async function loadIntegrationActions() {
+  try {
+    const res = await get<IntegrationActionLogVO[]>('/integration/actions')
+    integrationActions.value = res.data ?? []
+  } catch (e) {
+    console.error('加载集成动作记录失败', e)
+  }
+}
+
 async function saveCiStatusConfig() {
   ciConfigSaving.value = true
   try {
@@ -443,6 +477,7 @@ async function saveCiStatusConfig() {
     const res = await put<CiStatusConfigVO>('/integration/ci-config', payload)
     if (res.data) applyCiStatusConfig(res.data)
     await loadCiWritebacks()
+    await loadIntegrationActions()
   } catch (e) {
     console.error('保存 CI 回写配置失败', e)
   } finally {
@@ -467,6 +502,7 @@ async function retryCiWriteback(item: CiStatusWritebackLogVO) {
 onMounted(() => {
   loadCiStatusConfig()
   loadCiWritebacks()
+  loadIntegrationActions()
 })
 
 const capabilityColumns = [
@@ -489,4 +525,5 @@ function impactLabel(impact: BusinessImpact) { return { HIGH: '高', MEDIUM: '�
 function impactColor(impact: BusinessImpact) { return { HIGH: 'red', MEDIUM: 'blue', LOW: 'default' }[impact] }
 function categoryLabel(category: string) { return { AI_REVIEW: 'AI 审查', QUALITY: '质量', SECURITY: '安全', INTEGRATION: '集成', KNOWLEDGE: '知识库', ANALYTICS: '分析' }[category] ?? category }
 function writebackStatusColor(status: string) { return { SUCCESS: 'green', FAILED: 'red', SKIPPED: 'default' }[status] ?? 'default' }
+function actionStatusColor(status: string) { return { UPLOADED: 'green', POSTED: 'green', FAILED: 'red', SKIPPED: 'default' }[status] ?? 'default' }
 </script>

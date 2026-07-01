@@ -105,3 +105,17 @@ export interface CiStatusWritebackLogVO {
   createdAt: string
   updatedAt: string
 }
+
+export interface IntegrationActionLogVO {
+  id: number
+  connectorKey: string
+  provider: string
+  actionType: 'SARIF_UPLOAD' | 'PR_SUMMARY_COMMENT' | string
+  actionStatus: 'UPLOADED' | 'POSTED' | 'SKIPPED' | 'FAILED' | string
+  targetKey: string | null
+  commitSha: string | null
+  requestUrl: string | null
+  errorMessage: string | null
+  createdAt: string
+  updatedAt: string
+}

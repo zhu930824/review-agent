@@ -4,6 +4,7 @@ import test from 'node:test'
 import {
   buildRemediationQueue,
   deriveOperationsScorecard,
+  deriveStrategyPressureItems,
   estimateReviewBusinessImpact,
   extractRuleLearningCandidates,
   summarizeRemediationQueue,
@@ -92,5 +93,43 @@ test('business impact estimate scales with review volume and avoided defects', (
   assert.ok(impact.hoursSaved >= 30)
   assert.ok(impact.avoidedReworkHours > impact.hoursSaved)
   assert.equal(impact.executiveSummary.includes('80'), true)
+})
+
+test('strategy pressure ranks costly noisy strategies first', () => {
+  const pressure = deriveStrategyPressureItems([
+    {
+      strategyKey: 'quality-gate',
+      totalCalls: 12,
+      failedCalls: 3,
+      totalTokens: 12000,
+      avgLatencyMs: 1800,
+      failureRatePercent: 25,
+      avgCostMicroCents: 900,
+      confirmedFindings: 2,
+      dismissedFindings: 6,
+      pendingFindings: 4,
+      confirmationRatePercent: 17,
+      falsePositiveProxyPercent: 75,
+    },
+    {
+      strategyKey: 'fast-scan',
+      totalCalls: 20,
+      failedCalls: 0,
+      totalTokens: 4000,
+      avgLatencyMs: 450,
+      failureRatePercent: 0,
+      avgCostMicroCents: 90,
+      confirmedFindings: 8,
+      dismissedFindings: 1,
+      pendingFindings: 1,
+      confirmationRatePercent: 80,
+      falsePositiveProxyPercent: 11,
+    },
+  ])
+
+  assert.equal(pressure[0].strategyKey, 'quality-gate')
+  assert.equal(pressure[0].pressureLevel, 'HIGH')
+  assert.ok(pressure[0].pressureScore > pressure[1].pressureScore)
+  assert.match(pressure[0].recommendation, /降噪|复核|成本/)
 })
 

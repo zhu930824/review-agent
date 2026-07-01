@@ -126,6 +126,14 @@
               <template #icon><DownloadOutlined /></template>
               SARIF
             </a-button>
+            <a-button size="small" :loading="sarifUploadLoading" @click="uploadSarifToCodeScanning">
+              <template #icon><UploadOutlined /></template>
+              上传扫描
+            </a-button>
+            <a-button size="small" :loading="prSummaryCommentLoading" @click="openPrSummaryModal">
+              <template #icon><MessageOutlined /></template>
+              PR Summary
+            </a-button>
             <a-button size="small" :loading="ciRepublishLoading" @click="republishCiStatus">
               <template #icon><SyncOutlined /></template>
               重发 CI
@@ -382,13 +390,35 @@
         </a-card>
       </template>
     </template>
+
+    <a-modal
+      v-model:open="prSummaryModalOpen"
+      title="发布 PR Summary"
+      ok-text="发布评论"
+      cancel-text="取消"
+      :confirm-loading="prSummaryCommentLoading"
+      @ok="submitPrSummaryComment"
+    >
+      <a-space direction="vertical" :size="12" style="width:100%">
+        <div style="font-size:13px;color:#64748b">
+          填入 GitHub Pull Request 编号，系统会把当前 Review 摘要、Gate 状态和主要 Finding 写到 PR 对话区。
+        </div>
+        <a-input-number
+          v-model:value="prSummaryPullNumber"
+          :min="1"
+          style="width:100%"
+          placeholder="Pull Request 编号，例如 42"
+        />
+      </a-space>
+    </a-modal>
   </a-space>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { ArrowLeftOutlined, SyncOutlined, CheckOutlined, CloseOutlined, ClockCircleOutlined, FileSearchOutlined, SafetyOutlined, ExclamationCircleOutlined, CheckCircleOutlined, ApiOutlined, TeamOutlined, FundViewOutlined, DownloadOutlined } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
+import { ArrowLeftOutlined, SyncOutlined, CheckOutlined, CloseOutlined, ClockCircleOutlined, FileSearchOutlined, SafetyOutlined, ExclamationCircleOutlined, CheckCircleOutlined, ApiOutlined, TeamOutlined, FundViewOutlined, DownloadOutlined, UploadOutlined, MessageOutlined } from '@ant-design/icons-vue'
 import type { ReviewDetail, HumanStatus, PrePrGate } from '@/types/review'
 import { deriveGateStatus, generateBlockedReasons } from '@/utils/reviewMetrics'
 import { useApi } from '@/composables/useApi'
@@ -417,8 +447,12 @@ const { get, patch, post } = useApi()
 const reviewId = computed(() => route.params.id as string)
 const loading = ref(false)
 const downloadingSarif = ref(false)
+const sarifUploadLoading = ref(false)
 const prePrDecisionLoading = ref(false)
 const ciRepublishLoading = ref(false)
+const prSummaryModalOpen = ref(false)
+const prSummaryPullNumber = ref<number | null>(null)
+const prSummaryCommentLoading = ref(false)
 const detail = ref<ReviewDetail | null>(null)
 const severityFilter = ref('all')
 const categoryFilter = ref('all')
@@ -657,8 +691,10 @@ async function republishCiStatus() {
   ciRepublishLoading.value = true
   try {
     await post<unknown>(`/reviews/${reviewId.value}/gate/publish-ci`)
+    message.success('CI 状态已重新发布')
   } catch (e) {
     console.error('重新发布 CI 状态失败', e)
+    message.error('重新发布 CI 状态失败')
   } finally {
     ciRepublishLoading.value = false
   }
@@ -683,6 +719,92 @@ async function downloadSarif() {
     console.error('导出 SARIF 失败', e)
   } finally {
     downloadingSarif.value = false
+  }
+}
+
+function resolveIntegrationCommitSha(): string {
+  return detail.value?.sourceCommit || detail.value?.targetCommit || ''
+}
+
+function resolveIntegrationRef(): string {
+  const branch = detail.value?.sourceBranch || detail.value?.targetBranch || 'main'
+  return branch.startsWith('refs/') ? branch : `refs/heads/${branch}`
+}
+
+async function uploadSarifToCodeScanning() {
+  sarifUploadLoading.value = true
+  try {
+    const sarifRes = await get<unknown>(`/reviews/${reviewId.value}/sarif`)
+    const commitSha = resolveIntegrationCommitSha()
+    if (!sarifRes.data || !commitSha) {
+      message.warning('缺少 SARIF 内容或 Commit SHA，无法上传')
+      return
+    }
+
+    await post<unknown>('/integration/sarif/upload', {
+      commitSha: resolveIntegrationCommitSha(),
+      ref: resolveIntegrationRef(),
+      sarif: JSON.stringify(sarifRes.data),
+    })
+    message.success('SARIF 已提交到 GitHub Code Scanning')
+  } catch (e) {
+    console.error('上传 SARIF 失败', e)
+    message.error('上传 SARIF 失败')
+  } finally {
+    sarifUploadLoading.value = false
+  }
+}
+
+function openPrSummaryModal() {
+  prSummaryModalOpen.value = true
+}
+
+function buildPrSummaryBody(): string {
+  const current = detail.value
+  if (!current) return ''
+  const topFindings = current.findings.slice(0, 5)
+    .map(item => `- [${item.severity}] ${item.title} (${item.filePath}:${item.lineStart ?? '-'})`)
+    .join('\n')
+  const findingsText = topFindings || '- 未发现需要写入 PR 的问题'
+  const summaryText = parsedSummary.value || '本次 Review 未生成摘要。'
+
+  return [
+    '## Review Agent Summary',
+    '',
+    `- Project: ${current.projectName || '-'}`,
+    `- Branches: ${current.sourceBranch || '-'} -> ${current.targetBranch || '-'}`,
+    `- Gate: ${gateStatusLabel.value}`,
+    `- Findings: BLOCKER ${current.blockerCount}, MAJOR ${current.majorCount}, MINOR ${current.minorCount}, INFO ${current.infoCount}`,
+    '',
+    '### Summary',
+    summaryText,
+    '',
+    '### Top Findings',
+    findingsText,
+    '',
+    `_Generated from Review Agent review #${current.id}_`,
+  ].join('\n')
+}
+
+async function submitPrSummaryComment() {
+  if (!prSummaryPullNumber.value) {
+    message.warning('请先填写 Pull Request 编号')
+    return
+  }
+
+  prSummaryCommentLoading.value = true
+  try {
+    await post<unknown>('/integration/pr-summary/comment', {
+      pullNumber: Number(prSummaryPullNumber.value),
+      body: buildPrSummaryBody(),
+    })
+    message.success('PR Summary 已发布')
+    prSummaryModalOpen.value = false
+  } catch (e) {
+    console.error('发布 PR Summary 失败', e)
+    message.error('发布 PR Summary 失败')
+  } finally {
+    prSummaryCommentLoading.value = false
   }
 }
 

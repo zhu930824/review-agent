@@ -79,6 +79,41 @@
       </a-col>
     </a-row>
 
+    <!-- 策略质量压力 -->
+    <a-card size="small" style="margin-bottom:16px">
+      <template #title>
+        <a-space :size="8">
+          <BarChartOutlined style="font-size:20px;color:#6366f1" />
+          <span style="font-weight:600">策略成本/质量压力</span>
+        </a-space>
+      </template>
+      <a-spin v-if="strategyPressureLoading" style="display:flex;justify-content:center;padding:16px 0" />
+      <a-row v-else-if="strategyPressureItems.length" :gutter="12">
+        <a-col v-for="strategy in strategyPressureItems" :key="strategy.strategyKey" :xl="8" :md="12" :span="24" style="margin-bottom:12px">
+          <a-card size="small" :body-style="{ padding: '12px' }" style="background:#f8fafc">
+            <a-space :size="8" style="width:100%;justify-content:space-between;align-items:flex-start">
+              <div>
+                <div style="font-weight:600;font-size:13px">{{ strategy.strategyKey }}</div>
+                <div style="font-size:12px;color:#64748b;margin-top:4px">
+                  压力分 {{ strategy.pressureScore }} · 确认率 {{ strategy.confirmationRatePercent }}% · 误报代理 {{ strategy.falsePositiveProxyPercent }}%
+                </div>
+                <div style="font-size:12px;color:#94a3b8;margin-top:4px">
+                  失败率 {{ strategy.failureRatePercent }}% · 平均成本 {{ formatMicroCents(strategy.avgCostMicroCents) }} · {{ strategy.avgLatencyMs }}ms
+                </div>
+                <div style="font-size:12px;color:#94a3b8;margin-top:4px">
+                  命中率 {{ strategy.strategyHitRatePercent }}% · 跨模型 {{ strategy.crossHitRatePercent }}% · Judge {{ strategy.judgeFailureRatePercent }}%
+                </div>
+              </div>
+              <a-tag :color="pressureColor(strategy.pressureLevel)">{{ strategy.pressureLevel }}</a-tag>
+            </a-space>
+            <a-progress :percent="strategy.pressureScore" :show-info="false" size="small" style="margin-top:10px" />
+            <div style="font-size:12px;color:#475569;margin-top:8px;line-height:1.5">{{ strategy.recommendation }}</div>
+          </a-card>
+        </a-col>
+      </a-row>
+      <div v-else style="font-size:13px;color:#94a3b8;padding:12px 0">暂无模型遥测数据，真实调用接入后会显示策略成本/质量压力。</div>
+    </a-card>
+
     <!-- 主内容区 -->
     <a-row :gutter="16">
       <!-- 修复队列表格 -->
@@ -96,8 +131,9 @@
           <a-table
             :columns="queueColumns"
             :data-source="remediationQueue"
+            :loading="remediationQueueLoading"
             :pagination="false"
-            row-key="id"
+            row-key="findingId"
             size="small"
           >
             <template #bodyCell="{ column, record }">
@@ -203,24 +239,54 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { BarChartOutlined, ExclamationCircleOutlined, ClockCircleOutlined, RiseOutlined, UnorderedListOutlined, TeamOutlined, ExperimentOutlined, CalendarOutlined, AppstoreOutlined, PlayCircleOutlined, SafetyCertificateOutlined, RocketOutlined } from '@ant-design/icons-vue'
-import type { OperationalFinding } from '@/types/operations'
+import type { OperationDashboard, OperationOwnerLoad, OperationalFinding, RuleLearningCandidate, StrategyPressureItem, StrategyPressureLevel } from '@/types/operations'
 import type { SeverityLevel } from '@/types/review'
+import { useApi } from '@/composables/useApi'
 import { buildRemediationQueue, deriveOperationsScorecard, estimateReviewBusinessImpact, extractRuleLearningCandidates, summarizeRemediationQueue } from '@/utils/reviewOperations'
 
-const sampleFindings: OperationalFinding[] = [
-  { id: 1, reviewId: 1001, projectName: 'payment-core', severity: 'BLOCKER', category: 'SECURITY', title: 'Token can be reused after logout', humanStatus: 'CONFIRMED', confidence: 0.92, isCrossHit: true },
-  { id: 2, reviewId: 1001, projectName: 'payment-core', severity: 'MAJOR', category: 'PERFORMANCE', title: 'Settlement list has N+1 query risk', humanStatus: 'PENDING', confidence: 0.82 },
-  { id: 3, reviewId: 1002, projectName: 'order-service', severity: 'MAJOR', category: 'EXCEPTION_HANDLING', title: 'External timeout is not mapped to business error', humanStatus: 'CONFIRMED', confidence: 0.88, isCrossHit: true },
-  { id: 4, reviewId: 1003, projectName: 'web-console', severity: 'MINOR', category: 'CODE_STYLE', title: 'Naming can be clearer', humanStatus: 'DISMISSED', confidence: 0.41 },
-]
-
-const remediationQueue = buildRemediationQueue(sampleFindings)
-const queueSummary = summarizeRemediationQueue(remediationQueue)
-const learningCandidates = extractRuleLearningCandidates(sampleFindings)
-const scorecard = deriveOperationsScorecard(sampleFindings)
 const businessImpact = estimateReviewBusinessImpact({ monthlyReviews: 80, averageManualReviewMinutes: 35, automationCoveragePercent: 65, blockerFindings: 6, majorFindings: 18 })
+const { get } = useApi()
+const remediationQueueLoading = ref(false)
+const operationalFindings = ref<OperationalFinding[]>([])
+const operationDashboard = ref<OperationDashboard | null>(null)
+const backendOwnerLoad = ref<OperationOwnerLoad[]>([])
+const backendRuleLearningCandidates = ref<RuleLearningCandidate[]>([])
+const strategyPressureLoading = ref(false)
+const strategyPressureItems = ref<StrategyPressureItem[]>([])
+const remediationQueue = computed(() => buildRemediationQueue(operationalFindings.value))
+const learningCandidates = computed(() => backendRuleLearningCandidates.value.length
+  ? backendRuleLearningCandidates.value
+  : extractRuleLearningCandidates(operationalFindings.value))
+const queueSummary = computed(() => {
+  const localSummary = summarizeRemediationQueue(remediationQueue.value)
+  const dashboard = operationDashboard.value
+  if (!dashboard) {
+    return localSummary
+  }
+  return {
+    ...localSummary,
+    total: dashboard.totalFindings,
+    blockerCount: dashboard.blockerCount,
+    humanPendingCount: dashboard.pendingCount,
+    slaPressure: dashboard.slaPressure,
+  }
+})
+const scorecard = computed(() => {
+  const dashboard = operationDashboard.value
+  if (!dashboard) {
+    return deriveOperationsScorecard(operationalFindings.value)
+  }
+  const readinessPenalty = dashboard.blockerCount * 12 + dashboard.pendingCount * 6
+  return {
+    openRiskItems: dashboard.totalFindings,
+    blockerCount: dashboard.blockerCount,
+    ruleLearningCandidates: learningCandidates.value.length,
+    topOwnerRole: ownerLoad.value[0]?.role ?? 'None',
+    operationalReadiness: Math.max(0, Math.min(100, 88 - readinessPenalty + learningCandidates.value.length * 3)),
+  }
+})
 
 const queueColumns = [
   { title: '风险项', key: 'title', dataIndex: 'title' },
@@ -229,7 +295,9 @@ const queueColumns = [
   { title: 'SLA', key: 'slaHours', dataIndex: 'slaHours' },
   { title: '优先级', key: 'priorityScore', dataIndex: 'priorityScore' },
 ]
-const ownerLoad = computed(() => Object.entries(queueSummary.byOwner).map(([role, count]) => ({ role, count, percent: queueSummary.total ? Math.round((count / queueSummary.total) * 100) : 0 })))
+const ownerLoad = computed(() => backendOwnerLoad.value.length
+  ? backendOwnerLoad.value
+  : Object.entries(queueSummary.value.byOwner).map(([role, count]) => ({ role, count, percent: queueSummary.value.total ? Math.round((count / queueSummary.value.total) * 100) : 0 })))
 
 const operatingCadences = [
   { name: '每日风险清理', iconComp: SafetyCertificateOutlined, description: '每天处理 BLOCKER 和 24 小时内到期项，避免风险穿透到正式 PR。' },
@@ -238,4 +306,71 @@ const operatingCadences = [
 ]
 
 function severityColor(severity: SeverityLevel) { return { BLOCKER: 'red', MAJOR: 'orange', MINOR: 'blue', INFO: 'default' }[severity] }
+
+function pressureColor(level: StrategyPressureLevel) {
+  return { HIGH: 'red', MEDIUM: 'orange', LOW: 'green' }[level]
+}
+
+function formatMicroCents(n: number): string {
+  return `$${(n / 100000000).toFixed(4)}`
+}
+
+async function loadStrategyPressure() {
+  strategyPressureLoading.value = true
+  try {
+    const res = await get<StrategyPressureItem[]>('/operations/strategy-pressure')
+    if (res.data) strategyPressureItems.value = res.data.slice(0, 3)
+  } catch (e) {
+    console.error(e)
+  } finally {
+    strategyPressureLoading.value = false
+  }
+}
+
+async function loadOperationsDashboard() {
+  try {
+    const res = await get<OperationDashboard>('/operations/dashboard')
+    if (res.data) operationDashboard.value = res.data
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+async function loadOwnerLoad() {
+  try {
+    const res = await get<OperationOwnerLoad[]>('/operations/owner-load')
+    if (res.data) backendOwnerLoad.value = res.data
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+async function loadRemediationQueue() {
+  remediationQueueLoading.value = true
+  try {
+    const res = await get<OperationalFinding[]>('/operations/remediation-queue?limit=20')
+    if (res.data) operationalFindings.value = res.data
+  } catch (e) {
+    console.error(e)
+  } finally {
+    remediationQueueLoading.value = false
+  }
+}
+
+async function loadRuleLearningCandidates() {
+  try {
+    const res = await get<RuleLearningCandidate[]>('/operations/rule-learning-candidates?limit=20')
+    if (res.data) backendRuleLearningCandidates.value = res.data
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+onMounted(() => {
+  loadOperationsDashboard()
+  loadOwnerLoad()
+  loadStrategyPressure()
+  loadRemediationQueue()
+  loadRuleLearningCandidates()
+})
 </script>

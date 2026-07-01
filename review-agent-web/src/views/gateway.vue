@@ -67,28 +67,120 @@
         </a-col>
         <a-col :span="6">
           <div style="text-align:center;padding:16px;border-radius:12px;background:#fee2e2">
-            <div style="font-size:24px;font-weight:800;color:#dc2626">{{ stats.failedCalls }}</div>
-            <div style="margin-top:4px;font-size:12px;color:#ef4444">失败次数</div>
+            <div style="font-size:24px;font-weight:800;color:#dc2626">{{ stats.failureRatePercent }}%</div>
+            <div style="margin-top:4px;font-size:12px;color:#ef4444">失败率</div>
           </div>
         </a-col>
       </a-row>
+      <a-row v-if="stats" :gutter="12" style="margin-top:12px">
+        <a-col :span="12">
+          <div style="text-align:center;padding:12px;border-radius:12px;background:#f8fafc">
+            <div style="font-size:18px;font-weight:700;color:#475569">{{ stats.failedCalls }}</div>
+            <div style="margin-top:4px;font-size:12px;color:#94a3b8">失败次数</div>
+          </div>
+        </a-col>
+        <a-col :span="12">
+          <div style="text-align:center;padding:12px;border-radius:12px;background:#f8fafc">
+            <div style="font-size:18px;font-weight:700;color:#475569">{{ formatMicroCents(stats.avgCostMicroCents) }}</div>
+            <div style="margin-top:4px;font-size:12px;color:#94a3b8">平均成本</div>
+          </div>
+        </a-col>
+      </a-row>
+      <div v-if="modelTelemetrySummary.strategies.length" style="margin-top:16px">
+        <div style="font-size:13px;font-weight:600;color:#475569;margin-bottom:8px">策略效果</div>
+        <a-space direction="vertical" :size="8" style="width:100%">
+          <a-card
+            v-for="strategy in modelTelemetrySummary.strategies"
+            :key="strategy.strategyKey"
+            size="small"
+            :body-style="{ padding: '12px' }"
+            style="background:#f8fafc"
+          >
+            <a-space :size="8" style="width:100%;justify-content:space-between;flex-wrap:wrap">
+              <div>
+                <div style="font-size:13px;font-weight:600">{{ strategy.strategyKey }}</div>
+                <div style="font-size:12px;color:#94a3b8;margin-top:2px">
+                  {{ strategy.totalCalls }} 次调用 · {{ formatTokens(strategy.totalTokens) }} tokens · 平均 {{ strategy.avgLatencyMs }}ms · 平均成本 {{ formatMicroCents(strategy.avgCostMicroCents) }}
+                </div>
+                <div style="font-size:12px;color:#64748b;margin-top:6px">
+                  Finding: 确认 {{ strategy.confirmedFindings }} · 驳回 {{ strategy.dismissedFindings }} · 待处理 {{ strategy.pendingFindings }}
+                  · 确认率 {{ strategy.confirmationRatePercent }}% · 误报代理 {{ strategy.falsePositiveProxyPercent }}%
+                </div>
+                <div style="font-size:12px;color:#64748b;margin-top:4px">
+                  命中率 {{ strategy.strategyHitRatePercent }}% · 跨模型 {{ strategy.crossHitRatePercent }}% · 模型 {{ strategy.modelDiversity }} 个 · Judge 失败率 {{ strategy.judgeFailureRatePercent }}%
+                </div>
+              </div>
+              <a-tag :color="strategy.failedCalls > 0 ? 'red' : 'green'">失败率 {{ strategy.failureRatePercent }}%</a-tag>
+            </a-space>
+          </a-card>
+        </a-space>
+      </div>
     </a-card>
   </a-space>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useApi } from '@/composables/useApi'
+
+interface StrategyTelemetry {
+  strategyKey: string
+  totalCalls: number
+  failedCalls: number
+  totalTokens: number
+  avgLatencyMs: number
+  failureRatePercent: number
+  avgCostMicroCents: number
+  confirmedFindings: number
+  dismissedFindings: number
+  pendingFindings: number
+  confirmationRatePercent: number
+  falsePositiveProxyPercent: number
+  reviewedReviews: number
+  totalFindings: number
+  strategyHitRatePercent: number
+  findingsPerReview: number
+  crossHitFindings: number
+  crossHitRatePercent: number
+  modelDiversity: number
+  judgeCalls: number
+  judgeFailureRatePercent: number
+}
+
+interface ModelTelemetrySummary {
+  totalCalls: number
+  failedCalls: number
+  totalTokens: number
+  totalCostMicroCents: number
+  avgLatencyMs: number
+  failureRatePercent: number
+  avgCostMicroCents: number
+  strategies: StrategyTelemetry[]
+}
 
 const { get } = useApi()
 const promptsLoading = ref(false)
 const prompts = ref<any[]>([])
 const selectedPrompt = ref<any>(null)
 const stats = ref<any>(null)
+const modelTelemetrySummary = ref<ModelTelemetrySummary>({
+  totalCalls: 0,
+  failedCalls: 0,
+  totalTokens: 0,
+  totalCostMicroCents: 0,
+  avgLatencyMs: 0,
+  failureRatePercent: 0,
+  avgCostMicroCents: 0,
+  strategies: [],
+})
 
 function formatTokens(n: number): string {
   if (n >= 10000) return (n / 1000).toFixed(1) + 'K'
   return String(n)
+}
+
+function formatMicroCents(n: number): string {
+  return `$${(n / 100000000).toFixed(4)}`
 }
 
 async function loadPrompts() {
@@ -107,9 +199,28 @@ async function loadStats() {
   } catch (e) { console.error(e) }
 }
 
+async function loadModelTelemetrySummary() {
+  try {
+    const res = await get<ModelTelemetrySummary>('/model-telemetry/summary')
+    if (res.data) {
+      modelTelemetrySummary.value = res.data
+      stats.value = {
+        totalCalls: res.data.totalCalls,
+        totalTokens: res.data.totalTokens,
+        avgLatencyMs: res.data.avgLatencyMs,
+        failedCalls: res.data.failedCalls,
+        failureRatePercent: res.data.failureRatePercent,
+        avgCostMicroCents: res.data.avgCostMicroCents,
+      }
+    }
+  } catch (e) {
+    console.error(e)
+    await loadStats()
+  }
+}
+
 onMounted(() => {
   loadPrompts()
-  loadStats()
+  loadModelTelemetrySummary()
 })
 </script>
-

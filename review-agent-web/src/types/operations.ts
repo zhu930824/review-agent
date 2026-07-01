@@ -36,6 +36,12 @@ export interface RemediationSummary {
   slaPressure: number
 }
 
+export interface OperationOwnerLoad {
+  role: string
+  count: number
+  percent: number
+}
+
 export interface RuleLearningCandidate {
   findingId: number
   action: LearningAction
@@ -51,6 +57,17 @@ export interface OperationsScorecard {
   operationalReadiness: number
 }
 
+export interface OperationDashboard {
+  findings: OperationalFinding[]
+  totalFindings: number
+  blockerCount: number
+  majorCount: number
+  pendingCount: number
+  confirmedCount: number
+  dismissedCount: number
+  slaPressure: number
+}
+
 export interface BusinessImpactInput {
   monthlyReviews: number
   averageManualReviewMinutes: number
@@ -63,4 +80,47 @@ export interface BusinessImpactEstimate {
   hoursSaved: number
   avoidedReworkHours: number
   executiveSummary: string
+}
+
+export interface StrategyTelemetry {
+  strategyKey: string
+  totalCalls: number
+  failedCalls: number
+  totalTokens: number
+  avgLatencyMs: number
+  failureRatePercent: number
+  avgCostMicroCents: number
+  confirmedFindings: number
+  dismissedFindings: number
+  pendingFindings: number
+  confirmationRatePercent: number
+  falsePositiveProxyPercent: number
+  reviewedReviews: number
+  totalFindings: number
+  strategyHitRatePercent: number
+  findingsPerReview: number
+  crossHitFindings: number
+  crossHitRatePercent: number
+  modelDiversity: number
+  judgeCalls: number
+  judgeFailureRatePercent: number
+}
+
+export interface ModelTelemetrySummary {
+  totalCalls: number
+  failedCalls: number
+  totalTokens: number
+  totalCostMicroCents: number
+  avgLatencyMs: number
+  failureRatePercent: number
+  avgCostMicroCents: number
+  strategies: StrategyTelemetry[]
+}
+
+export type StrategyPressureLevel = 'HIGH' | 'MEDIUM' | 'LOW'
+
+export interface StrategyPressureItem extends StrategyTelemetry {
+  pressureScore: number
+  pressureLevel: StrategyPressureLevel
+  recommendation: string
 }

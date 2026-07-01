@@ -393,3 +393,396 @@
 1. 将 Review 完成事件或详情页操作串接到 PR Summary 评论入口。
 2. 为 PR Summary 回写增加日志、幂等 marker 和失败重试。
 3. 进入阶段 3：模型调用遥测与策略效果看板的最小数据结构。
+
+## 2026-07-01 阶段 2 使用体验与集成闭环补齐
+
+### 已完成切片
+
+1. Review 详情页串接 SARIF 上传
+   - 在 Review 详情头部操作区新增“上传扫描”按钮。
+   - 点击后先读取既有 `GET /api/reviews/{id}/sarif` 导出结果，再调用 `POST /api/integration/sarif/upload` 上传到 GitHub Code Scanning。
+   - 上传请求自动使用当前 Review 的 `sourceCommit/targetCommit` 和源/目标分支 ref，减少用户手工填集成参数。
+   - 增加 `sarifUploadLoading` 与成功/失败反馈，避免集成动作没有可见状态。
+
+2. Review 详情页串接 PR Summary 评论
+   - 在 Review 详情头部操作区新增 “PR Summary” 按钮。
+   - 用户输入 Pull Request 编号后，页面将当前 Review 摘要、Gate 状态、严重度统计和前 5 条 Finding 组合为 Markdown。
+   - 提交后调用 `POST /api/integration/pr-summary/comment`，把 Review 结论写入 GitHub PR 对话区。
+   - 增加输入校验、loading 状态和成功/失败反馈。
+
+3. API 文档同步
+   - `docs/api-catalog.md` 更新到 2026-07-01。
+   - 补充 Review 详情页对 SARIF 上传和 PR Summary 回写的前端接入状态。
+
+4. SARIF / PR Summary 集成动作审计
+   - 新增 `integration_action_log` 表，用统一日志记录外部集成动作。
+   - SARIF 上传会记录 `SARIF_UPLOAD` 的 `UPLOADED`、`SKIPPED`、`FAILED` 状态，包含 commit、请求 URL 和错误原因。
+   - PR Summary 评论会记录 `PR_SUMMARY_COMMENT` 的 `POSTED`、`SKIPPED`、`FAILED` 状态，包含 PR 编号、请求 URL 和错误原因。
+   - GitHub 外部调用异常不再直接向上抛出，服务会返回 `FAILED` 结果并落审计日志。
+
+5. 最近集成动作查询与治理中心视图
+   - 新增 `GET /api/integration/actions`，默认返回最近 10 条、最大 50 条集成动作日志。
+   - 治理中心 CI 回写就绪度面板新增“最近集成动作”，展示 SARIF 上传和 PR Summary 评论的动作类型、目标、状态和错误信息。
+
+### 验证记录
+
+- `npx tsx --test tests/sarifExport.test.ts`：4 个 Review 详情页 SARIF/PR Summary 合同测试通过。
+- `mvn -q "-Dtest=IntegrationActionLogControllerTest,IntegrationActionLogServiceImplTest,GitHubSarifUploadServiceImplTest,GitHubPrSummaryCommentServiceImplTest" test`：集成动作日志查询、SARIF 上传审计和 PR Summary 审计测试通过。
+- `npx tsx --test tests/ciWritebackObservability.test.ts`：6 个 CI 回写与集成动作可观测性合同测试通过。
+- `npm test`：前端 81 个测试通过。
+- `npm run build`：前端构建成功；仍存在 Ant Design Vue chunk 超过 500 kB 的既有体积警告。
+
+### 下一步建议
+
+1. 为 SARIF 上传和 PR Summary 回写增加幂等 marker 和失败重试。
+2. 为 webhook 投递日志补治理中心查询视图和失败重放入口。
+3. 进入阶段 3：模型调用遥测与策略效果看板的最小数据结构。
+
+## 2026-07-01 阶段 3 启动：模型调用遥测最小闭环
+
+### 已完成切片
+
+1. 模型调用遥测数据结构
+   - 新增 `model_call_telemetry` 表，记录 review、strategy、provider、model、role、promptVersion、status、latency、token、成本和错误信息。
+   - 新增 `ModelCallTelemetry` 实体、MyBatis mapper 和 repository。
+   - 由于既有 Gateway / ModelCallRecord 源码处于受保护区域，本轮通过新的可维护边界落地，不直接改受保护文件。
+
+2. 遥测记录与汇总 API
+   - 新增 `POST /api/model-telemetry/records`，用于后续真实模型调用链路写入遥测。
+   - 新增 `GET /api/model-telemetry/summary`，返回总调用、失败数、总 token、估算成本、平均延迟和策略维度汇总。
+   - 策略维度按调用量降序展示，便于看板优先看到主要策略表现。
+
+3. AI Gateway 策略效果视图
+   - AI Gateway 页面优先读取 `/api/model-telemetry/summary` 作为调用统计主数据源。
+   - 调用统计新增策略效果列表，展示每个策略的调用量、token、平均延迟和失败率。
+   - 新接口失败时保留旧 `/api/gateway/stats` 兜底，避免受保护 Gateway 旧接口不可用时影响页面基础展示。
+
+4. API 文档同步
+   - `docs/api-catalog.md` 新增 Model Telemetry API 清单。
+   - 将策略效果指标从“待推进”更新为已具备遥测地基，人工确认率、策略命中、Judge 分歧仍留作后续。
+
+### 验证记录
+
+- `mvn -q "-Dtest=ModelTelemetryControllerTest,ModelTelemetryServiceImplTest" test`：模型遥测记录、汇总和 Controller 合同测试通过。
+- `npx tsx --test tests/modelTelemetry.test.ts`：2 个后端合同与 AI Gateway 视图接入测试通过。
+
+### 下一步建议
+
+1. 将真实 Review / Agent 模型调用链路逐步接入 `POST /api/model-telemetry/records` 或服务层记录口。
+2. 在策略效果汇总里加入人工确认率、有效 Finding 数和误报代理指标。
+3. 将模型遥测与 Operations 的风险/治理队列串联，形成“哪个策略更准、更贵、更慢”的运营视角。
+
+## 2026-07-01 阶段 3 继续：策略效果成本与失败率
+
+### 已完成切片
+
+1. 模型遥测汇总增强
+   - `GET /api/model-telemetry/summary` 新增总失败率 `failureRatePercent`。
+   - 新增平均单次成本 `avgCostMicroCents`。
+   - 策略维度新增 `failureRatePercent` 和 `avgCostMicroCents`，前端不再重复计算失败率口径。
+
+2. AI Gateway 策略效果展示增强
+   - 调用统计卡片从“失败次数”升级为展示总失败率，并保留失败次数作为辅助指标。
+   - 新增平均成本指标，使用微分成本格式化为美元展示。
+   - 策略效果列表新增策略级平均成本，并直接使用后端返回的策略级失败率。
+
+3. API 文档同步
+   - `docs/api-catalog.md` 补充模型遥测 summary 的失败率和成本字段说明。
+
+### 验证记录
+
+- `mvn -q "-Dtest=ModelTelemetryServiceImplTest" test`：模型遥测失败率和平均成本聚合测试通过。
+- `npx tsx --test tests/modelTelemetry.test.ts`：AI Gateway 模型遥测视图合同测试通过。
+
+### 下一步建议
+
+1. 将真实模型调用记录接入可维护服务边界。
+2. 继续补策略有效性指标：有效 Finding 数、人工确认率、误报代理指标。
+3. 在 Operations 中增加策略成本/质量压力视角。
+
+## 2026-07-01 阶段 3 继续：策略质量结果指标
+
+### 已完成切片
+
+1. 策略效果汇总接入 Review Finding 人工状态
+   - `GET /api/model-telemetry/summary` 在策略维度新增 `confirmedFindings`、`dismissedFindings`、`pendingFindings`。
+   - 汇总逻辑按策略下的去重 `reviewId` 关联 `review_finding`，避免同一 review 多次模型调用导致 Finding 重复计数。
+   - 新增 `confirmationRatePercent`：`CONFIRMED / (CONFIRMED + DISMISSED + PENDING)`。
+   - 新增 `falsePositiveProxyPercent`：`DISMISSED / (CONFIRMED + DISMISSED)`，把未处理项排除在误报代理指标之外。
+
+2. 受保护主流程隔离
+   - 本轮只在 `ModelTelemetryRepository` 增加旁路查询 `listFindingsByReviewIds`，复用已有 `ReviewFindingMapper`。
+   - 不改 Review / Finding 主流程写入逻辑，真实调用链后续可逐步把 `reviewId` 和 `strategyKey` 写入遥测记录。
+
+3. AI Gateway 策略效果视图补齐
+   - 策略卡片新增确认、驳回、待处理 Finding 数。
+   - 策略卡片新增确认率和误报代理率，和调用量、成本、失败率放在同一视图里，便于比较“准不准、贵不贵、稳不稳”。
+
+4. API 文档同步
+   - `docs/api-catalog.md` 补充 Model Telemetry summary 的策略质量字段和当前阶段状态。
+
+### 验证记录
+
+- `mvn -q -Dtest=ModelTelemetryServiceImplTest test`：策略成本、失败率和 Finding 人工状态聚合测试通过。
+- `npx tsx --test tests/modelTelemetry.test.ts`：AI Gateway 模型遥测视图合同测试通过。
+
+### 下一步建议
+
+1. 将真实 Review / Agent 模型调用链路接入 `model_call_telemetry`，让质量指标从手动记录过渡到自动采集。
+2. 在 Operations 中增加策略成本/质量压力视角。
+3. 继续补策略命中、Judge 分歧和跨模型命中指标。
+
+## 2026-07-01 阶段 3 继续：模型调用遥测服务层接入边界
+
+### 已完成切片
+
+1. 模型调用遥测包装器
+   - 新增 `ModelTelemetryRecorder`，用于包装真实模型调用的 `Callable`。
+   - 成功时自动记录 `SUCCESS`、耗时、上下文和 usage extractor 提取的 token / 成本。
+   - 失败时自动记录 `FAILED`、耗时和错误信息，并原样抛回调用异常，不吞掉主链路错误。
+
+2. 可维护上下文 DTO
+   - 新增 `ModelTelemetryContext`，承载 `reviewId`、`strategyKey`、`provider`、`modelName`、`role`、`promptVersion`。
+   - 新增 `ModelTelemetryUsage`，承载 `promptTokens`、`completionTokens`、`costMicroCents`。
+   - 后续 Gateway / Agent / Review worker 只需要在可维护调用点构造上下文并包一层 `recordCall(...)`，即可进入统一遥测表。
+
+3. 受保护主流程隔离
+   - 本轮不直接修改受保护 Review / Gateway 主流程源码。
+   - 先提供服务层 seam，让后续真实调用链路接入时不需要绕 HTTP，也不需要散落重复记录逻辑。
+
+4. API 文档同步
+   - `docs/api-catalog.md` 补充 `ModelTelemetryRecorder.recordCall(...)` 作为服务层接入方式。
+
+### 验证记录
+
+- `mvn -q -Dtest=ModelTelemetryRecorderTest test`：成功调用记录、失败调用记录和异常原样抛回测试通过。
+
+### 下一步建议
+
+1. 在可读的 Gateway / Agent 模型调用实现中接入 `ModelTelemetryRecorder`。
+2. 在 Operations 中增加策略成本/质量压力视角。
+3. 继续补策略命中、Judge 分歧和跨模型命中指标。
+
+## 2026-07-01 阶段 3 下一阶段：Operations 策略成本/质量压力视图
+
+### 已完成切片
+
+1. 策略压力计算工具
+   - 新增 `deriveStrategyPressureItems`，基于策略失败率、误报代理、确认率、平均成本和平均延迟生成 `pressureScore`。
+   - 按压力分降序排序，输出 `HIGH` / `MEDIUM` / `LOW` 压力等级。
+   - 为高压策略生成降噪、复核成本、缩小适用场景等运营建议。
+
+2. Operations 页面接入模型遥测
+   - 运营中心新增“策略成本/质量压力”面板。
+   - 页面调用 `/api/model-telemetry/summary`，复用当前模型遥测 summary，不新增后端接口。
+   - 面板展示策略压力分、确认率、误报代理、失败率、平均成本、平均延迟和建议。
+   - 暂无遥测数据时展示空态提示，真实模型调用接入后自动出现策略压力排行。
+
+3. API 文档同步
+   - `docs/api-catalog.md` 补充 Operations 前端读取模型遥测 summary 的当前接入状态。
+
+### 验证记录
+
+- `npx tsx --test tests/reviewOperations.test.ts tests/operationsTelemetry.test.ts`：策略压力排序和 Operations 遥测视图合同测试通过。
+
+### 下一步建议
+
+1. 在可读的 Gateway / Agent 模型调用实现中接入 `ModelTelemetryRecorder`。
+2. 继续补策略命中、Judge 分歧和跨模型命中指标。
+3. 将策略压力结果升级为后端 Operations dashboard 字段，替换前端本地推导。
+
+## 2026-07-01 阶段 3 继续补齐：策略诊断指标
+
+### 已完成切片
+
+1. Model Telemetry summary 增加策略诊断字段
+   - 策略维度新增 `reviewedReviews`、`totalFindings`、`strategyHitRatePercent`、`findingsPerReview`。
+   - 策略维度新增 `crossHitFindings`、`crossHitRatePercent`，复用 `review_finding.is_cross_hit` 作为跨模型命中代理指标。
+   - 策略维度新增 `modelDiversity`，按 telemetry 中的不同 `modelName` 统计模型覆盖数。
+   - 策略维度新增 `judgeCalls`、`judgeFailureRatePercent`，按 telemetry role=`JUDGE` 统计 Judge 调用健康度。
+
+2. AI Gateway 策略效果视图补齐
+   - 策略卡片新增命中率、跨模型命中率、模型覆盖数和 Judge 失败率。
+   - 保留原调用量、成本、失败率、确认率、误报代理指标，形成更完整的策略画像。
+
+3. Operations 策略压力视图增强
+   - `deriveStrategyPressureItems` 将策略命中率和 Judge 失败率纳入压力分。
+   - Operations 策略压力面板新增命中率、跨模型命中率和 Judge 失败率展示。
+
+4. API 文档同步
+   - `docs/api-catalog.md` 补充策略命中、跨模型命中、模型覆盖和 Judge 健康指标。
+
+### 验证记录
+
+- `mvn -q -Dtest=ModelTelemetryServiceImplTest test`：策略命中、跨模型命中、模型覆盖和 Judge 健康指标聚合测试通过。
+- `npx tsx --test tests/modelTelemetry.test.ts tests/operationsTelemetry.test.ts tests/reviewOperations.test.ts`：AI Gateway、Operations 和策略压力工具合同测试通过。
+
+### 下一步建议
+
+1. 将策略压力结果升级为后端 Operations dashboard 字段，替换前端本地推导。
+2. 在可读的 Gateway / Agent 模型调用实现中接入 `ModelTelemetryRecorder`。
+3. 补 Judge 分歧的真实裁决差异和跨模型 Finding 归因明细。
+
+## 2026-07-01 阶段 3 继续：Operations 策略压力后端化
+
+### 已完成切片
+
+1. 策略压力后端服务
+   - 新增 `OperationsStrategyPressureService` 和 `OperationsStrategyPressureServiceImpl`。
+   - 复用 `ModelTelemetryService.summary()` 的策略维度指标，在后端生成 `pressureScore`、`pressureLevel` 和运营建议。
+   - 压力分纳入失败率、误报代理、低确认率、成本、延迟、Judge 失败率和低命中率，按压力分降序返回。
+
+2. Operations API 合同
+   - 新增 `GET /api/operations/strategy-pressure`。
+   - 返回 `OperationsStrategyPressureVO` 列表，包含策略成本、质量、命中、跨模型和 Judge 健康指标。
+   - 保持 `GET /api/operations/dashboard` 不变，避免影响现有运营中心基础数据合同。
+
+3. 前端接入切换
+   - Operations 页面从直接读取 `/api/model-telemetry/summary` 改为读取 `/api/operations/strategy-pressure`。
+   - 页面保留原策略压力展示体验，只把压力计算和建议生成收敛到后端。
+   - `deriveStrategyPressureItems` 仍保留为独立工具函数，便于测试和未来 fallback。
+
+4. API 文档同步
+   - `docs/api-catalog.md` 新增 Operations 策略压力接口。
+   - 将运营中心当前接入状态更新为读取 Operations 聚合接口。
+
+### 验证记录
+
+- `mvn -q "-Dtest=OperationsStrategyPressureServiceImplTest,OperationsControllerTest" test`：策略压力服务和 Operations Controller 合同测试通过。
+- `npx tsx --test tests/operationsTelemetry.test.ts tests/reviewOperations.test.ts`：Operations 页面新接口接入和策略压力工具测试通过。
+
+### 下一步建议
+
+1. 在可读的 Gateway / Agent 模型调用实现中接入 `ModelTelemetryRecorder`。
+2. 补 Judge 分歧的真实裁决差异和跨模型 Finding 归因明细。
+3. 将运营中心本地样例修复队列逐步替换为真实 Finding / Gate / SLA 聚合数据。
+
+## 2026-07-01 阶段 3 继续：Operations 真实修复队列
+
+### 已完成切片
+
+1. 运营修复队列后端边界
+   - 新增 `OperationsRemediationQueueService` 和 `OperationsRemediationQueueServiceImpl`。
+   - 新增 `OperationsRemediationQueueRepository` 和 MyBatis 实现，只读 `review_finding`、`review`、`project`，不改 Review 主流程。
+   - 队列排除 `DISMISSED` Finding，并按严重度、待人工处理、跨模型命中和 Finding ID 排序。
+
+2. Operations API 合同
+   - 新增 `GET /api/operations/remediation-queue`，支持 `limit` 参数，默认 50，上限 100。
+   - 返回 `OperationFindingVO` 列表，包含 Finding、Review、项目、严重度、分类、人工状态、置信度和跨模型命中信息。
+
+3. 前端接入切换
+   - Operations 页面从本地样例 Finding 切换到 `/api/operations/remediation-queue?limit=20`。
+   - 修复队列、SLA 压力、责任人负载、规则学习候选和运营就绪度改为跟真实 Finding 返回联动。
+   - 业务收益估算暂时保留本地运营假设，后续可接入真实 Review 吞吐和缺陷闭环数据。
+
+4. API 文档同步
+   - `docs/api-catalog.md` 新增 Operations 修复队列接口。
+   - 将运营中心当前接入状态更新为真实 Finding 驱动。
+
+### 验证记录
+
+- `mvn -q "-Dtest=OperationsRemediationQueueServiceImplTest,OperationsControllerTest" test`：修复队列 service 排序/限量和 Controller 合同测试通过。
+- `npx tsx --test tests/operationsTelemetry.test.ts tests/reviewOperations.test.ts`：Operations 页面真实队列接入和队列工具测试通过。
+
+### 下一步建议
+
+1. 将 Operations dashboard 基础 KPI 改为后端真实聚合，减少前端重复计算。
+2. 在可读的 Gateway / Agent 模型调用实现中接入 `ModelTelemetryRecorder`。
+3. 补 Judge 分歧的真实裁决差异和跨模型 Finding 归因明细。
+
+## 2026-07-01 阶段 3 继续：Operations dashboard KPI 接入
+
+### 已完成切片
+
+1. 前端 KPI 数据源切换
+   - Operations 页面新增读取 `GET /api/operations/dashboard`。
+   - 开放风险项、BLOCKER 数、待人工确认数和 SLA 压力优先使用后端 dashboard 的全局聚合。
+   - 当 dashboard 读取失败时，保留基于当前修复队列的本地推导兜底，避免页面空白。
+
+2. 队列和 KPI 职责拆分
+   - 修复队列表格继续读取 `/api/operations/remediation-queue?limit=20`，用于展示当前优先处理项。
+   - 全局 KPI 不再依赖前 20 条队列推导，避免有限列表导致总数和 SLA 压力失真。
+   - 责任人负载和规则学习仍基于当前队列展示，保留运营执行视角。
+
+3. API 文档同步
+   - `docs/api-catalog.md` 更新 Operations 当前接入状态，明确 dashboard 和 remediation queue 的职责分工。
+
+### 验证记录
+
+- `npx tsx --test tests/operationsTelemetry.test.ts tests/reviewOperations.test.ts`：Operations 页面 dashboard / queue 接入合同和队列工具测试通过。
+- `mvn -q "-Dtest=OperationsRemediationQueueServiceImplTest,OperationsControllerTest" test`：Operations 后端队列与 Controller 合同测试通过。
+
+### 下一步建议
+
+1. 在可读的 Gateway / Agent 模型调用实现中接入 `ModelTelemetryRecorder`。
+2. 补 Judge 分歧的真实裁决差异和跨模型 Finding 归因明细。
+3. 将责任人负载和规则学习候选也逐步后端聚合化。
+
+## 2026-07-01 阶段 3 继续：Operations 责任人负载后端化
+
+### 已完成切片
+
+1. 责任人负载后端聚合
+   - 新增 `OperationOwnerLoadVO`。
+   - `OperationsRemediationQueueService` 新增 `listOwnerLoad()`，基于 open Finding 聚合责任人负载。
+   - 责任人映射与前端既有口径保持一致：Security Owner、Performance Owner、Tech Lead、Code Owner。
+
+2. Operations API 合同
+   - 新增 `GET /api/operations/owner-load`。
+   - 返回责任人、未关闭 Finding 数量和占比，按数量降序展示。
+   - 聚合排除 `DISMISSED` Finding，避免已驳回项继续占用执行负载。
+
+3. 前端接入切换
+   - Operations 页面新增读取 `/api/operations/owner-load`。
+   - 责任人负载面板优先使用后端 owner-load；接口失败时保留基于当前修复队列的本地推导兜底。
+   - 修复队列和规则学习候选仍保持现有展示逻辑。
+
+4. API 文档同步
+   - `docs/api-catalog.md` 新增 owner-load 接口，并更新运营中心接入状态。
+
+### 验证记录
+
+- `mvn -q "-Dtest=OperationsRemediationQueueServiceImplTest,OperationsControllerTest" test`：owner-load 聚合和 Controller 合同测试通过。
+- `npx tsx --test tests/operationsTelemetry.test.ts tests/reviewOperations.test.ts`：Operations 页面 owner-load 接入和队列工具测试通过。
+
+### 下一步建议
+
+1. 将规则学习候选后端聚合化，减少前端对 Finding 规则沉淀口径的重复维护。
+2. 在可读的 Gateway / Agent 模型调用实现中接入 `ModelTelemetryRecorder`。
+3. 补 Judge 分歧的真实裁决差异和跨模型 Finding 归因明细。
+
+## 2026-07-01 阶段 3 继续：Operations 规则学习候选后端化
+
+### 已完成切片
+
+1. 规则学习候选后端聚合
+   - 新增 `OperationRuleLearningCandidateVO`。
+   - `OperationsRemediationQueueService` 新增 `listRuleLearningCandidates(limit)`。
+   - 候选口径覆盖两类运营动作：人工确认且跨模型命中/高置信的 Finding 生成 `PROMOTE_TO_RULE`；人工驳回且低置信的 Finding 生成 `SUPPRESS_PATTERN`。
+
+2. 仓储读取口径补齐
+   - `OperationsRemediationQueueRepository` 新增 `listFindings(limit)`，用于规则学习读取已驳回样本。
+   - `listOpenFindings(limit)` 继续排除 `DISMISSED`，保持修复队列和责任人负载只面向未关闭风险。
+
+3. Operations API 合同
+   - 新增 `GET /api/operations/rule-learning-candidates`。
+   - 支持 `limit` 参数，默认 20，上限沿用服务层 100。
+   - 返回 finding id、动作、规则标题和沉淀原因。
+
+4. 前端接入切换
+   - Operations 页面新增读取 `/api/operations/rule-learning-candidates?limit=20`。
+   - 规则学习面板优先使用后端候选；接口失败时保留基于当前修复队列的本地推导兜底。
+
+5. API 文档同步
+   - `docs/api-catalog.md` 新增 rule-learning-candidates 接口，并更新运营中心接入状态。
+
+### 验证记录
+
+- `mvn -q "-Dtest=OperationsRemediationQueueServiceImplTest,OperationsControllerTest" test`：规则学习候选聚合和 Controller 合同测试通过。
+- `npx tsx --test tests/operationsTelemetry.test.ts tests/reviewOperations.test.ts`：Operations 页面规则学习候选接入和队列工具测试通过。
+
+### 下一步建议
+
+1. 在可读的 Gateway / Agent 模型调用实现中接入 `ModelTelemetryRecorder`。
+2. 补 Judge 分歧的真实裁决差异和跨模型 Finding 归因明细。
+3. 将运营中心业务收益估算逐步后端化，减少前端固定假设。

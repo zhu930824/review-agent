@@ -7,6 +7,8 @@ import type {
   RemediationQueueItem,
   RemediationSummary,
   RuleLearningCandidate,
+  StrategyPressureItem,
+  StrategyTelemetry,
 } from '../types/operations'
 import type { FindingCategory, SeverityLevel } from '../types/review'
 
@@ -120,6 +122,33 @@ export function estimateReviewBusinessImpact(input: BusinessImpactInput): Busine
   }
 }
 
+export function deriveStrategyPressureItems(strategies: readonly StrategyTelemetry[] = []): StrategyPressureItem[] {
+  const maxCost = Math.max(1, ...strategies.map(strategy => strategy.avgCostMicroCents || 0))
+
+  return strategies
+    .map(strategy => {
+      const lowConfirmationPenalty = Math.max(0, 100 - (strategy.confirmationRatePercent || 0))
+      const costPressure = Math.round(((strategy.avgCostMicroCents || 0) / maxCost) * 100)
+      const pressureScore = clampScore(Math.round(
+        (strategy.failureRatePercent || 0) * 0.30
+        + (strategy.falsePositiveProxyPercent || 0) * 0.25
+        + lowConfirmationPenalty * 0.25
+        + costPressure * 0.10
+        + latencyPressure(strategy.avgLatencyMs) * 0.05
+        + (strategy.judgeFailureRatePercent || 0) * 0.05
+        + Math.max(0, 100 - (strategy.strategyHitRatePercent || 0)) * 0.05,
+      ))
+
+      return {
+        ...strategy,
+        pressureScore,
+        pressureLevel: pressureLevel(pressureScore),
+        recommendation: strategyRecommendation(strategy, pressureScore),
+      }
+    })
+    .sort((left, right) => right.pressureScore - left.pressureScore)
+}
+
 function getPriorityScore(finding: OperationalFinding): number {
   const confidenceBonus = Math.round((finding.confidence ?? 0.5) * 10)
   const crossHitBonus = finding.isCrossHit ? 15 : 0
@@ -128,4 +157,40 @@ function getPriorityScore(finding: OperationalFinding): number {
   const securityBonus = finding.category === 'SECURITY' ? 18 : 0
 
   return severityScore[finding.severity] + confidenceBonus + crossHitBonus + confirmedBonus + pendingBonus + securityBonus
+}
+
+function latencyPressure(avgLatencyMs: number): number {
+  if (avgLatencyMs >= 3000) return 100
+  if (avgLatencyMs >= 1500) return 70
+  if (avgLatencyMs >= 800) return 40
+  return 15
+}
+
+function pressureLevel(score: number) {
+  if (score >= 60) return 'HIGH'
+  if (score >= 35) return 'MEDIUM'
+  return 'LOW'
+}
+
+function strategyRecommendation(strategy: StrategyTelemetry, score: number): string {
+  if (score >= 60) {
+    return '优先降噪并复核成本口径，必要时缩小适用场景。'
+  }
+  if ((strategy.judgeFailureRatePercent || 0) > 0) {
+    return '复核 Judge 调用稳定性，确认裁决链路是否需要降级兜底。'
+  }
+  if ((strategy.confirmationRatePercent || 0) < 50) {
+    return '补充人工样本复核，确认策略是否需要调参。'
+  }
+  if ((strategy.strategyHitRatePercent || 0) < 50) {
+    return '策略命中偏低，建议检查适用场景和触发条件。'
+  }
+  if ((strategy.avgCostMicroCents || 0) > 0) {
+    return '持续观察成本和质量趋势，保留当前策略。'
+  }
+  return '保持观察，等待更多调用样本。'
+}
+
+function clampScore(score: number): number {
+  return Math.max(0, Math.min(100, score))
 }

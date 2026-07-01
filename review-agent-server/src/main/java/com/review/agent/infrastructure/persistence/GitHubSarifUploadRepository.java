@@ -7,4 +7,6 @@ import java.util.Optional;
 public interface GitHubSarifUploadRepository {
 
     Optional<CiStatusConfig> findConfig(String connectorKey);
+
+    void recordAction(String actionType, String status, String commitSha, String requestUrl, String errorMessage);
 }
