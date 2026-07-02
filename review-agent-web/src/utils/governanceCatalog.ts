@@ -295,23 +295,23 @@ export const workflowTemplates: WorkflowTemplate[] = [
   },
 ]
 
-export function getCapabilityCoverageSummary(): CapabilityCoverageSummary {
-  const enabled = marketCapabilities.filter(item => item.status === 'ENABLED').length
-  const partial = marketCapabilities.filter(item => item.status === 'PARTIAL').length
-  const planned = marketCapabilities.filter(item => item.status === 'PLANNED').length
-  const total = marketCapabilities.length
+export function getCapabilityCoverageSummary(capabilities: MarketCapability[] = marketCapabilities): CapabilityCoverageSummary {
+  const enabled = capabilities.filter(item => item.status === 'ENABLED').length
+  const partial = capabilities.filter(item => item.status === 'PARTIAL').length
+  const planned = capabilities.filter(item => item.status === 'PLANNED').length
+  const total = capabilities.length
 
   return {
     total,
     enabled,
     partial,
     planned,
-    coveragePercent: Math.round(((enabled + partial * 0.5) / total) * 100),
+    coveragePercent: total ? Math.round(((enabled + partial * 0.5) / total) * 100) : 0,
   }
 }
 
-export function getRecommendedNextActions(limit = 5): RecommendedAction[] {
-  return marketCapabilities
+export function getRecommendedNextActions(limit = 5, capabilities: MarketCapability[] = marketCapabilities): RecommendedAction[] {
+  return capabilities
     .filter(item => item.status !== 'ENABLED' && item.businessImpact !== 'LOW')
     .map(item => ({
       ...item,
@@ -321,8 +321,8 @@ export function getRecommendedNextActions(limit = 5): RecommendedAction[] {
     .slice(0, limit)
 }
 
-export function getConnectorsByStage(): Record<RolloutStage, IntegrationConnector[]> {
-  return integrationConnectors.reduce(
+export function getConnectorsByStage(connectors: IntegrationConnector[] = integrationConnectors): Record<RolloutStage, IntegrationConnector[]> {
+  return connectors.reduce(
     (groups, connector) => {
       groups[connector.stage].push(connector)
       return groups
@@ -353,9 +353,12 @@ export function getCiStatusIntegrationReadiness(): CiStatusIntegrationReadiness 
   }
 }
 
-export function compileGovernancePolicyPack(packIds: string[]): CompiledGovernancePolicyPack {
+export function compileGovernancePolicyPack(
+  packIds: string[],
+  rulePacks: GovernanceRulePack[] = governanceRulePacks,
+): CompiledGovernancePolicyPack {
   const selectedPacks = packIds.map(packId => {
-    const pack = governanceRulePacks.find(item => item.id === packId)
+    const pack = rulePacks.find(item => item.id === packId)
     if (!pack) {
       throw new Error(`Unknown governance rule pack: ${packId}`)
     }

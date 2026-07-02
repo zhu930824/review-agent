@@ -251,12 +251,12 @@
             </div>
             <a-form layout="vertical" size="small" style="margin-top:4px">
               <a-row :gutter="8">
-                <a-col :span="12">
+                <a-col :xs="24" :md="12">
                   <a-form-item label="Repo Owner">
                     <a-input v-model:value="ciConfigForm.repoOwner" placeholder="zhu930824" />
                   </a-form-item>
                 </a-col>
-                <a-col :span="12">
+                <a-col :xs="24" :md="12">
                   <a-form-item label="Repo Name">
                     <a-input v-model:value="ciConfigForm.repoName" placeholder="review-agent" />
                   </a-form-item>
@@ -266,12 +266,12 @@
                 <a-input v-model:value="ciConfigForm.statusContext" placeholder="Review Agent" />
               </a-form-item>
               <a-row :gutter="8">
-                <a-col :span="12">
+                <a-col :xs="24" :md="12">
                   <a-form-item label="API Token">
                     <a-input-password v-model:value="ciConfigForm.apiToken" :placeholder="ciConfigForm.tokenConfigured ? '已配置，留空则不更新' : 'GitHub token'" />
                   </a-form-item>
                 </a-col>
-                <a-col :span="12">
+                <a-col :xs="24" :md="12">
                   <a-form-item label="Webhook Secret">
                     <a-input-password v-model:value="ciConfigForm.webhookSecret" :placeholder="ciConfigForm.webhookSecretConfigured ? '已配置，留空则不更新' : 'Webhook secret'" />
                   </a-form-item>
@@ -414,17 +414,24 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { BarChartOutlined, CheckCircleOutlined, ExclamationCircleOutlined, AppstoreOutlined, ThunderboltOutlined, SafetyOutlined, UserOutlined, EnvironmentOutlined, SyncOutlined, PlayCircleOutlined, SettingOutlined, ClockCircleOutlined } from '@ant-design/icons-vue'
-import type { BusinessImpact, CapabilityStatus, CiStatusConfigVO, CiStatusWritebackLogVO, IntegrationActionLogVO, RolloutStage } from '@/types/governance'
+import type { BusinessImpact, CapabilityStatus, CiStatusConfigVO, CiStatusWritebackLogVO, GovernanceRulePack, IntegrationActionLogVO, IntegrationConnector, MarketCapability, RolloutStage, WorkflowTemplate } from '@/types/governance'
 import type { TelemetryReadinessItem } from '@/types/operations'
 import { useApi } from '@/composables/useApi'
-import { compileGovernancePolicyPack, getCapabilityCoverageSummary, getCiStatusIntegrationReadiness, getConnectorsByStage, getRecommendedNextActions, marketCapabilities, workflowTemplates } from '@/utils/governanceCatalog'
+import { compileGovernancePolicyPack, getCapabilityCoverageSummary, getCiStatusIntegrationReadiness, getConnectorsByStage, getRecommendedNextActions, governanceRulePacks as fallbackRulePacks, integrationConnectors as fallbackConnectors, marketCapabilities as fallbackCapabilities, workflowTemplates as fallbackWorkflowTemplates } from '@/utils/governanceCatalog'
 import { buildTelemetryGapActions, telemetryReadinessColor } from '@/utils/governanceTelemetry'
 
 const { get, post, put } = useApi()
-const coverage = getCapabilityCoverageSummary()
-const recommendedActions = getRecommendedNextActions(5)
-const connectorsByStage = getConnectorsByStage()
-const releasePolicy = compileGovernancePolicyPack(['security-release', 'ai-generated-code', 'compliance-evidence'])
+const marketCapabilities = ref<MarketCapability[]>(fallbackCapabilities)
+const integrationConnectors = ref<IntegrationConnector[]>(fallbackConnectors)
+const governanceRulePacks = ref<GovernanceRulePack[]>(fallbackRulePacks)
+const workflowTemplates = ref<WorkflowTemplate[]>(fallbackWorkflowTemplates)
+const coverage = computed(() => getCapabilityCoverageSummary(marketCapabilities.value))
+const recommendedActions = computed(() => getRecommendedNextActions(5, marketCapabilities.value))
+const connectorsByStage = computed(() => getConnectorsByStage(integrationConnectors.value))
+const releasePolicy = computed(() => compileGovernancePolicyPack(
+  ['security-release', 'ai-generated-code', 'compliance-evidence'],
+  governanceRulePacks.value,
+))
 const ciStatusReadiness = getCiStatusIntegrationReadiness()
 const ciConfigSaving = ref(false)
 const ciWritebacks = ref<CiStatusWritebackLogVO[]>([])
@@ -448,6 +455,23 @@ const ciConfigForm = reactive({
 })
 
 const telemetryGapActions = computed(() => buildTelemetryGapActions(telemetryReadinessItems.value))
+
+async function loadGovernanceCatalog() {
+  try {
+    const [capabilitiesRes, connectorsRes, rulePacksRes, workflowsRes] = await Promise.all([
+      get<MarketCapability[]>('/governance/capabilities').catch(() => null),
+      get<IntegrationConnector[]>('/governance/connectors').catch(() => null),
+      get<GovernanceRulePack[]>('/governance/rule-packs').catch(() => null),
+      get<WorkflowTemplate[]>('/governance/workflows').catch(() => null),
+    ])
+    if (capabilitiesRes?.data?.length) marketCapabilities.value = capabilitiesRes.data
+    if (connectorsRes?.data?.length) integrationConnectors.value = connectorsRes.data
+    if (rulePacksRes?.data?.length) governanceRulePacks.value = rulePacksRes.data
+    if (workflowsRes?.data?.length) workflowTemplates.value = workflowsRes.data
+  } catch (e) {
+    console.error('加载治理目录失败，将使用本地目录兜底', e)
+  }
+}
 
 function applyCiStatusConfig(config: CiStatusConfigVO) {
   ciConfigForm.connectorKey = config.connectorKey || 'github-checks'
@@ -543,6 +567,7 @@ async function retryCiWriteback(item: CiStatusWritebackLogVO) {
 }
 
 onMounted(() => {
+  loadGovernanceCatalog()
   loadCiStatusConfig()
   loadCiWritebacks()
   loadIntegrationActions()

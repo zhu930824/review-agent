@@ -203,14 +203,14 @@
               </a-space>
             </template>
             <template #extra>
-              <a-space :size="8">
-                <a-select v-model:value="severityFilter" style="width:140px" size="small" placeholder="严重度">
+              <div class="ra-card-toolbar">
+                <a-select v-model:value="severityFilter" class="ra-filter-control-sm" size="small" placeholder="严重度">
                   <a-select-option v-for="opt in severityOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
                 </a-select>
-                <a-select v-model:value="categoryFilter" style="width:160px" size="small" placeholder="分类">
+                <a-select v-model:value="categoryFilter" class="ra-filter-control" size="small" placeholder="分类">
                   <a-select-option v-for="opt in categoryOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
                 </a-select>
-              </a-space>
+              </div>
             </template>
 
             <a-space direction="vertical" :size="8" style="width:100%">
@@ -675,7 +675,7 @@ async function updateFindingStatus(findingId: number, status: HumanStatus) {
 async function submitPrePrDecision(payload: { gateStatus: string; reason: string }) {
   prePrDecisionLoading.value = true
   try {
-    const res = await patch<PrePrGate>(`/reviews/${reviewId.value}/pre-pr-decision`, {
+    const res = await patch<PrePrGate>(`/reviews/${reviewId.value}/gate/decision`, {
       ...payload,
       decidedBy: 'manual-reviewer',
     })

@@ -40,7 +40,7 @@ public class PrePrGateController {
         return Result.success(gate);
     }
 
-    @PatchMapping("/{id}/pre-pr-decision")
+    @PatchMapping("/{id}/gate/decision")
     public Result<PrePrGateVO> decideGate(
             @PathVariable("id") Long reviewId,
             @Valid @RequestBody PrePrGateDecisionRequest request) {

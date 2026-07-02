@@ -14,6 +14,8 @@ import com.review.agent.service.OperationsStrategyPressureService;
 import com.review.agent.service.OperationsTelemetryReadinessService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -48,6 +50,18 @@ public class OperationsController {
     @GetMapping("/remediation-queue")
     public Result<List<OperationFindingVO>> remediationQueue(@RequestParam(defaultValue = "50") int limit) {
         return Result.success(remediationQueueService.listQueue(limit));
+    }
+
+    @PostMapping("/remediation-queue/{findingId}/confirm")
+    public Result<Void> confirmFinding(@PathVariable("findingId") Long findingId) {
+        remediationQueueService.confirmFinding(findingId);
+        return Result.success();
+    }
+
+    @PostMapping("/remediation-queue/{findingId}/dismiss")
+    public Result<Void> dismissFinding(@PathVariable("findingId") Long findingId) {
+        remediationQueueService.dismissFinding(findingId);
+        return Result.success();
     }
 
     @GetMapping("/owner-load")

@@ -48,6 +48,14 @@ public class MybatisOperationsRemediationQueueRepository implements OperationsRe
                 .toList();
     }
 
+    @Override
+    public void updateHumanStatus(Long findingId, HumanStatus humanStatus) {
+        ReviewFinding finding = new ReviewFinding();
+        finding.setId(findingId);
+        finding.setHumanStatus(humanStatus);
+        reviewFindingMapper.updateById(finding);
+    }
+
     private Map<Long, Review> reviewsById(List<ReviewFinding> findings) {
         List<Long> reviewIds = findings.stream()
                 .map(ReviewFinding::getReviewId)

@@ -16,7 +16,6 @@ public class RegisterRequest {
     @Size(min = 6, max = 100, message = "密码长度需要在 6 到 100 个字符之间")
     private String password;
 
-    @NotBlank(message = "显示名称不能为空")
     @Size(max = 100, message = "显示名称不能超过 100 个字符")
     private String displayName;
 

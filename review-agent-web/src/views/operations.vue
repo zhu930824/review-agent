@@ -166,6 +166,30 @@
               <template v-else-if="column.key === 'priorityScore'">
                 <a-tag color="orange">{{ record.priorityScore }}</a-tag>
               </template>
+              <template v-else-if="column.key === 'actions'">
+                <a-space :size="4" wrap>
+                  <a-button
+                    type="link"
+                    size="small"
+                    :loading="actingFindingId === record.findingId && actingFindingAction === 'CONFIRM'"
+                    @click="handleQueueAction(record, 'CONFIRM')"
+                  >
+                    确认有效
+                  </a-button>
+                  <a-button
+                    type="link"
+                    size="small"
+                    danger
+                    :loading="actingFindingId === record.findingId && actingFindingAction === 'DISMISS'"
+                    @click="handleQueueAction(record, 'DISMISS')"
+                  >
+                    标记误报
+                  </a-button>
+                  <a-button type="link" size="small" @click="router.push(`/reviews/${record.reviewId}`)">
+                    查看 Review
+                  </a-button>
+                </a-space>
+              </template>
             </template>
           </a-table>
         </a-card>
@@ -251,15 +275,20 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { message } from 'ant-design-vue'
 import { BarChartOutlined, ExclamationCircleOutlined, ClockCircleOutlined, RiseOutlined, UnorderedListOutlined, TeamOutlined, ExperimentOutlined, CalendarOutlined, AppstoreOutlined, PlayCircleOutlined, SafetyCertificateOutlined, RocketOutlined } from '@ant-design/icons-vue'
-import type { BusinessImpactEstimate, OperationDashboard, OperationOwnerLoad, OperationalFinding, RuleLearningCandidate, StrategyPressureItem, StrategyPressureLevel, TelemetryReadinessItem, TelemetryReadinessLevel } from '@/types/operations'
+import type { BusinessImpactEstimate, OperationDashboard, OperationOwnerLoad, OperationalFinding, RemediationQueueItem, RuleLearningCandidate, StrategyPressureItem, StrategyPressureLevel, TelemetryReadinessItem, TelemetryReadinessLevel } from '@/types/operations'
 import type { SeverityLevel } from '@/types/review'
 import { useApi } from '@/composables/useApi'
 import { buildRemediationQueue, deriveOperationsScorecard, estimateReviewBusinessImpact, extractRuleLearningCandidates, summarizeRemediationQueue } from '@/utils/reviewOperations'
 
 const fallbackBusinessImpact = estimateReviewBusinessImpact({ monthlyReviews: 80, averageManualReviewMinutes: 35, automationCoveragePercent: 65, blockerFindings: 6, majorFindings: 18 })
-const { get } = useApi()
+const router = useRouter()
+const { get, post } = useApi()
 const remediationQueueLoading = ref(false)
+const actingFindingId = ref<number | null>(null)
+const actingFindingAction = ref<'CONFIRM' | 'DISMISS' | null>(null)
 const operationalFindings = ref<OperationalFinding[]>([])
 const operationDashboard = ref<OperationDashboard | null>(null)
 const backendOwnerLoad = ref<OperationOwnerLoad[]>([])
@@ -308,6 +337,7 @@ const queueColumns = [
   { title: '负责人', key: 'ownerRole', dataIndex: 'ownerRole' },
   { title: 'SLA', key: 'slaHours', dataIndex: 'slaHours' },
   { title: '优先级', key: 'priorityScore', dataIndex: 'priorityScore' },
+  { title: '操作', key: 'actions', width: 220 },
 ]
 const ownerLoad = computed(() => backendOwnerLoad.value.length
   ? backendOwnerLoad.value
@@ -399,6 +429,35 @@ async function loadBusinessImpact() {
     if (res.data) backendBusinessImpact.value = res.data
   } catch (e) {
     console.error(e)
+  }
+}
+
+async function reloadOperationsWorkflows() {
+  await Promise.all([
+    loadOperationsDashboard(),
+    loadOwnerLoad(),
+    loadRemediationQueue(),
+    loadRuleLearningCandidates(),
+    loadBusinessImpact(),
+  ])
+}
+
+async function handleQueueAction(record: RemediationQueueItem, action: 'CONFIRM' | 'DISMISS') {
+  actingFindingId.value = record.findingId
+  actingFindingAction.value = action
+  const endpoint = action === 'CONFIRM'
+    ? `/operations/remediation-queue/${record.findingId}/confirm`
+    : `/operations/remediation-queue/${record.findingId}/dismiss`
+  try {
+    await post(endpoint)
+    message.success(action === 'CONFIRM' ? '已确认风险项有效' : '已标记为误报')
+    await reloadOperationsWorkflows()
+  } catch (e) {
+    console.error('更新运营队列项失败', e)
+    message.error('更新运营队列项失败')
+  } finally {
+    actingFindingId.value = null
+    actingFindingAction.value = null
   }
 }
 

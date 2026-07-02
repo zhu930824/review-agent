@@ -6,7 +6,7 @@
       <a-typography-text type="secondary">添加一个新的代码仓库进行审查</a-typography-text>
     </a-space>
 
-    <a-card :bordered="false" style="max-width: 640px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06)">
+    <a-card :bordered="false" class="ra-form-card">
       <a-form layout="vertical" :model="form" @finish="handleSubmit">
         <a-form-item label="项目名称" required>
           <a-input v-model:value="form.name" placeholder="输入项目名称">
@@ -77,4 +77,3 @@ async function handleSubmit() {
   }
 }
 </script>
-

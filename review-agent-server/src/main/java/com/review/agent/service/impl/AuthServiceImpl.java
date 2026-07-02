@@ -40,7 +40,10 @@ public class AuthServiceImpl implements AuthService {
         UserAccount user = new UserAccount();
         user.setUsername(username);
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-        user.setDisplayName(request.getDisplayName().trim());
+        String displayName = StringUtils.hasText(request.getDisplayName())
+                ? request.getDisplayName().trim()
+                : username;
+        user.setDisplayName(displayName);
         user.setEmail(StringUtils.hasText(request.getEmail()) ? request.getEmail().trim() : null);
         user.setRole(DEFAULT_ROLE);
         user.setStatus(ACTIVE);

@@ -21,3 +21,15 @@ test('governance page turns telemetry readiness gaps into action items', () => {
   assert.match(governanceView, /buildTelemetryGapActions/)
   assert.match(governanceView, /telemetryReadinessColor/)
 })
+
+test('governance page loads backend catalog before falling back to local catalog', () => {
+  const governanceView = readFileSync(join(process.cwd(), 'src/views/governance.vue'), 'utf8')
+
+  assert.match(governanceView, /loadGovernanceCatalog/)
+  assert.match(governanceView, /get<MarketCapability\[]>\('\/governance\/capabilities'\)/)
+  assert.match(governanceView, /get<IntegrationConnector\[]>\('\/governance\/connectors'\)/)
+  assert.match(governanceView, /get<GovernanceRulePack\[]>\('\/governance\/rule-packs'\)/)
+  assert.match(governanceView, /get<WorkflowTemplate\[]>\('\/governance\/workflows'\)/)
+  assert.match(governanceView, /fallbackCapabilities/)
+  assert.match(governanceView, /fallbackWorkflowTemplates/)
+})

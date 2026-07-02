@@ -32,6 +32,20 @@ test('coverage summary separates enabled, partial, and planned capabilities', ()
   assert.equal(summary.coveragePercent, Math.round(((summary.enabled + summary.partial * 0.5) / summary.total) * 100))
 })
 
+test('coverage summary can use backend-provided capabilities', () => {
+  const summary = getCapabilityCoverageSummary([
+    { ...marketCapabilities[0], status: 'ENABLED' },
+    { ...marketCapabilities[1], status: 'PARTIAL' },
+    { ...marketCapabilities[2], status: 'PLANNED' },
+  ])
+
+  assert.equal(summary.total, 3)
+  assert.equal(summary.enabled, 1)
+  assert.equal(summary.partial, 1)
+  assert.equal(summary.planned, 1)
+  assert.equal(summary.coveragePercent, 50)
+})
+
 test('recommended actions are sorted by business impact and readiness', () => {
   const actions = getRecommendedNextActions(4)
 

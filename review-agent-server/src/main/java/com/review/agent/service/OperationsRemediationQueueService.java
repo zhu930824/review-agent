@@ -16,4 +16,8 @@ public interface OperationsRemediationQueueService {
     List<OperationRuleLearningCandidateVO> listRuleLearningCandidates(int limit);
 
     OperationBusinessImpactVO estimateBusinessImpact();
+
+    void confirmFinding(Long findingId);
+
+    void dismissFinding(Long findingId);
 }

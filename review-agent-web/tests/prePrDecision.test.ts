@@ -7,7 +7,7 @@ test('review detail can submit a manual pre-pr gate decision', () => {
   const detailView = readFileSync(join(process.cwd(), 'src/views/reviews/detail.vue'), 'utf8')
 
   assert.match(detailView, /submitPrePrDecision/)
-  assert.match(detailView, /\/reviews\/\$\{reviewId\.value\}\/pre-pr-decision/)
+  assert.match(detailView, /\/reviews\/\$\{reviewId\.value\}\/gate\/decision/)
   assert.match(detailView, /gateStatus:\s*'PASSED'/)
   assert.match(detailView, /reason:\s*'人工确认风险可接受，允许进入后续流程'/)
   assert.match(detailView, /decidedBy:\s*'manual-reviewer'/)

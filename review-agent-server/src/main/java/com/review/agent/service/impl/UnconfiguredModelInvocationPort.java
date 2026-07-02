@@ -3,12 +3,10 @@ package com.review.agent.service.impl;
 import com.review.agent.domain.dto.ModelInvocationRequest;
 import com.review.agent.domain.dto.ModelInvocationResponse;
 import com.review.agent.service.ModelInvocationPort;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 @Service
-@ConditionalOnMissingBean(ModelInvocationPort.class)
 @ConditionalOnProperty(prefix = "review-agent.model-invocation.http", name = "enabled", havingValue = "false", matchIfMissing = true)
 public class UnconfiguredModelInvocationPort implements ModelInvocationPort {
 

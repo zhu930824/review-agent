@@ -66,7 +66,7 @@
 | `POST` | `/api/reviews/{id}/gate/initialize` | 初始化 Pre-PR Gate | Pre-PR 创建成功后调用；写入 `pre_pr_gate_history` 初始化事件；不发布 CI |
 | `POST` | `/api/reviews/{id}/gate/refresh` | 重新计算并持久化 Gate 状态 | Finding 人工状态变化后使用；成功后自动发布 CI 状态 |
 | `POST` | `/api/reviews/{id}/gate/publish-ci` | 将持久化 Gate 状态发布到 CI/PR 状态系统 | `PASSED` -> success，`BLOCKED` / `NEEDS_HUMAN_REVIEW` -> failure，`RUNNING` -> pending；Review 详情页提供手动重发入口 |
-| `PATCH` | `/api/reviews/{id}/pre-pr-decision` | 记录人工 Gate 决策 | 请求体：`PrePrGateDecisionRequest`；写入 `pre_pr_gate_history` 决策事件；成功后自动发布 CI 状态 |
+| `PATCH` | `/api/reviews/{id}/gate/decision` | 记录人工 Gate 决策 | 请求体：`PrePrGateDecisionRequest`；写入 `pre_pr_gate_history` 决策事件；成功后自动发布 CI 状态 |
 
 `PrePrGateDecisionRequest`：
 
@@ -132,6 +132,11 @@
 | --- | --- | --- | --- |
 | `POST` | `/api/model-config/invocations/smoke-test` | 发起一次模型调用烟测 | 走当前 `ModelInvocationPort`，HTTP adapter 开启时会调用真实供应商并写入遥测；未配置时返回 `FAILED` 和可读错误信息 |
 
+当前前端接入状态：
+
+- 模型配置页 `/settings/models` 已接入 Provider、Profile、Strategy 列表读取，并提供新增、编辑、删除入口；Strategy 表单支持维护推荐场景、Gate 级别和角色到模型档案的绑定。
+- 模型配置页已接入 `/api/model-config/invocations/smoke-test`，可选择启用的模型档案发起最小调用，并展示 `SUCCESS/FAILED`、错误信息、返回正文、token 和成本字段。
+
 ## Governance
 
 来源：后端可读源码确认，`GovernanceController`。
@@ -152,6 +157,8 @@
 | `GET` | `/api/operations/dashboard` | 查询运营中心数据 |
 | `GET` | `/api/operations/strategy-pressure` | 查询策略成本/质量压力排行 | 基于模型遥测 summary 生成压力分、压力等级和运营建议 |
 | `GET` | `/api/operations/remediation-queue` | 查询运营中心修复队列 | 参数：`limit`，默认 50；返回未驳回 Finding，包含 Review、项目、严重度、人工状态、置信度和跨模型命中信息 |
+| `POST` | `/api/operations/remediation-queue/{findingId}/confirm` | 确认修复队列风险项有效 | 将 Finding 人工状态更新为 `CONFIRMED` |
+| `POST` | `/api/operations/remediation-queue/{findingId}/dismiss` | 将修复队列风险项标记为误报 | 将 Finding 人工状态更新为 `DISMISSED` |
 | `GET` | `/api/operations/owner-load` | 查询运营责任人负载 | 返回按 Finding 分类映射的责任人、数量和占比 |
 | `GET` | `/api/operations/rule-learning-candidates` | 查询规则学习候选 | 参数：`limit`，默认 20；返回 `PROMOTE_TO_RULE` / `SUPPRESS_PATTERN` 候选 |
 | `GET` | `/api/operations/business-impact` | 查询业务收益估算 | 基于近期 Finding 的 review 数、人工确认/驳回覆盖率、BLOCKER/MAJOR 数量估算节省审查时间和规避返工时间 |
@@ -160,6 +167,7 @@
 当前前端接入状态：
 
 - 运营中心全局 KPI 优先读取 `/api/operations/dashboard`，修复队列读取 `/api/operations/remediation-queue`，责任人负载读取 `/api/operations/owner-load`，规则学习视图读取 `/api/operations/rule-learning-candidates`，业务收益估算读取 `/api/operations/business-impact`；责任人负载、规则学习候选和业务收益均保留本地推导兜底。
+- 运营中心修复队列已支持“确认有效”和“标记误报”，分别调用 `/api/operations/remediation-queue/{findingId}/confirm` 和 `/api/operations/remediation-queue/{findingId}/dismiss`，操作完成后刷新队列、Owner 负载、规则学习候选和业务收益估算。
 - 运营中心“策略成本/质量压力”面板调用 `/api/operations/strategy-pressure` 和 `/api/operations/telemetry-readiness`，按失败率、误报代理、确认率、策略命中率、Judge 失败率、平均成本和延迟展示后端生成的策略压力分、压力等级、运营建议和遥测接入/归因就绪状态。
 - 治理中心“遥测行动项”面板调用 `/api/operations/telemetry-readiness`，将 `NO_TELEMETRY`、`WEAK_ATTRIBUTION`、`JUDGE_FAILURE` 等 `gapCode` 转成平台集成待办，便于从治理视角继续补齐模型调用遥测、跨模型归因和 Judge 稳定性。
 
@@ -223,7 +231,7 @@
    - 已落地：`GET /api/reviews/{id}/gate`
    - 已落地：`POST /api/reviews/{id}/gate/refresh`
    - 已落地：`POST /api/reviews/{id}/gate/publish-ci`
-   - 已落地：`PATCH /api/reviews/{id}/pre-pr-decision`
+   - 已落地：`PATCH /api/reviews/{id}/gate/decision`
 
 2. **CI 与代码扫描集成**
    - 已落地：GitHub Commit Status 回写。

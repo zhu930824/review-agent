@@ -102,6 +102,16 @@ public class OperationsRemediationQueueServiceImpl implements OperationsRemediat
         return vo;
     }
 
+    @Override
+    public void confirmFinding(Long findingId) {
+        repository.updateHumanStatus(findingId, HumanStatus.CONFIRMED);
+    }
+
+    @Override
+    public void dismissFinding(Long findingId) {
+        repository.updateHumanStatus(findingId, HumanStatus.DISMISSED);
+    }
+
     private int normalizeLimit(int limit) {
         if (limit <= 0) {
             return DEFAULT_LIMIT;
