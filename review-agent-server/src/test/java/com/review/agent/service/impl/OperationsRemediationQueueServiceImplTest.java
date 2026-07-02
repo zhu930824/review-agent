@@ -1,6 +1,7 @@
 package com.review.agent.service.impl;
 
 import com.review.agent.domain.dto.OperationFindingVO;
+import com.review.agent.domain.dto.OperationBusinessImpactVO;
 import com.review.agent.domain.dto.OperationOwnerLoadVO;
 import com.review.agent.domain.dto.OperationRuleLearningCandidateVO;
 import com.review.agent.domain.enums.FindingCategory;
@@ -82,6 +83,28 @@ class OperationsRemediationQueueServiceImplTest {
         assertEquals(List.of("PROMOTE_TO_RULE", "PROMOTE_TO_RULE", "SUPPRESS_PATTERN"), result.stream().map(OperationRuleLearningCandidateVO::getAction).toList());
         assertEquals(10, repository.lastLimit);
         assertEquals(1, repository.allFindingCalls);
+    }
+
+    @Test
+    void estimatesBusinessImpactFromReviewedFindings() {
+        repository.findings.add(finding(1L, Severity.BLOCKER, HumanStatus.CONFIRMED, true));
+        repository.findings.add(finding(2L, Severity.MAJOR, HumanStatus.DISMISSED, false));
+        repository.findings.add(finding(3L, Severity.MINOR, HumanStatus.PENDING, false));
+        repository.findings.get(0).setReviewId(101L);
+        repository.findings.get(1).setReviewId(102L);
+        repository.findings.get(2).setReviewId(102L);
+
+        OperationBusinessImpactVO result = service.estimateBusinessImpact();
+
+        assertEquals(2L, result.getMonthlyReviews());
+        assertEquals(35L, result.getAverageManualReviewMinutes());
+        assertEquals(67L, result.getAutomationCoveragePercent());
+        assertEquals(1L, result.getBlockerFindings());
+        assertEquals(1L, result.getMajorFindings());
+        assertEquals(1L, result.getHoursSaved());
+        assertEquals(9L, result.getAvoidedReworkHours());
+        assertEquals(1, repository.allFindingCalls);
+        assertEquals(100, repository.lastLimit);
     }
 
     private OperationFindingVO finding(Long id, Severity severity, HumanStatus humanStatus, boolean crossHit) {

@@ -11,3 +11,13 @@ test('governance page renders ci status readiness panel', () => {
   assert.match(governanceView, /backendSignals/)
   assert.match(governanceView, /nextActions/)
 })
+
+test('governance page turns telemetry readiness gaps into action items', () => {
+  const governanceView = readFileSync(join(process.cwd(), 'src/views/governance.vue'), 'utf8')
+
+  assert.match(governanceView, /telemetryGapActions/)
+  assert.match(governanceView, /loadTelemetryReadiness/)
+  assert.match(governanceView, /get<TelemetryReadinessItem\[]>\('\/operations\/telemetry-readiness'\)/)
+  assert.match(governanceView, /buildTelemetryGapActions/)
+  assert.match(governanceView, /telemetryReadinessColor/)
+})

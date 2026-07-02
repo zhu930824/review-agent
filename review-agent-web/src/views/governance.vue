@@ -189,6 +189,35 @@
           </a-space>
         </a-card>
 
+        <a-card size="small" style="margin-bottom:16px">
+          <template #title>
+            <a-space :size="8">
+              <EnvironmentOutlined style="font-size:16px;color:#0891b2" />
+              <span style="font-weight:600;font-size:14px">遥测行动项</span>
+            </a-space>
+          </template>
+          <a-space v-if="telemetryGapActions.length" direction="vertical" :size="8" style="width:100%">
+            <a-card
+              v-for="action in telemetryGapActions"
+              :key="action.key"
+              size="small"
+              :body-style="{ padding: '12px' }"
+              style="background:#f8fafc"
+            >
+              <a-space direction="vertical" :size="6" style="width:100%">
+                <a-space :size="6" wrap>
+                  <a-tag color="processing">{{ action.strategyKey }}</a-tag>
+                  <a-tag :color="telemetryReadinessColor(action.readinessLevel)">{{ action.readinessLevel }}</a-tag>
+                  <a-tag>{{ action.gapCode }}</a-tag>
+                </a-space>
+                <div style="font-weight:600;font-size:13px">{{ action.title }}</div>
+                <div style="font-size:12px;color:#64748b;line-height:1.5">{{ action.recommendation }}</div>
+              </a-space>
+            </a-card>
+          </a-space>
+          <a-empty v-else description="暂无遥测缺口" :image="undefined" />
+        </a-card>
+
         <a-card size="small">
           <template #title>
             <a-space :size="8">
@@ -383,11 +412,13 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { BarChartOutlined, CheckCircleOutlined, ExclamationCircleOutlined, AppstoreOutlined, ThunderboltOutlined, SafetyOutlined, UserOutlined, EnvironmentOutlined, SyncOutlined, PlayCircleOutlined, SettingOutlined, ClockCircleOutlined } from '@ant-design/icons-vue'
 import type { BusinessImpact, CapabilityStatus, CiStatusConfigVO, CiStatusWritebackLogVO, IntegrationActionLogVO, RolloutStage } from '@/types/governance'
+import type { TelemetryReadinessItem } from '@/types/operations'
 import { useApi } from '@/composables/useApi'
 import { compileGovernancePolicyPack, getCapabilityCoverageSummary, getCiStatusIntegrationReadiness, getConnectorsByStage, getRecommendedNextActions, marketCapabilities, workflowTemplates } from '@/utils/governanceCatalog'
+import { buildTelemetryGapActions, telemetryReadinessColor } from '@/utils/governanceTelemetry'
 
 const { get, post, put } = useApi()
 const coverage = getCapabilityCoverageSummary()
@@ -398,6 +429,7 @@ const ciStatusReadiness = getCiStatusIntegrationReadiness()
 const ciConfigSaving = ref(false)
 const ciWritebacks = ref<CiStatusWritebackLogVO[]>([])
 const integrationActions = ref<IntegrationActionLogVO[]>([])
+const telemetryReadinessItems = ref<TelemetryReadinessItem[]>([])
 const ciWritebackRetryingIds = ref<Set<number>>(new Set())
 const ciConfigForm = reactive({
   connectorKey: 'github-checks',
@@ -414,6 +446,8 @@ const ciConfigForm = reactive({
   tokenConfigured: false,
   webhookSecretConfigured: false,
 })
+
+const telemetryGapActions = computed(() => buildTelemetryGapActions(telemetryReadinessItems.value))
 
 function applyCiStatusConfig(config: CiStatusConfigVO) {
   ciConfigForm.connectorKey = config.connectorKey || 'github-checks'
@@ -455,6 +489,15 @@ async function loadIntegrationActions() {
     integrationActions.value = res.data ?? []
   } catch (e) {
     console.error('加载集成动作记录失败', e)
+  }
+}
+
+async function loadTelemetryReadiness() {
+  try {
+    const res = await get<TelemetryReadinessItem[]>('/operations/telemetry-readiness')
+    telemetryReadinessItems.value = res.data ?? []
+  } catch (e) {
+    console.error('加载遥测就绪度失败', e)
   }
 }
 
@@ -503,6 +546,7 @@ onMounted(() => {
   loadCiStatusConfig()
   loadCiWritebacks()
   loadIntegrationActions()
+  loadTelemetryReadiness()
 })
 
 const capabilityColumns = [

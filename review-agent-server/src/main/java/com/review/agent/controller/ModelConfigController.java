@@ -2,8 +2,11 @@ package com.review.agent.controller;
 
 import com.review.agent.common.result.Result;
 import com.review.agent.domain.dto.*;
+import com.review.agent.service.ModelInvocationPort;
 import com.review.agent.service.ModelConfigService;
+import com.review.agent.service.impl.HttpModelInvocationProperties;
 import lombok.RequiredArgsConstructor;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -14,6 +17,8 @@ import java.util.List;
 public class ModelConfigController {
 
     private final ModelConfigService modelConfigService;
+    private final ModelInvocationPort modelInvocationPort;
+    private final HttpModelInvocationProperties httpModelInvocationProperties;
 
     @GetMapping("/providers")
     public Result<List<ModelProviderVO>> listProviders() {
@@ -91,5 +96,59 @@ public class ModelConfigController {
     public Result<Void> deleteStrategy(@PathVariable("id") Long id) {
         modelConfigService.deleteStrategy(id);
         return Result.success();
+    }
+
+    @PostMapping("/invocations/smoke-test")
+    public Result<ModelInvocationSmokeTestVO> smokeTestInvocation(@RequestBody ModelInvocationSmokeTestRequest request) {
+        ModelInvocationRequest invocationRequest = toInvocationRequest(request);
+        ModelInvocationSmokeTestVO result = new ModelInvocationSmokeTestVO();
+        result.setProvider(invocationRequest.getProvider());
+        result.setModelName(invocationRequest.getModelName());
+        result.setPromptVersion(invocationRequest.getPromptVersion());
+        try {
+            ModelInvocationResponse response = modelInvocationPort.invoke(invocationRequest);
+            result.setStatus("SUCCESS");
+            result.setContent(response == null ? null : response.getContent());
+            result.setPromptTokens(response == null ? null : response.getPromptTokens());
+            result.setCompletionTokens(response == null ? null : response.getCompletionTokens());
+            result.setCostMicroCents(response == null ? null : response.getCostMicroCents());
+        } catch (Exception e) {
+            result.setStatus("FAILED");
+            result.setErrorMessage(e.getMessage());
+        }
+        return Result.success(result);
+    }
+
+    private ModelInvocationRequest toInvocationRequest(ModelInvocationSmokeTestRequest request) {
+        ModelInvocationRequest invocationRequest = new ModelInvocationRequest();
+        if (request != null) {
+            invocationRequest.setReviewId(request.getReviewId());
+            invocationRequest.setStrategyKey(request.getStrategyKey());
+            invocationRequest.setProvider(request.getProvider());
+            invocationRequest.setModelName(request.getModelName());
+            invocationRequest.setRole(request.getRole());
+            invocationRequest.setPromptVersion(request.getPromptVersion());
+            invocationRequest.setPrompt(request.getPrompt());
+            invocationRequest.setTemperature(request.getTemperature());
+        }
+        if (!StringUtils.hasText(invocationRequest.getStrategyKey())) {
+            invocationRequest.setStrategyKey("smoke-test");
+        }
+        if (!StringUtils.hasText(invocationRequest.getProvider())) {
+            invocationRequest.setProvider(httpModelInvocationProperties.getProvider());
+        }
+        if (!StringUtils.hasText(invocationRequest.getModelName())) {
+            invocationRequest.setModelName(httpModelInvocationProperties.getModelName());
+        }
+        if (!StringUtils.hasText(invocationRequest.getRole())) {
+            invocationRequest.setRole("OPERATOR");
+        }
+        if (!StringUtils.hasText(invocationRequest.getPromptVersion())) {
+            invocationRequest.setPromptVersion("model-config-smoke-test-v1");
+        }
+        if (!StringUtils.hasText(invocationRequest.getPrompt())) {
+            invocationRequest.setPrompt("Reply with OK to confirm the model invocation path is configured.");
+        }
+        return invocationRequest;
     }
 }

@@ -118,9 +118,22 @@ export interface ModelTelemetrySummary {
 }
 
 export type StrategyPressureLevel = 'HIGH' | 'MEDIUM' | 'LOW'
+export type TelemetryReadinessLevel = 'READY' | 'NEEDS_ATTRIBUTION' | 'JUDGE_UNSTABLE' | 'NOT_CONNECTED'
 
 export interface StrategyPressureItem extends StrategyTelemetry {
   pressureScore: number
   pressureLevel: StrategyPressureLevel
+  recommendation: string
+}
+
+export interface TelemetryReadinessItem {
+  strategyKey: string
+  totalCalls: number
+  reviewedReviews: number
+  modelDiversity: number
+  crossHitRatePercent: number
+  judgeFailureRatePercent: number
+  readinessLevel: TelemetryReadinessLevel
+  gapCode: string
   recommendation: string
 }

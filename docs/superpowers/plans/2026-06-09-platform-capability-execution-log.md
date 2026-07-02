@@ -786,3 +786,286 @@
 1. 在可读的 Gateway / Agent 模型调用实现中接入 `ModelTelemetryRecorder`。
 2. 补 Judge 分歧的真实裁决差异和跨模型 Finding 归因明细。
 3. 将运营中心业务收益估算逐步后端化，减少前端固定假设。
+
+## 2026-07-02 阶段 3 继续：Operations 业务收益估算后端化
+
+### 已完成切片
+
+1. 业务收益估算后端聚合
+   - 新增 `OperationBusinessImpactVO`。
+   - `OperationsRemediationQueueService` 新增 `estimateBusinessImpact()`。
+   - 估算口径基于近期 Finding 样本：去重 review 数作为审查量，人工确认/驳回占比作为自动化覆盖率，BLOCKER/MAJOR 数量用于估算规避返工时间。
+
+2. 受保护主流程绕行
+   - `OperationsService` / dashboard 主实现保持不改，避免触碰受保护 Esafenet 文件。
+   - 业务收益估算沿用已可读的 `OperationsRemediationQueueRepository.listFindings(limit)` seam，和 owner-load、rule-learning 后端化保持一致。
+
+3. Operations API 合同
+   - 新增 `GET /api/operations/business-impact`。
+   - 返回审查量、平均人工审查分钟数、自动化覆盖率、BLOCKER/MAJOR 数、节省审查小时、规避返工小时和摘要说明。
+
+4. 前端接入切换
+   - Operations 页面新增读取 `/api/operations/business-impact`。
+   - 月度收益估算卡片和运营节奏建议摘要优先使用后端估算；接口失败时保留原本本地固定假设兜底。
+
+5. API 文档同步
+   - `docs/api-catalog.md` 新增 business-impact 接口，并更新运营中心接入状态。
+
+### 验证记录
+
+- `mvn -q "-Dtest=OperationsRemediationQueueServiceImplTest,OperationsControllerTest" test`：业务收益估算和 Controller 合同测试通过。
+- `npx tsx --test tests/operationsTelemetry.test.ts tests/reviewOperations.test.ts`：Operations 页面 business-impact 接入和队列工具测试通过。
+
+### 下一步建议
+
+1. 在可读的 Gateway / Agent 模型调用实现中接入 `ModelTelemetryRecorder`。
+2. 补 Judge 分歧的真实裁决差异和跨模型 Finding 归因明细。
+3. 将 Operations 业务收益估算参数配置化，例如平均人工审查分钟数和返工规避权重。
+
+## 2026-07-02 阶段 3 继续：Operations 遥测接入就绪度诊断
+
+### 已完成切片
+
+1. 遥测接入诊断后端聚合
+   - 新增 `OperationsTelemetryReadinessVO`。
+   - 新增 `OperationsTelemetryReadinessService` 和 `OperationsTelemetryReadinessServiceImpl`。
+   - 基于 `ModelTelemetryService.summary()` 输出策略级就绪度：`READY`、`NEEDS_ATTRIBUTION`、`JUDGE_UNSTABLE`、`NOT_CONNECTED`。
+
+2. 受保护调用链绕行
+   - 真实 Gateway / Agent 模型调用文件仍显示为 Esafenet 保护内容，本轮不硬改不可读主流程。
+   - 通过只读诊断层暴露“缺真实遥测、缺跨模型归因、Judge 调用不稳定”等集成缺口，帮助后续定位安全接入点。
+
+3. Operations API 合同
+   - 新增 `GET /api/operations/telemetry-readiness`。
+   - 当没有任何模型遥测时返回 `model-telemetry / NOT_CONNECTED / NO_TELEMETRY`，避免前端只能看到空态。
+   - 有策略遥测时按风险优先展示：Judge 不稳定、归因不足、未接入、就绪。
+
+4. 前端接入切换
+   - Operations 页面新增读取 `/api/operations/telemetry-readiness`。
+   - 策略成本/质量压力面板下方新增紧凑遥测就绪条，展示调用数、模型多样性、跨模型命中率和就绪等级。
+
+5. API 文档同步
+   - `docs/api-catalog.md` 新增 telemetry-readiness 接口，并更新运营中心接入状态。
+
+### 验证记录
+
+- `mvn -q "-Dtest=OperationsTelemetryReadinessServiceImplTest,OperationsControllerTest" test`：遥测就绪度聚合和 Controller 合同测试通过。
+- `npx tsx --test tests/operationsTelemetry.test.ts tests/reviewOperations.test.ts`：Operations 页面 telemetry-readiness 接入和队列工具测试通过。
+
+### 下一步建议
+
+1. 将 `ModelTelemetryRecorder` 接入一个确认可读、可维护的真实模型调用点。
+2. 将 telemetry-readiness 的 gapCode 做成治理中心行动项，例如提示缺 reviewId、缺 role、缺多模型交叉命中。
+3. 将 Operations 业务收益估算参数配置化，例如平均人工审查分钟数和返工规避权重。
+
+## 2026-07-02 阶段 3 继续：Governance 遥测行动项接入
+
+### 已完成切片
+
+1. 治理中心接入 telemetry-readiness
+   - Governance 页面新增读取 `GET /api/operations/telemetry-readiness`。
+   - 将后端返回的策略级 `gapCode` 转成治理行动项，过滤 `NONE` / 已就绪项。
+   - 目前覆盖 `NO_TELEMETRY`、`WEAK_ATTRIBUTION`、`JUDGE_FAILURE` 三类缺口标题，并保留后端 `recommendation` 作为执行说明。
+2. 治理视图补齐体验闭环
+   - 右侧边栏新增“遥测行动项”卡片，展示策略、就绪等级、缺口编码和建议。
+   - 没有缺口时展示空状态，避免页面出现无解释的空白区域。
+3. 复用既有后端合同
+   - 本轮不改后端，仅复用上一阶段的 `/api/operations/telemetry-readiness`。
+   - Operations 的遥测诊断继续保留，Governance 负责把诊断转成平台治理待办。
+4. 文档同步
+   - `docs/api-catalog.md` 更新当前前端接入状态，明确 Governance 也消费 telemetry-readiness。
+
+### 验证记录
+
+- `npx tsx --test tests/ciStatusReadinessView.test.ts`：先红后绿，覆盖 Governance 遥测行动项结构、接口读取和 gapCode 映射。
+
+### 下一步建议
+
+1. 为 Governance 遥测行动项增加真实数据级组件测试，覆盖 `NO_TELEMETRY` / `WEAK_ATTRIBUTION` / `JUDGE_FAILURE` 的展示差异。
+2. 将 `ModelTelemetryRecorder` 接入一个确认可读、可维护的真实模型调用点。
+3. 将 Operations 业务收益估算参数配置化，例如平均人工审查分钟数和返工规避权重。
+
+## 2026-07-02 阶段 3 下一阶段：Governance 遥测行动映射工具化
+
+### 已完成切片
+
+1. 真实模型调用点复核
+   - 在后端可读源码中复核 `ModelTelemetryRecorder`、`ModelTelemetryService`、模型配置和可见服务实现。
+   - 当前可读源码仍未暴露明确的 Gateway / Agent LLM 调用实现；本轮不把 Recorder 接到控制器或假入口，避免形成误导性遥测。
+2. Governance 遥测行动映射工具化
+   - 新增 `src/utils/governanceTelemetry.ts`。
+   - 将 `NO_TELEMETRY`、`WEAK_ATTRIBUTION`、`JUDGE_FAILURE` 的标题映射、已就绪项过滤和 tag 颜色映射从页面内联逻辑抽出。
+   - 未知 `gapCode` 统一保留为“复核遥测接入”，避免后端扩展编码时前端静默丢失行动项。
+3. Governance 页面复用
+   - `governance.vue` 改为通过 `buildTelemetryGapActions()` 生成右侧“遥测行动项”数据。
+   - 页面继续读取 `/api/operations/telemetry-readiness`，视觉结构和空状态保持不变。
+4. 测试补齐
+   - 新增 `tests/governanceTelemetry.test.ts`，覆盖三类已知 gap、未知 gap 和 readiness tag 颜色。
+   - 更新 `tests/ciStatusReadinessView.test.ts`，确认 Governance 页面读取接口并复用工具方法。
+
+### 验证记录
+
+- `npx tsx --test tests/governanceTelemetry.test.ts tests/ciStatusReadinessView.test.ts`：先红后绿，5 个 Governance 遥测行动映射与页面结构测试通过。
+
+### 下一步建议
+
+1. 继续寻找或整理可读的模型调用 seam，再把 `ModelTelemetryRecorder` 接入真实 Gateway / Agent 调用点。
+2. 如果真实调用点仍受保护，新增一个明确的 `ModelInvocationPort` / adapter seam，用测试先约束调用元数据和 token/cost usage 回填。
+3. 将 Operations 业务收益估算参数配置化，例如平均人工审查分钟数和返工规避权重。
+
+## 2026-07-02 阶段 3 继续：ModelInvocationPort 遥测接入 seam
+
+### 已完成切片
+
+1. 模型调用 port 合同
+   - 新增 `ModelInvocationPort`，定义可读模型调用入口：`invoke(ModelInvocationRequest)`。
+   - 新增 `ModelInvocationRequest`，携带 `reviewId`、`strategyKey`、`provider`、`modelName`、`role`、`promptVersion`、`prompt` 和 `temperature`。
+   - 新增 `ModelInvocationResponse`，携带模型响应内容以及 `promptTokens`、`completionTokens`、`costMicroCents`。
+2. 遥测 wrapper
+   - 新增 `TelemetryModelInvocationPort`，包装真实 `ModelInvocationPort` delegate。
+   - 成功调用时从 request 建立 `ModelTelemetryContext`，从 response 提取 token/cost usage，并通过 `ModelTelemetryRecorder` 记录 `SUCCESS`。
+   - delegate 抛错时记录 `FAILED`，保留错误信息并原样抛出。
+3. 集成边界控制
+   - 本轮不将 wrapper 注册为 Spring Bean，也不改变现有受保护主流程。
+   - 后续真实 Gateway / Agent 调用点可显式包一层 `TelemetryModelInvocationPort`，避免把遥测接到控制器或假入口。
+4. 治理建议同步
+   - `OperationsTelemetryReadinessServiceImpl` 的 `NO_TELEMETRY` 建议改为指向 `ModelInvocationPort` + `TelemetryModelInvocationPort`，让 Operations / Governance 行动项落到新的可读 seam。
+5. 测试补齐
+   - 新增 `TelemetryModelInvocationPortTest`，覆盖成功委托、上下文字段、token/cost 回填、失败记录和异常透传。
+   - 更新 `OperationsTelemetryReadinessServiceImplTest`，约束未接入遥测时的下一步建议文案。
+
+### 验证记录
+
+- `mvn -q "-Dtest=TelemetryModelInvocationPortTest" test`：先红后绿，模型调用 port 遥测 seam 测试通过。
+- `mvn -q "-Dtest=TelemetryModelInvocationPortTest,OperationsTelemetryReadinessServiceImplTest" test`：seam 与 readiness 建议文案测试通过。
+
+### 下一步建议
+
+1. 将一个可读的真实 Gateway / Agent 模型调用实现改为实现 `ModelInvocationPort`，并用 `TelemetryModelInvocationPort` 包装。
+2. 在 `OperationsTelemetryReadinessServiceImpl` 的建议文案中指向新的 `ModelInvocationPort` seam，帮助治理侧定位下一步集成点。
+3. 将 Operations 业务收益估算参数配置化，例如平均人工审查分钟数和返工规避权重。
+
+## 2026-07-02 阶段 3 继续：ModelInvocationPort 默认未配置保护
+
+### 已完成切片
+
+1. 真实调用入口复核
+   - 复核 `infrastructure/gateway`、`infrastructure/ai`、`infrastructure/agent` 下的候选模型调用文件。
+   - 当前这些文件仍是 Esafenet 保护内容，不能安全读取和改造为真实 adapter。
+2. 默认未配置 port
+   - 新增 `UnconfiguredModelInvocationPort`。
+   - 通过 `@ConditionalOnMissingBean(ModelInvocationPort.class)` 注册为兜底 Bean，真实 adapter 出现后自动让位。
+   - 默认调用会快速失败，并在错误信息中带出 strategy、provider、modelName 和下一步：实现真实 Gateway / Agent adapter 并用 `TelemetryModelInvocationPort` 包装。
+3. 治理建议同步
+   - `OperationsTelemetryReadinessServiceImpl` 的 `NO_TELEMETRY` 建议改为“替换 `UnconfiguredModelInvocationPort`，再包 `TelemetryModelInvocationPort`”。
+   - Governance 遥测行动项会直接显示这条更可执行的接入建议。
+4. 测试补齐
+   - 新增 `UnconfiguredModelInvocationPortTest`，覆盖默认未配置 port 的失败信息。
+   - 更新 `OperationsTelemetryReadinessServiceImplTest`，约束未接入遥测时的建议文案。
+
+### 验证记录
+
+- `mvn -q "-Dtest=UnconfiguredModelInvocationPortTest" test`：先红后绿，默认未配置 port 测试通过。
+- `mvn -q "-Dtest=UnconfiguredModelInvocationPortTest,OperationsTelemetryReadinessServiceImplTest" test`：默认 port 与 readiness 建议文案测试通过。
+
+### 下一步建议
+
+1. 新增一个可读的真实 Gateway / Agent adapter 实现 `ModelInvocationPort`，并逐步把受保护主链路迁移到该 adapter。
+2. 给 `TelemetryModelInvocationPort` 增加 Spring wiring 测试，确保真实 adapter 出现时不会被默认未配置 port 抢占。
+3. 将 Operations 业务收益估算参数配置化，例如平均人工审查分钟数和返工规避权重。
+
+## 2026-07-02 阶段 3 继续：ModelInvocationPort Spring wiring 验证
+
+### 已完成切片
+
+1. 默认 fallback 装配验证
+   - 新增 `ModelInvocationPortWiringTest`。
+   - 使用 `ApplicationContextRunner` 验证没有真实 `ModelInvocationPort` 时，Spring 上下文只注册 `UnconfiguredModelInvocationPort`。
+   - 该测试先暴露了直接传组件类不会进入上下文的问题，再通过显式 `@Import` 固定当前装配边界。
+2. 真实 adapter 覆盖验证
+   - 使用 runner 预注册一个 `FakeRealModelInvocationPort`，模拟真实 Gateway / Agent adapter 已存在。
+   - 验证 fallback 不会再注册，避免后续接入真实适配器时出现两个 `ModelInvocationPort` 或默认未配置 port 抢占调用链。
+3. 集成边界控制
+   - 本轮不修改受保护的 Gateway / Agent 主链路文件。
+   - 不新增生产行为，只补齐 Spring wiring 回归测试，作为后续真实 adapter 接入前的保护网。
+
+### 验证记录
+
+- `mvn -q "-Dtest=ModelInvocationPortWiringTest" test`：先红后绿，覆盖默认 fallback 注册和真实 adapter 覆盖两类装配场景。
+- `mvn -q "-Dtest=ModelInvocationPortWiringTest,UnconfiguredModelInvocationPortTest,TelemetryModelInvocationPortTest,OperationsTelemetryReadinessServiceImplTest" test`：port wiring、默认未配置保护、遥测 wrapper 和 readiness 建议文案聚焦测试通过。
+- `mvn -q test`：后端全量测试通过；仍保留既有 CI writeback retry warning。
+- `npm run build`：前端生产构建通过；仍保留既有 ant-design-vue chunk size warning。
+- `npm test`：并行构建时出现 9 个前端测试文件失败；随后单独复跑时本机 `D:\develop\node\node.exe` 连 `node --version` 都无输出退出 1，未能完成前端全量测试复核。
+
+### 下一步建议
+
+1. 新增一个可读的真实 Gateway / Agent adapter 实现 `ModelInvocationPort`，并用 `TelemetryModelInvocationPort` 包装。
+2. 将真实 adapter 接入后的 `ModelTelemetryRecorder` 数据继续回流到 Operations / Governance 的 telemetry-readiness 行动项。
+3. 将 Operations 业务收益估算参数配置化，例如平均人工审查分钟数和返工规避权重。
+
+## 2026-07-02 阶段 3 继续：配置驱动 HTTP 模型调用 adapter
+
+### 已完成切片
+
+1. 可读 HTTP adapter
+   - 新增 `HttpModelInvocationPort`，实现 `ModelInvocationPort`。
+   - 默认按 OpenAI-compatible chat completions 请求体调用：`model` + `messages[{role:user,content}]`。
+   - 支持通过 JSON Pointer 提取响应正文、prompt tokens 和 completion tokens，兼容 OpenAI-compatible / DashScope 这类响应结构。
+2. 配置化接入
+   - 新增 `HttpModelInvocationProperties`，绑定 `review-agent.model-invocation.http`。
+   - `application.yml` 新增 `MODEL_INVOCATION_HTTP_ENABLED`、`MODEL_INVOCATION_HTTP_ENDPOINT`、`MODEL_INVOCATION_HTTP_API_KEY`、`MODEL_INVOCATION_HTTP_MODEL` 等环境变量入口。
+   - 默认 `enabled=false`，不影响现有未配置保护。
+3. 遥测包装装配
+   - 新增 `ModelInvocationPortConfiguration`。
+   - 当 `review-agent.model-invocation.http.enabled=true` 时注册一个带默认 provider/model/promptVersion 补齐的 `ModelInvocationPort` Bean。
+   - HTTP adapter 被 `TelemetryModelInvocationPort` 包装，真实调用成功/失败后会继续写入 `ModelTelemetryRecorder`。
+4. fallback 退场控制
+   - `UnconfiguredModelInvocationPort` 增加 HTTP adapter 开关条件。
+   - HTTP adapter 显式开启时，默认未配置 port 不再参与装配，避免真实接入路径被 fallback 抢占。
+5. 测试策略
+   - 按本轮要求，不新增单元测试。
+   - 通过编译和现有后端测试做回归验证。
+
+### 验证记录
+
+- `mvn -q -DskipTests compile`：后端编译通过。
+- `mvn -q test`：后端现有测试通过；仍保留既有 CI writeback retry warning。
+
+### 下一步建议
+
+1. 在目标环境配置 `MODEL_INVOCATION_HTTP_ENABLED=true`、`MODEL_INVOCATION_HTTP_ENDPOINT`、`MODEL_INVOCATION_HTTP_API_KEY`、`MODEL_INVOCATION_HTTP_MODEL`，用真实供应商请求跑通首条遥测。
+2. 将受保护主链路的模型调用入口逐步迁移到 `ModelInvocationPort`，避免继续散落在不可读 Gateway / Agent 文件里。
+3. 如果供应商响应不是 OpenAI-compatible，调整 `response-text-pointer` / token pointer，或新增供应商专用 request/response adapter。
+
+## 2026-07-02 阶段 3 继续：模型调用烟测入口
+
+### 已完成切片
+
+1. 烟测请求/响应合同
+   - 新增 `ModelInvocationSmokeTestRequest`，支持传入 `reviewId`、`strategyKey`、`provider`、`modelName`、`role`、`promptVersion`、`prompt` 和 `temperature`。
+   - 新增 `ModelInvocationSmokeTestVO`，返回 `SUCCESS` / `FAILED`、模型响应正文、token/cost usage 和错误信息。
+2. 后端烟测接口
+   - `ModelConfigController` 新增 `POST /api/model-config/invocations/smoke-test`。
+   - 接口调用当前 Spring 注入的 `ModelInvocationPort`，因此默认未配置时返回 fallback 的可读错误，HTTP adapter 开启时调用真实供应商。
+   - 调用异常被转换为响应体里的 `FAILED` 和 `errorMessage`，避免运维烟测只能看到通用 500。
+3. 默认字段补齐
+   - 未传 `strategyKey` 时使用 `smoke-test`。
+   - 未传 `role` 时使用 `OPERATOR`。
+   - 未传 `promptVersion` 时使用 `model-config-smoke-test-v1`。
+   - 未传 prompt 时使用一条最小确认提示。
+4. 文档同步
+   - `docs/api-catalog.md` 新增模型调用烟测接口。
+5. 测试策略
+   - 按本轮要求，不新增单元测试。
+   - 通过编译和现有后端测试做回归验证。
+
+### 验证记录
+
+- `mvn -q -DskipTests compile`：新增 DTO / Controller 注入 / smoke-test endpoint 编译通过。
+- `mvn -q test`：后端现有测试通过；仍保留既有 CI writeback retry warning。
+
+### 下一步建议
+
+1. 在模型配置页面增加一个“测试调用”按钮，调用 `/api/model-config/invocations/smoke-test` 并展示 SUCCESS / FAILED、错误信息和 token/cost usage。
+2. 在真实环境配置 HTTP adapter 后，用 smoke-test 产生一条真实 `model_call_telemetry`，再观察 Operations / Governance 的 telemetry-readiness 是否从 `NO_TELEMETRY` 进入下一类状态。
+3. 如果需要避免误触真实模型成本，可给 smoke-test 增加后端开关或管理员权限约束。

@@ -1,14 +1,17 @@
 package com.review.agent.controller;
 
 import com.review.agent.common.result.Result;
+import com.review.agent.domain.dto.OperationBusinessImpactVO;
 import com.review.agent.domain.dto.OperationDashboardVO;
 import com.review.agent.domain.dto.OperationFindingVO;
 import com.review.agent.domain.dto.OperationOwnerLoadVO;
 import com.review.agent.domain.dto.OperationRuleLearningCandidateVO;
 import com.review.agent.domain.dto.OperationsStrategyPressureVO;
+import com.review.agent.domain.dto.OperationsTelemetryReadinessVO;
 import com.review.agent.service.OperationsRemediationQueueService;
 import com.review.agent.service.OperationsService;
 import com.review.agent.service.OperationsStrategyPressureService;
+import com.review.agent.service.OperationsTelemetryReadinessService;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -20,8 +23,9 @@ class OperationsControllerTest {
 
     private final FakeOperationsService operationsService = new FakeOperationsService();
     private final FakeStrategyPressureService pressureService = new FakeStrategyPressureService();
+    private final FakeTelemetryReadinessService readinessService = new FakeTelemetryReadinessService();
     private final FakeRemediationQueueService remediationQueueService = new FakeRemediationQueueService();
-    private final OperationsController controller = new OperationsController(operationsService, pressureService, remediationQueueService);
+    private final OperationsController controller = new OperationsController(operationsService, pressureService, readinessService, remediationQueueService);
 
     @Test
     void strategyPressureDelegatesToService() {
@@ -60,6 +64,26 @@ class OperationsControllerTest {
         assertEquals("PROMOTE_TO_RULE", result.getData().get(0).getAction());
     }
 
+    @Test
+    void businessImpactDelegatesToService() {
+        Result<OperationBusinessImpactVO> result = controller.businessImpact();
+
+        assertTrue(result.isSuccess());
+        assertEquals(1, remediationQueueService.businessImpactCalls);
+        assertEquals(12L, result.getData().getHoursSaved());
+        assertEquals(18L, result.getData().getAvoidedReworkHours());
+    }
+
+    @Test
+    void telemetryReadinessDelegatesToService() {
+        Result<List<OperationsTelemetryReadinessVO>> result = controller.telemetryReadiness();
+
+        assertTrue(result.isSuccess());
+        assertEquals(1, readinessService.calls);
+        assertEquals("quality-gate", result.getData().get(0).getStrategyKey());
+        assertEquals("READY", result.getData().get(0).getReadinessLevel());
+    }
+
     private static class FakeOperationsService implements OperationsService {
         @Override
         public OperationDashboardVO getDashboard() {
@@ -79,10 +103,24 @@ class OperationsControllerTest {
         }
     }
 
+    private static class FakeTelemetryReadinessService implements OperationsTelemetryReadinessService {
+        private int calls;
+
+        @Override
+        public List<OperationsTelemetryReadinessVO> listReadiness() {
+            calls++;
+            OperationsTelemetryReadinessVO vo = new OperationsTelemetryReadinessVO();
+            vo.setStrategyKey("quality-gate");
+            vo.setReadinessLevel("READY");
+            return List.of(vo);
+        }
+    }
+
     private static class FakeRemediationQueueService implements OperationsRemediationQueueService {
         private int lastLimit;
         private int lastRuleLearningLimit;
         private int ownerLoadCalls;
+        private int businessImpactCalls;
 
         @Override
         public List<OperationFindingVO> listQueue(int limit) {
@@ -111,6 +149,16 @@ class OperationsControllerTest {
             vo.setRuleTitle("Promote rule: finding-9");
             vo.setReason("Confirmed high-signal finding");
             return List.of(vo);
+        }
+
+        @Override
+        public OperationBusinessImpactVO estimateBusinessImpact() {
+            businessImpactCalls++;
+            OperationBusinessImpactVO vo = new OperationBusinessImpactVO();
+            vo.setHoursSaved(12L);
+            vo.setAvoidedReworkHours(18L);
+            vo.setExecutiveSummary("Backend business impact estimate");
+            return vo;
         }
     }
 }

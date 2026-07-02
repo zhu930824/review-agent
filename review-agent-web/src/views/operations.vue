@@ -111,7 +111,18 @@
           </a-card>
         </a-col>
       </a-row>
-      <div v-else style="font-size:13px;color:#94a3b8;padding:12px 0">暂无模型遥测数据，真实调用接入后会显示策略成本/质量压力。</div>
+      <a-row v-if="telemetryReadinessItems.length" :gutter="12" style="margin-top:4px">
+        <a-col v-for="item in telemetryReadinessItems.slice(0, 3)" :key="item.strategyKey" :xl="8" :md="12" :span="24" style="margin-bottom:8px">
+          <a-space :size="8" style="width:100%;justify-content:space-between;background:#f8fafc;padding:8px 10px;border-radius:6px">
+            <div style="min-width:0">
+              <div style="font-size:12px;font-weight:600;color:#334155">{{ item.strategyKey }}</div>
+              <div style="font-size:12px;color:#94a3b8;margin-top:2px">调用 {{ item.totalCalls }} · 模型 {{ item.modelDiversity }} · 跨模型 {{ item.crossHitRatePercent }}%</div>
+            </div>
+            <a-tag :color="telemetryReadinessColor(item.readinessLevel)">{{ item.readinessLevel }}</a-tag>
+          </a-space>
+        </a-col>
+      </a-row>
+      <div v-if="!strategyPressureLoading && !strategyPressureItems.length" style="font-size:13px;color:#94a3b8;padding:12px 0">暂无模型遥测数据，真实调用接入后会显示策略成本/质量压力。</div>
     </a-card>
 
     <!-- 主内容区 -->
@@ -241,21 +252,24 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { BarChartOutlined, ExclamationCircleOutlined, ClockCircleOutlined, RiseOutlined, UnorderedListOutlined, TeamOutlined, ExperimentOutlined, CalendarOutlined, AppstoreOutlined, PlayCircleOutlined, SafetyCertificateOutlined, RocketOutlined } from '@ant-design/icons-vue'
-import type { OperationDashboard, OperationOwnerLoad, OperationalFinding, RuleLearningCandidate, StrategyPressureItem, StrategyPressureLevel } from '@/types/operations'
+import type { BusinessImpactEstimate, OperationDashboard, OperationOwnerLoad, OperationalFinding, RuleLearningCandidate, StrategyPressureItem, StrategyPressureLevel, TelemetryReadinessItem, TelemetryReadinessLevel } from '@/types/operations'
 import type { SeverityLevel } from '@/types/review'
 import { useApi } from '@/composables/useApi'
 import { buildRemediationQueue, deriveOperationsScorecard, estimateReviewBusinessImpact, extractRuleLearningCandidates, summarizeRemediationQueue } from '@/utils/reviewOperations'
 
-const businessImpact = estimateReviewBusinessImpact({ monthlyReviews: 80, averageManualReviewMinutes: 35, automationCoveragePercent: 65, blockerFindings: 6, majorFindings: 18 })
+const fallbackBusinessImpact = estimateReviewBusinessImpact({ monthlyReviews: 80, averageManualReviewMinutes: 35, automationCoveragePercent: 65, blockerFindings: 6, majorFindings: 18 })
 const { get } = useApi()
 const remediationQueueLoading = ref(false)
 const operationalFindings = ref<OperationalFinding[]>([])
 const operationDashboard = ref<OperationDashboard | null>(null)
 const backendOwnerLoad = ref<OperationOwnerLoad[]>([])
 const backendRuleLearningCandidates = ref<RuleLearningCandidate[]>([])
+const backendBusinessImpact = ref<BusinessImpactEstimate | null>(null)
 const strategyPressureLoading = ref(false)
 const strategyPressureItems = ref<StrategyPressureItem[]>([])
+const telemetryReadinessItems = ref<TelemetryReadinessItem[]>([])
 const remediationQueue = computed(() => buildRemediationQueue(operationalFindings.value))
+const businessImpact = computed(() => backendBusinessImpact.value ?? fallbackBusinessImpact)
 const learningCandidates = computed(() => backendRuleLearningCandidates.value.length
   ? backendRuleLearningCandidates.value
   : extractRuleLearningCandidates(operationalFindings.value))
@@ -311,6 +325,10 @@ function pressureColor(level: StrategyPressureLevel) {
   return { HIGH: 'red', MEDIUM: 'orange', LOW: 'green' }[level]
 }
 
+function telemetryReadinessColor(level: TelemetryReadinessLevel) {
+  return { READY: 'green', NEEDS_ATTRIBUTION: 'orange', JUDGE_UNSTABLE: 'red', NOT_CONNECTED: 'default' }[level]
+}
+
 function formatMicroCents(n: number): string {
   return `$${(n / 100000000).toFixed(4)}`
 }
@@ -324,6 +342,15 @@ async function loadStrategyPressure() {
     console.error(e)
   } finally {
     strategyPressureLoading.value = false
+  }
+}
+
+async function loadTelemetryReadiness() {
+  try {
+    const res = await get<TelemetryReadinessItem[]>('/operations/telemetry-readiness')
+    if (res.data) telemetryReadinessItems.value = res.data
+  } catch (e) {
+    console.error(e)
   }
 }
 
@@ -366,11 +393,22 @@ async function loadRuleLearningCandidates() {
   }
 }
 
+async function loadBusinessImpact() {
+  try {
+    const res = await get<BusinessImpactEstimate>('/operations/business-impact')
+    if (res.data) backendBusinessImpact.value = res.data
+  } catch (e) {
+    console.error(e)
+  }
+}
+
 onMounted(() => {
   loadOperationsDashboard()
   loadOwnerLoad()
   loadStrategyPressure()
+  loadTelemetryReadiness()
   loadRemediationQueue()
   loadRuleLearningCandidates()
+  loadBusinessImpact()
 })
 </script>

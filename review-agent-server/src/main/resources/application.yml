@@ -78,6 +78,16 @@ review-agent:
         model-name: qwen-max
         system-prompt: "你是一名资深架构评审专家。专注于架构设计..."
         skills: ["JavaCodeStyleSkill", "PerformanceSkill"]
+  model-invocation:
+    http:
+      enabled: ${MODEL_INVOCATION_HTTP_ENABLED:false}
+      endpoint: ${MODEL_INVOCATION_HTTP_ENDPOINT:}
+      api-key: ${MODEL_INVOCATION_HTTP_API_KEY:}
+      provider: ${MODEL_INVOCATION_HTTP_PROVIDER:OpenAI-Compatible}
+      model-name: ${MODEL_INVOCATION_HTTP_MODEL:}
+      response-text-pointer: ${MODEL_INVOCATION_HTTP_RESPONSE_TEXT_POINTER:/choices/0/message/content}
+      prompt-tokens-pointer: ${MODEL_INVOCATION_HTTP_PROMPT_TOKENS_POINTER:/usage/prompt_tokens}
+      completion-tokens-pointer: ${MODEL_INVOCATION_HTTP_COMPLETION_TOKENS_POINTER:/usage/completion_tokens}
   mcp:
     enabled: false
     server-urls:

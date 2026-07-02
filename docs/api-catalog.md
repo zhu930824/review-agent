@@ -126,6 +126,12 @@
 | `PUT` | `/api/model-config/strategies/{id}` | 更新审查策略 |
 | `DELETE` | `/api/model-config/strategies/{id}` | 删除审查策略 |
 
+### Invocations
+
+| Method | Path | 用途 | 备注 |
+| --- | --- | --- | --- |
+| `POST` | `/api/model-config/invocations/smoke-test` | 发起一次模型调用烟测 | 走当前 `ModelInvocationPort`，HTTP adapter 开启时会调用真实供应商并写入遥测；未配置时返回 `FAILED` 和可读错误信息 |
+
 ## Governance
 
 来源：后端可读源码确认，`GovernanceController`。
@@ -148,11 +154,14 @@
 | `GET` | `/api/operations/remediation-queue` | 查询运营中心修复队列 | 参数：`limit`，默认 50；返回未驳回 Finding，包含 Review、项目、严重度、人工状态、置信度和跨模型命中信息 |
 | `GET` | `/api/operations/owner-load` | 查询运营责任人负载 | 返回按 Finding 分类映射的责任人、数量和占比 |
 | `GET` | `/api/operations/rule-learning-candidates` | 查询规则学习候选 | 参数：`limit`，默认 20；返回 `PROMOTE_TO_RULE` / `SUPPRESS_PATTERN` 候选 |
+| `GET` | `/api/operations/business-impact` | 查询业务收益估算 | 基于近期 Finding 的 review 数、人工确认/驳回覆盖率、BLOCKER/MAJOR 数量估算节省审查时间和规避返工时间 |
+| `GET` | `/api/operations/telemetry-readiness` | 查询模型遥测接入就绪度 | 基于模型遥测 summary 输出策略级 `READY` / `NEEDS_ATTRIBUTION` / `JUDGE_UNSTABLE` / `NOT_CONNECTED` 状态和建议 |
 
 当前前端接入状态：
 
-- 运营中心全局 KPI 优先读取 `/api/operations/dashboard`，修复队列读取 `/api/operations/remediation-queue`，责任人负载读取 `/api/operations/owner-load`，规则学习视图读取 `/api/operations/rule-learning-candidates`；责任人负载和规则学习候选均保留本地推导兜底，业务收益估算仍保留本地运营假设。
-- 运营中心“策略成本/质量压力”面板调用 `/api/operations/strategy-pressure`，按失败率、误报代理、确认率、策略命中率、Judge 失败率、平均成本和延迟展示后端生成的策略压力分、压力等级和运营建议，并展示跨模型命中率。
+- 运营中心全局 KPI 优先读取 `/api/operations/dashboard`，修复队列读取 `/api/operations/remediation-queue`，责任人负载读取 `/api/operations/owner-load`，规则学习视图读取 `/api/operations/rule-learning-candidates`，业务收益估算读取 `/api/operations/business-impact`；责任人负载、规则学习候选和业务收益均保留本地推导兜底。
+- 运营中心“策略成本/质量压力”面板调用 `/api/operations/strategy-pressure` 和 `/api/operations/telemetry-readiness`，按失败率、误报代理、确认率、策略命中率、Judge 失败率、平均成本和延迟展示后端生成的策略压力分、压力等级、运营建议和遥测接入/归因就绪状态。
+- 治理中心“遥测行动项”面板调用 `/api/operations/telemetry-readiness`，将 `NO_TELEMETRY`、`WEAK_ATTRIBUTION`、`JUDGE_FAILURE` 等 `gapCode` 转成平台集成待办，便于从治理视角继续补齐模型调用遥测、跨模型归因和 Judge 稳定性。
 
 ## Integration
 

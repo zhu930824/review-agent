@@ -1,5 +1,6 @@
 package com.review.agent.service.impl;
 
+import com.review.agent.domain.dto.OperationBusinessImpactVO;
 import com.review.agent.domain.dto.OperationFindingVO;
 import com.review.agent.domain.dto.OperationOwnerLoadVO;
 import com.review.agent.domain.dto.OperationRuleLearningCandidateVO;
@@ -24,6 +25,7 @@ public class OperationsRemediationQueueServiceImpl implements OperationsRemediat
 
     private static final int DEFAULT_LIMIT = 50;
     private static final int MAX_LIMIT = 100;
+    private static final long AVERAGE_MANUAL_REVIEW_MINUTES = 35L;
 
     private final OperationsRemediationQueueRepository repository;
 
@@ -68,6 +70,36 @@ public class OperationsRemediationQueueServiceImpl implements OperationsRemediat
                 .filter(Objects::nonNull)
                 .limit(safeLimit)
                 .toList();
+    }
+
+    @Override
+    public OperationBusinessImpactVO estimateBusinessImpact() {
+        List<OperationFindingVO> findings = repository.listFindings(MAX_LIMIT);
+        long monthlyReviews = findings.stream()
+                .map(OperationFindingVO::getReviewId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .count();
+        long totalFindings = findings.size();
+        long reviewedFindings = findings.stream()
+                .filter(finding -> finding.getHumanStatus() == HumanStatus.CONFIRMED || finding.getHumanStatus() == HumanStatus.DISMISSED)
+                .count();
+        long automationCoveragePercent = totalFindings == 0 ? 0L : Math.round((reviewedFindings * 100D) / totalFindings);
+        long blockerFindings = findings.stream().filter(finding -> finding.getSeverity() == Severity.BLOCKER).count();
+        long majorFindings = findings.stream().filter(finding -> finding.getSeverity() == Severity.MAJOR).count();
+        long hoursSaved = Math.round((monthlyReviews * AVERAGE_MANUAL_REVIEW_MINUTES * automationCoveragePercent) / 100D / 60D);
+        long avoidedReworkHours = Math.round(blockerFindings * 6D + majorFindings * 2.5D);
+
+        OperationBusinessImpactVO vo = new OperationBusinessImpactVO();
+        vo.setMonthlyReviews(monthlyReviews);
+        vo.setAverageManualReviewMinutes(AVERAGE_MANUAL_REVIEW_MINUTES);
+        vo.setAutomationCoveragePercent(automationCoveragePercent);
+        vo.setBlockerFindings(blockerFindings);
+        vo.setMajorFindings(majorFindings);
+        vo.setHoursSaved(hoursSaved);
+        vo.setAvoidedReworkHours(avoidedReworkHours);
+        vo.setExecutiveSummary(businessImpactSummary(monthlyReviews, hoursSaved, avoidedReworkHours));
+        return vo;
     }
 
     private int normalizeLimit(int limit) {
@@ -158,5 +190,13 @@ public class OperationsRemediationQueueServiceImpl implements OperationsRemediat
         vo.setRuleTitle(ruleTitle);
         vo.setReason(reason);
         return vo;
+    }
+
+    private String businessImpactSummary(long monthlyReviews, long hoursSaved, long avoidedReworkHours) {
+        if (monthlyReviews == 0) {
+            return "No recent review data yet; business impact will be estimated after findings are generated.";
+        }
+        return "Based on " + monthlyReviews + " recent reviews, estimated monthly savings are "
+                + hoursSaved + " review hours and " + avoidedReworkHours + " avoided rework hours.";
     }
 }
