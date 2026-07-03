@@ -60,9 +60,18 @@
         </a-form-item>
 
         <a-form-item label="Git 仓库地址" required>
-          <a-input v-model:value="createForm.repoUrl" placeholder="https://github.com/owner/repo">
+          <a-input v-model:value="createForm.repoUrl" placeholder="https://gitlab.com/group/project">
             <template #prefix><LinkOutlined /></template>
           </a-input>
+        </a-form-item>
+
+        <a-form-item label="GitLab Access Token">
+          <a-input-password v-model:value="createForm.gitlabToken" placeholder="输入 GitLab Personal Access Token 启用 API 模式（可选）">
+            <template #prefix><LockOutlined /></template>
+          </a-input-password>
+          <div style="font-size: 12px; color: #94a3b8; margin-top: 4px">
+            配置后将通过 GitLab REST API 直接获取 diff，无需克隆仓库。Token 需 <code>read_api</code> + <code>read_repository</code> 权限。
+          </div>
         </a-form-item>
 
         <a-form-item label="默认分支">
@@ -75,7 +84,7 @@
 
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { PlusOutlined, FolderOutlined, LinkOutlined, FolderOpenOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, FolderOutlined, LinkOutlined, FolderOpenOutlined, LockOutlined } from '@ant-design/icons-vue'
 import { useApi } from '@/composables/useApi'
 import type { Project } from '@/types/project'
 import type { PageResult } from '@/types/api'
@@ -94,6 +103,7 @@ const createForm = reactive({
   description: '',
   repoUrl: '',
   defaultBranch: 'main',
+  gitlabToken: '',
 })
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
@@ -122,10 +132,11 @@ async function handleCreate() {
       repoUrl: createForm.repoUrl,
       defaultBranch: createForm.defaultBranch || 'main',
       description: createForm.description || undefined,
+      gitlabToken: createForm.gitlabToken || undefined,
     })
     if (res.data) {
       showCreateModal.value = false
-      Object.assign(createForm, { name: '', description: '', repoUrl: '', defaultBranch: 'main' })
+      Object.assign(createForm, { name: '', description: '', repoUrl: '', defaultBranch: 'main', gitlabToken: '' })
       await loadProjects()
     }
   } catch {

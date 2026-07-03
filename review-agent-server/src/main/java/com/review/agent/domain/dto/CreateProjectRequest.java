@@ -18,4 +18,11 @@ public class CreateProjectRequest {
     private String defaultBranch = "main";
 
     private String description;
+
+    /**
+     * GitLab Personal Access Token（可选）。
+     * 配置后系统将通过 GitLab REST API 直接获取 diff，无需在本地克隆仓库。
+     * Token 需具备 read_api + read_repository 权限。
+     */
+    private String gitlabToken;
 }

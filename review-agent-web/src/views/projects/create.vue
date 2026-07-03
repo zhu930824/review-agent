@@ -19,9 +19,18 @@
         </a-form-item>
 
         <a-form-item label="Git 仓库地址" required>
-          <a-input v-model:value="form.repoUrl" placeholder="https://github.com/owner/repo">
+          <a-input v-model:value="form.repoUrl" placeholder="https://gitlab.com/group/project">
             <template #prefix><LinkOutlined /></template>
           </a-input>
+        </a-form-item>
+
+        <a-form-item label="GitLab Access Token">
+          <a-input-password v-model:value="form.gitlabToken" placeholder="输入 GitLab Personal Access Token 启用 API 模式（可选）">
+            <template #prefix><LockOutlined /></template>
+          </a-input-password>
+          <div style="font-size: 12px; color: #94a3b8; margin-top: 4px">
+            配置后将通过 GitLab REST API 直接获取 diff，无需在服务器上克隆仓库。Token 需具备 <code>read_api</code> + <code>read_repository</code> 权限。
+          </div>
         </a-form-item>
 
         <a-form-item label="默认分支">
@@ -43,7 +52,7 @@
 import { ref, computed, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '@/composables/useApi'
-import { FolderOutlined, LinkOutlined } from '@ant-design/icons-vue'
+import { FolderOutlined, LinkOutlined, LockOutlined } from '@ant-design/icons-vue'
 import type { Project } from '@/types/project'
 
 const router = useRouter()
@@ -55,6 +64,7 @@ const form = reactive({
   description: '',
   repoUrl: '',
   defaultBranch: 'main',
+  gitlabToken: '',
 })
 
 async function handleSubmit() {
@@ -66,6 +76,7 @@ async function handleSubmit() {
       repoUrl: form.repoUrl,
       defaultBranch: form.defaultBranch || 'main',
       description: form.description || undefined,
+      gitlabToken: form.gitlabToken || undefined,
     })
     if (res.data) {
       router.push(`/projects/${res.data.id}`)

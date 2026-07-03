@@ -74,6 +74,18 @@ public class OperationsController {
         return Result.success(remediationQueueService.listRuleLearningCandidates(limit));
     }
 
+    @PostMapping("/rule-learning-candidates/{findingId}/accept")
+    public Result<Void> acceptRuleLearningCandidate(@PathVariable("findingId") Long findingId) {
+        remediationQueueService.acceptRuleLearningCandidate(findingId);
+        return Result.success();
+    }
+
+    @PostMapping("/rule-learning-candidates/{findingId}/reject")
+    public Result<Void> rejectRuleLearningCandidate(@PathVariable("findingId") Long findingId) {
+        remediationQueueService.rejectRuleLearningCandidate(findingId);
+        return Result.success();
+    }
+
     @GetMapping("/business-impact")
     public Result<OperationBusinessImpactVO> businessImpact() {
         return Result.success(remediationQueueService.estimateBusinessImpact());

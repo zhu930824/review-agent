@@ -1,6 +1,6 @@
 # Review Agent API 清单
 
-> 更新时间：2026-07-01
+> 更新时间：2026-07-03
 
 本文档汇总当前项目已确认的 API。来源分为两类：
 
@@ -17,7 +17,7 @@
 | --- | --- | --- | --- |
 | `POST` | `/api/auth/register` | 注册并返回登录态 | 请求体：`RegisterRequest` |
 | `POST` | `/api/auth/login` | 登录并返回登录态 | 请求体：`AuthRequest` |
-| `POST` | `/api/auth/logout` | 退出登录 | 当前后端不维护 token 黑名单 |
+| `POST` | `/api/auth/logout` | 退出登录 | 前端 Header/Layout 统一通过 `useAuth.logout()` 调用；当前后端不维护 token 黑名单 |
 
 前端认证存储：
 
@@ -38,7 +38,11 @@
 | `PUT` | `/api/projects/{id}` | 更新项目 | 请求体：`UpdateProjectRequest` |
 | `DELETE` | `/api/projects/{id}` | 删除项目 |  |
 | `POST` | `/api/projects/{id}/retry-clone` | 重试仓库克隆 |  |
-| `GET` | `/api/projects/{id}/branches` | 查询项目分支 | Review 创建页使用 |
+| `GET` | `/api/projects/{id}/branches` | 查询项目分支 | 项目详情页展示；Review 创建页使用 |
+
+当前前端接入状态：
+
+- 项目详情页读取 `/api/projects/{id}/branches` 展示仓库分支列表，并支持手动刷新；创建 Review 页也使用该接口作为源分支/目标分支选项。
 
 ## Reviews
 
@@ -146,7 +150,18 @@
 | `GET` | `/api/governance/capabilities` | 查询治理能力目录 |
 | `GET` | `/api/governance/connectors` | 查询集成连接器路线图 |
 | `GET` | `/api/governance/rule-packs` | 查询治理规则包 |
+| `GET` | `/api/governance/rule-pack-changes` | 查询最近规则包变更记录 |
+| `GET` | `/api/governance/rule-pack-versions` | 查询最近规则包版本快照 |
+| `POST` | `/api/governance/rule-pack-changes/{id}/approve` | 批准规则包变更 | 状态更新为 `APPROVED` |
+| `POST` | `/api/governance/rule-pack-changes/{id}/dry-run` | 预览规则包变更 | 返回已有控制项数量、拟新增控制项、快照 JSON 和影响摘要；不写库、不改状态 |
+| `POST` | `/api/governance/rule-pack-changes/{id}/apply` | 应用规则包变更 | 写回 `governance_rule_pack.controls`，生成 `governance_rule_pack_version` 快照，并将状态更新为 `APPLIED` |
+| `POST` | `/api/governance/rule-pack-changes/{id}/reject` | 拒绝规则包变更 | 状态更新为 `REJECTED` |
+| `POST` | `/api/governance/rule-pack-changes/{id}/rollback` | 回滚规则包变更 | 从 `governance_rule_pack.controls` 移除对应控制项，将版本状态标为 `ROLLED_BACK`，并将变更状态更新为 `ROLLED_BACK` |
 | `GET` | `/api/governance/workflows` | 查询工作流模板 |
+
+当前前端接入状态：
+
+- 治理中心已展示最近规则包变更和规则包版本，分别读取 `/api/governance/rule-pack-changes?limit=20`、`/api/governance/rule-pack-versions?limit=20`。Operations 采纳规则学习候选后，会写入 `governance_rule_pack_change`，默认归入 `team-rule-memory` 规则包，状态为 `PROPOSED`；治理中心支持 `PROPOSED -> APPROVED -> APPLIED`，以及 `REJECTED`、`ROLLED_BACK` 状态流转；应用变更时会把拟新增控制项写入 `governance_rule_pack.controls` 并生成 `governance_rule_pack_version` 快照；规则包版本卡片可查看控制项快照 JSON；回滚会移除对应控制项并标记版本回滚；应用前可通过 dry-run 预览拟新增控制项和影响摘要。
 
 ## Operations
 
@@ -161,6 +176,8 @@
 | `POST` | `/api/operations/remediation-queue/{findingId}/dismiss` | 将修复队列风险项标记为误报 | 将 Finding 人工状态更新为 `DISMISSED` |
 | `GET` | `/api/operations/owner-load` | 查询运营责任人负载 | 返回按 Finding 分类映射的责任人、数量和占比 |
 | `GET` | `/api/operations/rule-learning-candidates` | 查询规则学习候选 | 参数：`limit`，默认 20；返回 `PROMOTE_TO_RULE` / `SUPPRESS_PATTERN` 候选 |
+| `POST` | `/api/operations/rule-learning-candidates/{findingId}/accept` | 采纳规则学习候选 | 写入 `operations_rule_learning_decision`，后续候选列表会过滤已决策项 |
+| `POST` | `/api/operations/rule-learning-candidates/{findingId}/reject` | 拒绝规则学习候选 | 写入 `operations_rule_learning_decision`，后续候选列表会过滤已决策项 |
 | `GET` | `/api/operations/business-impact` | 查询业务收益估算 | 基于近期 Finding 的 review 数、人工确认/驳回覆盖率、BLOCKER/MAJOR 数量估算节省审查时间和规避返工时间 |
 | `GET` | `/api/operations/telemetry-readiness` | 查询模型遥测接入就绪度 | 基于模型遥测 summary 输出策略级 `READY` / `NEEDS_ATTRIBUTION` / `JUDGE_UNSTABLE` / `NOT_CONNECTED` 状态和建议 |
 
@@ -168,6 +185,7 @@
 
 - 运营中心全局 KPI 优先读取 `/api/operations/dashboard`，修复队列读取 `/api/operations/remediation-queue`，责任人负载读取 `/api/operations/owner-load`，规则学习视图读取 `/api/operations/rule-learning-candidates`，业务收益估算读取 `/api/operations/business-impact`；责任人负载、规则学习候选和业务收益均保留本地推导兜底。
 - 运营中心修复队列已支持“确认有效”和“标记误报”，分别调用 `/api/operations/remediation-queue/{findingId}/confirm` 和 `/api/operations/remediation-queue/{findingId}/dismiss`，操作完成后刷新队列、Owner 负载、规则学习候选和业务收益估算。
+- 运营中心规则学习候选已支持“采纳”和“拒绝”，分别调用 `/api/operations/rule-learning-candidates/{findingId}/accept` 和 `/api/operations/rule-learning-candidates/{findingId}/reject`；决策持久化到 `operations_rule_learning_decision`，候选列表过滤已决策项；采纳时同步生成 `governance_rule_pack_change` 变更记录。
 - 运营中心“策略成本/质量压力”面板调用 `/api/operations/strategy-pressure` 和 `/api/operations/telemetry-readiness`，按失败率、误报代理、确认率、策略命中率、Judge 失败率、平均成本和延迟展示后端生成的策略压力分、压力等级、运营建议和遥测接入/归因就绪状态。
 - 治理中心“遥测行动项”面板调用 `/api/operations/telemetry-readiness`，将 `NO_TELEMETRY`、`WEAK_ATTRIBUTION`、`JUDGE_FAILURE` 等 `gapCode` 转成平台集成待办，便于从治理视角继续补齐模型调用遥测、跨模型归因和 Judge 稳定性。
 
@@ -200,6 +218,8 @@
 | --- | --- | --- | --- |
 | `GET` | `/api/knowledge/query?keyword={keyword}` | 查询知识节点 | `views/knowledge.vue` |
 
+- 知识图谱页面已将 `/api/knowledge/query` 返回结果转成前端工作台视图：展示全部、记忆、规则、发现项数量，并支持按 `MEMORY`、`RULE`、`FINDING` 类型过滤。
+
 ## AI Gateway
 
 来源：前端调用确认。
@@ -222,7 +242,7 @@
 
 - `model_call_telemetry` 表已落地，用于承接后续真实模型调用链路的耗时、token、成本和失败信息。
 - AI Gateway 页面优先读取 `/api/model-telemetry/summary` 展示调用统计、总失败率、平均成本和策略效果；策略卡片展示调用量、token、平均延迟、平均成本、失败率、确认/驳回/待处理 Finding 数、确认率、误报代理率、策略命中率、跨模型命中率、模型覆盖数和 Judge 失败率；若新接口失败，仍保留旧 `/api/gateway/stats` 兜底。
-- 受保护 Gateway / Review 主流程当前不直接修改；后续可在可维护调用点直接接入 `POST /api/model-telemetry/records`，或在服务层使用 `ModelTelemetryRecorder.recordCall(...)` 包装真实模型调用，自动记录成功/失败、耗时、token 和成本。
+- AI Gateway 页面已提供手动遥测记录面板，可调用 `POST /api/model-telemetry/records` 写入策略、Provider、模型、状态、延迟、token 和成本，并在成功后刷新 `/api/model-telemetry/summary`。后续真实 Review / Agent 调用链路仍可在服务层使用 `ModelTelemetryRecorder.recordCall(...)` 自动记录。
 
 ## 后续 API 演进优先级
 

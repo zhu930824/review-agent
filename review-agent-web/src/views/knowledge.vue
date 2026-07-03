@@ -19,13 +19,37 @@
       <a-button type="primary" @click="search">搜索</a-button>
     </a-space>
 
+    <a-row :gutter="12">
+      <a-col v-for="item in typeStats" :key="item.type" :xs="12" :md="6" style="margin-bottom:12px">
+        <a-card size="small" :body-style="{ padding: '12px' }">
+          <a-space :size="8" style="width:100%;justify-content:space-between">
+            <div>
+              <div style="font-size:12px;color:#94a3b8">{{ item.label }}</div>
+              <div style="font-size:22px;font-weight:800;margin-top:2px">{{ item.count }}</div>
+            </div>
+            <component :is="nodeIcon(item.type)" :style="{fontSize:'18px',color:nodeIconColor(item.type)}" />
+          </a-space>
+        </a-card>
+      </a-col>
+    </a-row>
+
+    <a-space style="width:100%;justify-content:space-between;flex-wrap:wrap">
+      <a-radio-group v-model:value="typeFilter" size="small">
+        <a-radio-button value="ALL">全部</a-radio-button>
+        <a-radio-button value="MEMORY">记忆</a-radio-button>
+        <a-radio-button value="RULE">规则</a-radio-button>
+        <a-radio-button value="FINDING">发现项</a-radio-button>
+      </a-radio-group>
+      <span style="font-size:12px;color:#94a3b8">显示 {{ filteredNodes.length }} / {{ nodes.length }} 个知识节点</span>
+    </a-space>
+
     <div v-if="loading" style="text-align:center;padding:48px 0">
       <a-spin size="large" />
     </div>
 
     <template v-else>
       <a-card
-        v-for="node in nodes"
+        v-for="node in filteredNodes"
         :key="node.id"
         size="small"
         style="margin-bottom:12px"
@@ -58,7 +82,7 @@
         </a-space>
       </a-card>
 
-      <div v-if="!nodes.length && searched" style="text-align:center;padding:32px 0;color:#94a3b8">
+      <div v-if="!filteredNodes.length && searched" style="text-align:center;padding:32px 0;color:#94a3b8">
         未找到匹配的知识节点
       </div>
     </template>
@@ -74,7 +98,35 @@ const { get } = useApi()
 const loading = ref(false)
 const keyword = ref('')
 const searched = ref(false)
-const nodes = ref<any[]>([])
+const typeFilter = ref<'ALL' | 'MEMORY' | 'RULE' | 'FINDING'>('ALL')
+const nodes = ref<KnowledgeNode[]>([])
+
+interface KnowledgeNode {
+  id: string | number
+  type: string
+  title: string
+  content?: string
+  severity?: string
+  tags?: string[]
+}
+
+const filteredNodes = computed(() => {
+  if (typeFilter.value === 'ALL') return nodes.value
+  return nodes.value.filter(node => node.type === typeFilter.value)
+})
+
+const typeStats = computed(() => {
+  const countByType = nodes.value.reduce<Record<string, number>>((acc, node) => {
+    acc[node.type] = (acc[node.type] || 0) + 1
+    return acc
+  }, {})
+  return [
+    { type: 'ALL', label: '全部节点', count: nodes.value.length },
+    { type: 'MEMORY', label: '团队记忆', count: countByType.MEMORY || 0 },
+    { type: 'RULE', label: '规则沉淀', count: countByType.RULE || 0 },
+    { type: 'FINDING', label: '发现项', count: countByType.FINDING || 0 },
+  ]
+})
 
 // 知识节点类型对应的图标和颜色
 const iconMap: Record<string, any> = {
@@ -106,7 +158,7 @@ async function search() {
   loading.value = true
   searched.value = true
   try {
-    const res = await get<any[]>(`/knowledge/query?keyword=${encodeURIComponent(keyword.value)}`)
+    const res = await get<KnowledgeNode[]>(`/knowledge/query?keyword=${encodeURIComponent(keyword.value)}`)
     if (res.data) nodes.value = res.data
   } catch (e) { console.error(e) }
   finally { loading.value = false }
@@ -116,4 +168,3 @@ onMounted(() => {
   search()
 })
 </script>
-

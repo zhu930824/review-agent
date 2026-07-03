@@ -50,6 +50,12 @@ logging:
 
 review-agent:
   repo-base-path: ${REPO_BASE_PATH:E:/code/repos}
+  gitlab:
+    # 默认 GitLab 实例地址（可选，实际以项目配置为准）
+    default-host: ${GITLAB_DEFAULT_HOST:https://gitlab.com}
+    # API 请求超时时间（毫秒）
+    connect-timeout: ${GITLAB_CONNECT_TIMEOUT:10000}
+    read-timeout: ${GITLAB_READ_TIMEOUT:60000}
   auth:
     jwt-secret: ${JWT_SECRET:review-agent-dev-secret-change-me-review-agent-dev-secret}
     jwt-expire-hours: ${JWT_EXPIRE_HOURS:168}

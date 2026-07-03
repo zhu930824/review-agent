@@ -8,7 +8,7 @@
       </a-breadcrumb>
     </div>
     <div style="display: flex; align-items: center; gap: 12px">
-      <a-button type="text" @click="logout">
+      <a-button type="text" @click="handleLogout">
         <template #icon><LogoutOutlined /></template>
         退出
       </a-button>
@@ -35,10 +35,9 @@ const breadcrumbItems = computed(() => {
   })
 })
 
-const { clearAuth } = useAuth()
-const router = useRouter()
-function logout() {
-  clearAuth()
-  router.push('/login')
+const { logout: logoutAuth } = useAuth()
+
+async function handleLogout() {
+  await logoutAuth()
 }
 </script>

@@ -1,6 +1,6 @@
 # Review Agent 当前功能设计与实现现状
 
-> 更新时间：2026-07-02  
+> 更新时间：2026-07-03  
 > 范围：基于当前仓库可读源码、前端页面调用、数据库迁移、`docs/api-catalog.md` 和阶段执行日志整理。部分后端主链路文件仍存在 Esafenet 保护内容，本文只把可读源码和已确认调用契约作为确定实现。
 
 ## 1. 产品定位
@@ -25,7 +25,7 @@ Review Agent 当前已经不是单点的“AI 代码审查工具”，而是在�
 | --- | --- |
 | 后端 | Spring Boot 3.3.5、Java 21、MyBatis-Plus、Flyway、MySQL、Spring AI Alibaba、JGit、JWT |
 | 前端 | Vue 3、Vite 6、Ant Design Vue 4、Vue Router、TypeScript |
-| 数据库 | Flyway 迁移，核心表从 `V1__init_schema.sql` 到 `V12__model_call_telemetry.sql` |
+| 数据库 | Flyway 迁移，核心表从 `V1__init_schema.sql` 到 `V17__add_project_gitlab_config.sql` |
 | API 响应 | 统一 `Result<T>`，前端通过 `/api` base path 调用 |
 | 模型与 Agent | 已有 Spring AI Alibaba、模型配置、Agent/Skill/MCP 结构；部分主链路文件受 Esafenet 保护 |
 | 集成 | GitHub CI Status、Webhook、SARIF upload、PR Summary comment、集成动作日志 |
@@ -36,14 +36,14 @@ Review Agent 当前已经不是单点的“AI 代码审查工具”，而是在�
 
 | 能力域 | 设计目标 | 当前实现状态 |
 | --- | --- | --- |
-| Identity & Auth | 用户注册、登录、JWT 鉴权、前端路由守卫 | 已实现基础能力；RBAC、审计、会话管理仍未完成 |
-| Project & Repo | 项目登记、仓库克隆、分支读取、项目级 Review 管理 | 基础闭环已实现 |
+| Identity & Auth | 用户注册、登录、JWT 鉴权、前端路由守卫 | 已实现基础能力；登录/注册/退出入口统一走 Auth composable；RBAC、审计、会话管理仍未完成 |
+| Project & Repo | 项目登记、仓库克隆/API 直连、分支读取、项目级 Review 管理 | 基础闭环已实现；项目详情页已展示后端仓库分支列表；新增 GitLab API 模式，支持通过 Personal Access Token 直接获取 diff，无需本地克隆 |
 | Review Core | 创建 Review、展示结果、Finding 人工状态、风险/测试/重构分析 | 页面和接口已接入，部分后端 Review 主链路源码仍受保护 |
 | Pre-PR Gate | 后端计算、持久化、人工决策、CI 状态发布 | 后端服务与表结构已实现；前后端决策接口路径存在不一致风险 |
 | Model Config | 模型供应商、模型档案、审查策略、角色绑定 | CRUD 和前端配置页已实现 |
 | Model Invocation & Telemetry | 模型调用抽象、HTTP adapter、调用遥测、策略效果汇总 | `ModelInvocationPort` seam、HTTP adapter、smoke-test、遥测表和汇总已实现；真实主链路迁移未完成 |
-| Governance | 治理能力目录、连接器、规则包、工作流模板、遥测行动项 | 页面和后端只读目录已实现，治理动作流仍偏轻 |
-| Operations | 修复队列、Owner 负载、规则学习候选、业务收益、策略压力、遥测就绪度 | 后端聚合接口和前端运营页已实现；修复队列支持确认有效/标记误报，完整任务生命周期未完成 |
+| Governance | 治理能力目录、连接器、规则包、工作流模板、遥测行动项 | 页面和后端目录已实现，规则包变更记录、dry-run 预览、批准/应用/拒绝/回滚状态流、规则控制项写回、版本快照列表与快照详情查看已接入 |
+| Operations | 修复队列、Owner 负载、规则学习候选、业务收益、策略压力、遥测就绪度 | 后端聚合接口和前端运营页已实现；修复队列支持确认有效/标记误报，规则学习候选支持采纳/拒绝并生成治理变更，完整任务生命周期未完成 |
 | Integration | CI 配置、回写日志、Webhook、SARIF、PR Summary、动作日志 | 多个接口已实现，仍需更多真实平台和权限边界 |
 
 ## 4. 前端页面实现现状
@@ -54,19 +54,25 @@ Review Agent 当前已经不是单点的“AI 代码审查工具”，而是在�
 | --- | --- | --- |
 | `/login` | 登录 | 登录表单、调用 `/auth/login`、写入本地登录态 |
 | `/register` | 注册 | 注册表单、调用 `/auth/register` |
+| 全局 Header / Layout | 退出 | 调用共享 `useAuth.logout()`，先请求 `/auth/logout`，再清理本地登录态并跳转登录页 |
 | `/` | Dashboard | 项目/Review 概览、最近 Review 聚合 |
 | `/projects` | 项目列表 | 分页项目列表、快速创建项目 |
-| `/projects/create` | 创建项目 | 创建项目表单 |
-| `/projects/:id` | 项目详情 | 项目信息、项目下 Review 列表、项目编辑与删除 |
+| `/projects/create` | 创建项目 | 创建项目表单；支持 GitLab Token（可选）切换 API 模式 |
+| `/projects`（Modal） | 项目列表快速创建 | 内联 Modal 表单，同样支持 GitLab Token |
+| `/projects/:id` | 项目详情 | 项目信息、仓库分支列表、项目下 Review 列表、项目编辑与删除 |
 | `/reviews/create` | 创建 Review | 选择项目、分支、策略，创建 Pre-PR Review，并初始化 Gate |
 | `/reviews/:id` | Review 详情 | Review 摘要、Finding、人工状态、Gate、SARIF、PR Summary、风险/测试/重构分析 |
 | `/governance` | 治理中心 | 治理目录、CI 配置、写回日志、集成动作、遥测行动项 |
 | `/operations` | 运营中心 | KPI、修复队列、Owner 负载、规则学习候选、业务收益、策略压力、遥测就绪度 |
 | `/settings/models` | 模型配置 | Provider/Profile/Strategy 管理、角色绑定、模型调用烟测 |
-| `/knowledge` | 知识查询 | 调用知识查询接口 |
-| `/gateway` | AI Gateway | Prompt、统计、模型遥测 summary 优先展示 |
+| `/knowledge` | 知识查询 | 调用知识查询接口，并按记忆、规则、发现项展示统计和筛选 |
+| `/gateway` | AI Gateway | Prompt、统计、模型遥测 summary 优先展示，并支持手动写入遥测记录 |
 
-前端的一个明显特点是：很多页面都已经具备“后端接口优先、本地兜底”的渐进式接入方式。例如 Operations 页面会优先读取后端聚合接口，接口失败时保留局部推导能力，便于分阶段后端化。
+前端的一个明显特点是：很多页面都已经具备”后端接口优先、本地兜底”的渐进式接入方式。例如 Operations 页面会优先读取后端聚合接口，接口失败时保留局部推导能力，便于分阶段后端化。
+
+**前端布局优化（2026-07-03）：**
+- 修复右侧内容区域独立垂直滚动：`app-shell` 高度固定为 `100vh`，`app-content` 使用 `flex: 1; overflow-y: auto`，左侧菜单栏和顶部标题栏保持固定。
+- 治理中心页面卡片布局重构：KPI 卡片统一 `min-height: 120px`；右侧边栏卡片通过 `governance-sidebar-cards` flex 容器 + `gap: 16px` 统一间距；CI 回写就绪度卡片内容区 `max-height: 520px; overflow-y: auto` 避免撑破布局；底部行卡片等高对齐；嵌套卡片内联样式替换为 CSS class。
 
 ## 5. 后端 API 实现现状
 
@@ -80,7 +86,7 @@ Review Agent 当前已经不是单点的“AI 代码审查工具”，而是在�
 | `POST` | `/api/auth/login` | 用户登录 |
 | `POST` | `/api/auth/logout` | 退出登录 |
 
-当前实现是基础 JWT 登录态，适合单团队/内测场景。企业级 RBAC、组织隔离、会话失效、审计日志未完成。
+当前实现是基础 JWT 登录态，适合单团队/内测场景。前端登录、注册和退出入口已统一到 `useAuth`，退出会调用 `/api/auth/logout` 并清理本地登录态；企业级 RBAC、组织隔离、服务端 token 失效/黑名单、审计日志未完成。
 
 ### 5.2 Project
 
@@ -94,7 +100,21 @@ Review Agent 当前已经不是单点的“AI 代码审查工具”，而是在�
 | `POST` | `/api/projects/{id}/retry-clone` | 重试仓库克隆 |
 | `GET` | `/api/projects/{id}/branches` | 查询分支 |
 
-项目表在 `V1__init_schema.sql` 中定义，包含仓库 URL、默认分支、本地路径、克隆状态、错误信息扩展等。
+项目表在 `V1__init_schema.sql` 中定义，包含仓库 URL、默认分支、本地路径、克隆状态、错误信息扩展等。项目详情页已读取 `/api/projects/{id}/branches` 展示仓库分支列表；创建 Review 页也会读取该接口作为源分支/目标分支选项。
+
+**GitLab API 模式（新增）：** 创建项目时可选提供 GitLab Personal Access Token，系统解析仓库 URL 提取 GitLab 实例地址和项目路径，写入 `project_gitlab_config` 表，项目状态直接标记为 `READY`，跳过本地克隆。后续获取分支列表和 diff 均通过 GitLab REST API：
+
+- `GET /api/v4/projects/:id/repository/branches` — 获取分支列表。
+- `GET /api/v4/projects/:id/repository/compare?from=...&to=...` — 获取两分支/提交之间的 diff。
+
+GitLab API 返回的 unified diff 经前置补全 `diff --git` 头部后，复用既有 `DiffParser` 解析为结构化 `FileChange` 列表，对上游调用方完全透明。
+
+核心实现文件：
+- `infrastructure/git/GitLabApiClient.java` — RestTemplate 封装，`PRIVATE-TOKEN` 头认证。
+- `infrastructure/git/GitLabDiffService.java` — 桥接层，调用 API → 拼接 diff → DiffParser 解析。
+- `infrastructure/git/GitLabRepoUrlParser.java` — 支持 HTTPS/SSH URL 解析。
+- `infrastructure/git/GitDiffService.java` — 入口路由层，优先检测 GitLab 配置，有则走 API，无则走本地 JGit。
+- `domain/entity/ProjectGitLabConfig.java` + `V17__add_project_gitlab_config.sql` — 配置持久化。
 
 ### 5.3 Review 与分析
 
@@ -212,7 +232,7 @@ Review 核心表包括 `review`、`review_finding`、`review_model_result`。其
 - 按策略维度聚合的调用表现。
 - 结合 Finding 人工状态推导确认率、误报代理、策略命中、跨模型命中、模型覆盖、Judge 健康。
 
-AI Gateway 页面已经优先读取 `/api/model-telemetry/summary`，如果失败再保留旧 `/api/gateway/stats` 兜底。
+AI Gateway 页面已经优先读取 `/api/model-telemetry/summary`，如果失败再保留旧 `/api/gateway/stats` 兜底；页面也提供手动遥测记录表单，调用 `/api/model-telemetry/records` 写入诊断记录后刷新 summary。
 
 ### 5.7 Governance
 
@@ -221,6 +241,13 @@ AI Gateway 页面已经优先读取 `/api/model-telemetry/summary`，如果失�
 | `GET` | `/api/governance/capabilities` | 治理能力目录 |
 | `GET` | `/api/governance/connectors` | 集成连接器路线图 |
 | `GET` | `/api/governance/rule-packs` | 治理规则包 |
+| `GET` | `/api/governance/rule-pack-changes` | 规则包变更记录 |
+| `GET` | `/api/governance/rule-pack-versions` | 规则包版本快照 |
+| `POST` | `/api/governance/rule-pack-changes/{id}/approve` | 批准规则包变更 |
+| `POST` | `/api/governance/rule-pack-changes/{id}/dry-run` | 预览规则包变更影响 |
+| `POST` | `/api/governance/rule-pack-changes/{id}/apply` | 应用规则包变更，写回控制项并生成版本快照 |
+| `POST` | `/api/governance/rule-pack-changes/{id}/reject` | 拒绝规则包变更 |
+| `POST` | `/api/governance/rule-pack-changes/{id}/rollback` | 回滚规则包变更，移除控制项并标记版本 |
 | `GET` | `/api/governance/workflows` | 工作流模板 |
 
 Governance 页面当前还接入：
@@ -230,8 +257,13 @@ Governance 页面当前还接入：
 - 失败写回手动重试。
 - 最近集成动作日志。
 - Operations telemetry-readiness 转成治理行动项。
+- Operations 采纳规则学习候选后生成的规则包变更记录。
+- 规则包变更 dry-run 预览，返回已有控制项数量、拟新增控制项、快照 JSON 和影响摘要。
+- 规则包变更批准、应用、拒绝、回滚状态流。
+- 规则包变更应用后写回 `governance_rule_pack.controls`，生成 `governance_rule_pack_version` 版本快照，并在治理中心展示最近版本；版本卡片支持查看控制项快照 JSON。
+- 规则包变更回滚后从 `governance_rule_pack.controls` 移除对应控制项，并将版本状态标记为 `ROLLED_BACK`。
 
-当前 Governance 更像“治理控制台和目录入口”，但规则发布、规则版本、Owner、审批、抑制、dry-run 这些治理动作还没有完整闭环。
+当前 Governance 已从“目录入口”推进到能接收运营侧规则包变更，并支持 dry-run、基础状态流转、控制项写回和版本快照；但 Owner、审批人、抑制策略细化和跨版本影响面这些治理动作还没有完整闭环。
 
 ### 5.8 Operations
 
@@ -245,6 +277,8 @@ Governance 页面当前还接入：
 | `POST` | `/api/operations/remediation-queue/{findingId}/dismiss` | 标记风险项为误报 |
 | `GET` | `/api/operations/owner-load` | Owner 负载 |
 | `GET` | `/api/operations/rule-learning-candidates` | 规则学习候选 |
+| `POST` | `/api/operations/rule-learning-candidates/{findingId}/accept` | 采纳规则学习候选 |
+| `POST` | `/api/operations/rule-learning-candidates/{findingId}/reject` | 拒绝规则学习候选 |
 | `GET` | `/api/operations/business-impact` | 业务收益估算 |
 
 Operations 页面当前已经把后端聚合能力接入到多个运营视图：
@@ -256,6 +290,7 @@ Operations 页面当前已经把后端聚合能力接入到多个运营视图：
 - 队列项确认有效/标记误报。
 - Owner 负载。
 - 规则学习候选。
+- 规则学习候选采纳/拒绝，决策持久化到 `operations_rule_learning_decision`。
 - 月度业务收益估算。
 
 当前不足是：这些还是“读模型 + 推导建议”为主，缺少可分配、可流转、可关闭的运营任务实体。
@@ -332,7 +367,24 @@ flowchart TD
     I --> J["AI Gateway / Operations / Governance"]
 ```
 
-### 6.4 运营治理闭环
+### 6.4 GitLab API 模式流程（新增）
+
+```mermaid
+flowchart TD
+    A["用户创建项目（提供 GitLab Token）"] --> B["GitLabRepoUrlParser 解析 URL"]
+    B --> C["写入 project_gitlab_config"]
+    C --> D["项目状态直接 READY（无本地克隆）"]
+    D --> E["用户创建 Review"]
+    E --> F["GitDiffService.getBranchDiff()"]
+    F --> G{"isGitLabConfigured?"}
+    G -->|是| H["GitLabApiClient.compare(from, to)"]
+    H --> I["GitLab Compare API 返回 per-file diffs"]
+    I --> J["拼接 unified diff（补全 diff --git 头）"]
+    J --> K["DiffParser.parse() → List＜FileChange＞"]
+    G -->|否| L["本地 JGit fetch + diff（原有逻辑）"]
+```
+
+### 6.5 运营治理闭环
 
 ```mermaid
 flowchart LR
@@ -355,21 +407,22 @@ flowchart LR
 | Auth | `user_account` |
 | CI/集成 | `integration_ci_config`、`integration_ci_writeback_log`、`integration_webhook_delivery_log`、`integration_action_log` |
 | 遥测 | `model_call_telemetry` |
-| 治理 | `governance_capability`、`governance_rule_pack`、`workflow_template` |
+| 治理 | `governance_capability`、`governance_rule_pack`、`workflow_template`、`governance_rule_pack_change`、`governance_rule_pack_version` |
+| GitLab 集成 | `project_gitlab_config`（V17 新增，项目级 GitLab API 凭证与配置） |
 
 ## 8. 当前实现成熟度评估
 
 | 模块 | 成熟度 | 判断 |
 | --- | --- | --- |
-| 登录/注册 | 可用 | 基础 JWT 闭环可用，缺 RBAC |
-| 项目管理 | 可用 | CRUD、克隆、分支读取具备 |
+| 登录/注册/退出 | 可用 | 基础 JWT 闭环可用，前端退出已接后端 `/auth/logout`，缺 RBAC 和服务端会话失效 |
+| 项目管理 | 可用 | CRUD、本地克隆/API 直连双模式、分支读取和项目详情分支展示具备；GitLab API 模式支持通过 Token 获取 diff，无需本地存储 |
 | Review 创建/详情 | 部分可用 | 前端完整，部分后端主链路受保护 |
 | Pre-PR Gate | 接近可用 | 后端持久化和 CI 发布具备，但接口路径需修正 |
 | 模型配置 | 可用 | CRUD 与种子数据具备 |
 | 模型调用 | 部分可用 | HTTP adapter 和 smoke-test 已有，主审查链路迁移未完成 |
 | 模型遥测 | 可用但数据源不足 | 表、记录、汇总和视图具备，真实调用数据接入不足 |
-| Governance | 部分可用 | 控制台、配置、行动项具备，规则生命周期不足 |
-| Operations | 部分可用 | 聚合视图丰富，队列项可确认/驳回，仍缺完整任务流转 |
+| Governance | 部分可用 | 控制台、配置、行动项、规则包变更记录、dry-run、基础状态流、规则控制项写回、版本快照列表和快照详情查看具备，Owner、审批人与跨版本影响面不足 |
+| Operations | 部分可用 | 聚合视图丰富，队列项可确认/驳回，规则候选可采纳/拒绝并沉淀治理变更，仍缺完整任务流转 |
 | CI/集成 | 部分可用 | GitHub Status、SARIF、PR Summary、Webhook 有实现，生产适配仍需验证 |
 | Agent/Skill/MCP | 原型到半成品 | 结构丰富，执行契约和可审计边界不足 |
 
@@ -402,15 +455,20 @@ flowchart LR
 
 遥测表、记录接口、summary、Operations 和 Governance 消费链路已经具备，但真实模型调用主链路尚未全面迁移到 `ModelInvocationPort`。因此当前指标可能更多依赖手动记录或 smoke-test。
 
-### 9.4 Governance 仍偏目录与诊断
+### 9.4 Governance 仍偏目录与诊断（已改进）
 
-治理中心已经能展示能力、连接器、规则包、工作流模板和行动项，但缺少：
+治理中心已经能展示能力、连接器、规则包、工作流模板和行动项，近期已补齐：
 
-- 规则发布/回滚。
-- 规则 Owner。
-- dry-run。
+- 规则发布/回滚（`APPLIED` / `ROLLED_BACK`）。
+- 规则 Owner（待补）。
+- dry-run 预览。
+- 从 Finding 到规则变更的采纳流（Operations 规则学习候选采纳 → Governance 规则包变更）。
+- 规则包版本快照。
+
+当前仍缺少：
 - 误报抑制审批。
-- 从 Finding 到规则的采纳流。
+- 跨版本影响面分析。
+- 审批人机制。
 
 ### 9.5 Operations 仍缺任务实体
 
@@ -459,14 +517,23 @@ flowchart LR
 1. 修复队列已从只读列表升级为可确认/驳回；下一步再抽象为独立任务实体。
 2. 增加 Owner、状态、SLA、关闭原因。
 3. 支持转外部 Issue。
-4. 规则学习候选支持采纳/拒绝。
+4. 规则学习候选已支持采纳/拒绝；采纳结果已沉淀为规则包变更记录。
 
-### P4：规则生命周期
+### P4：规则生命周期（已部分完成）
 
-1. Rule Pack 版本化。
-2. 发布、回滚、dry-run。
-3. 人工确认 Finding 转规则。
-4. 误报抑制和有效期。
+1. Rule Pack 版本化（已完成）。
+2. 发布、回滚、dry-run（已完成）。
+3. 人工确认 Finding 转规则（已完成 — Operations 规则学习候选采纳 → Governance 规则包变更）。
+4. 误报抑制和有效期（待完成）。
+5. 规则 Owner 和审批人机制（待完成）。
+
+### P5：GitLab API 直连模式（已完成）
+
+1. 创建项目时可选择提供 GitLab Personal Access Token。
+2. 系统通过 GitLab REST API 直接获取 diffs 和分支列表，不克隆仓库到本地。
+3. `GitDiffService` 自动路由：有 GitLab 配置走 API，无则走本地 JGit。
+4. 复用既有 `DiffParser`，对上游调用方透明。
+5. 后续可扩展到 GitHub API、Gitee 等同类平台。
 
 ## 11. 总结
 
@@ -482,5 +549,6 @@ Review Agent 当前已经完成了研发治理平台的主体框架：
 1. 将真实模型调用迁到 `ModelInvocationPort`。
 2. 让 Operations / Governance 消费更多真实遥测，而不是只消费空态和诊断。
 3. 把运营队列从确认/驳回继续升级为带 Owner、SLA、关闭原因的任务实体。
-4. 让规则学习候选支持采纳/拒绝并沉淀为规则包变更。
+4. 规则包变更已支持 dry-run、`PROPOSED`、`APPROVED`、`APPLIED`、`REJECTED`、`ROLLED_BACK`，且 `APPLIED` 会写回规则控制项并生成规则包版本快照；下一步补 Owner、审批人、抑制策略细化和跨版本影响面。
 5. 继续补齐 GitHub Checks / GitLab 等更多 CI 回写形态。
+6. GitLab API 直连模式已实现 → 扩展到 GitHub API、Gitee 等同类平台。

@@ -35,6 +35,43 @@ export interface GovernanceRulePack {
   humanCheckpoints: string[]
 }
 
+export interface GovernanceRulePackChange {
+  id: number
+  rulePackKey: string
+  findingId: number
+  changeType: string
+  title: string
+  rationale?: string | null
+  status: string
+  createdBy?: string | null
+  createdAt?: string | null
+}
+
+export interface GovernanceRulePackVersion {
+  id: number
+  rulePackKey: string
+  sourceChangeId: number
+  versionNo: number
+  versionStatus: string
+  title: string
+  controlsSnapshot?: string | null
+  rationale?: string | null
+  createdBy?: string | null
+  createdAt?: string | null
+}
+
+export interface GovernanceRulePackDryRun {
+  changeId: number
+  rulePackKey: string
+  changeType: string
+  title: string
+  existingControlCount: number
+  proposedControlCount: number
+  proposedControls: string[]
+  controlsSnapshot?: string | null
+  impactSummary: string[]
+}
+
 export interface WorkflowTemplate {
   id: string
   name: string

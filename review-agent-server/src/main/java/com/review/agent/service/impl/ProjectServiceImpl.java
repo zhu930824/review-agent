@@ -9,9 +9,14 @@ import com.review.agent.domain.dto.PageResult;
 import com.review.agent.domain.dto.ProjectVO;
 import com.review.agent.domain.dto.UpdateProjectRequest;
 import com.review.agent.domain.entity.Project;
+import com.review.agent.domain.entity.ProjectGitLabConfig;
 import com.review.agent.domain.enums.ProjectStatus;
 import com.review.agent.domain.exception.CommonExceptionEnum;
+import com.review.agent.infrastructure.git.GitLabRepoUrlParser;
+import com.review.agent.infrastructure.git.GitLabRepoUrlParser.GitLabRepoInfo;
+import com.review.agent.infrastructure.git.GitLabDiffService;
 import com.review.agent.infrastructure.git.GitService;
+import com.review.agent.infrastructure.persistence.ProjectGitLabConfigMapper;
 import com.review.agent.infrastructure.persistence.ProjectMapper;
 import com.review.agent.service.ProjectService;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +34,8 @@ public class ProjectServiceImpl implements ProjectService {
 
     private final ProjectMapper projectMapper;
     private final GitService gitService;
+    private final ProjectGitLabConfigMapper gitLabConfigMapper;
+    private final GitLabDiffService gitLabDiffService;
 
     @Value("${review-agent.repo-base-path:./repos}")
     private String repoBasePath;
@@ -46,13 +53,44 @@ public class ProjectServiceImpl implements ProjectService {
 
         projectMapper.insert(project);
 
-        String localPath = repoBasePath + "/" + project.getId();
-        project.setLocalPath(localPath);
-        projectMapper.updateById(project);
-
-        gitService.cloneRepository(project.getId());
+        // 如果提供了 GitLab token，配置 API 模式
+        if (request.getGitlabToken() != null && !request.getGitlabToken().isBlank()) {
+            setupGitLabConfig(project, request.getGitlabToken());
+            project.setStatus(ProjectStatus.READY);
+            projectMapper.updateById(project);
+            log.info("项目 {} 已配置 GitLab API 模式，跳过本地克隆", project.getId());
+        } else {
+            // 传统模式：本地克隆
+            String localPath = repoBasePath + "/" + project.getId();
+            project.setLocalPath(localPath);
+            projectMapper.updateById(project);
+            gitService.cloneRepository(project.getId());
+        }
 
         return toVO(project);
+    }
+
+    /**
+     * 解析仓库 URL 并保存 GitLab 集成配置。
+     */
+    private void setupGitLabConfig(Project project, String token) {
+        GitLabRepoInfo repoInfo = GitLabRepoUrlParser.parse(project.getRepoUrl());
+        if (repoInfo == null) {
+            log.warn("无法解析 GitLab 仓库 URL: {}, 回退到克隆模式", project.getRepoUrl());
+            project.setLocalPath(repoBasePath + "/" + project.getId());
+            gitService.cloneRepository(project.getId());
+            return;
+        }
+
+        ProjectGitLabConfig config = new ProjectGitLabConfig();
+        config.setProjectId(project.getId());
+        config.setGitlabHost(repoInfo.getHost());
+        config.setGitlabToken(token);
+        config.setProjectPath(repoInfo.getProjectPath());
+        config.setEnabled(true);
+        config.setCreatedAt(LocalDateTime.now());
+        config.setUpdatedAt(LocalDateTime.now());
+        gitLabConfigMapper.insert(config);
     }
 
     @Override
@@ -102,6 +140,12 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     public void retryClone(Long id) {
         Project project = requireProject(id);
+        if (gitLabDiffService.isGitLabConfigured(id)) {
+            // GitLab API 模式无需重试克隆，直接标记为就绪
+            project.setStatus(ProjectStatus.READY);
+            projectMapper.updateById(project);
+            return;
+        }
         if (project.getStatus() != ProjectStatus.ERROR) {
             throw new BizException(CommonExceptionEnum.PROJECT_RETRY_NOT_ALLOWED);
         }
@@ -113,6 +157,9 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     public List<String> getBranches(Long id) {
         requireProject(id);
+        if (gitLabDiffService.isGitLabConfigured(id)) {
+            return gitLabDiffService.getBranches(id);
+        }
         return gitService.getBranches(id);
     }
 

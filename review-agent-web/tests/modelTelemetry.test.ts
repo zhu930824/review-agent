@@ -43,3 +43,16 @@ test('gateway page loads model telemetry summary and renders strategy metrics', 
   assert.match(gatewayView, /modelDiversity/)
   assert.match(gatewayView, /judgeFailureRatePercent/)
 })
+
+test('gateway page can manually record model telemetry', () => {
+  const gatewayView = readFileSync(join(process.cwd(), 'src/views/gateway.vue'), 'utf8')
+
+  assert.match(gatewayView, /手动遥测记录/)
+  assert.match(gatewayView, /ModelCallTelemetryRecord/)
+  assert.match(gatewayView, /telemetryForm/)
+  assert.match(gatewayView, /telemetryStatusOptions/)
+  assert.match(gatewayView, /recordTelemetry/)
+  assert.match(gatewayView, /resetTelemetryForm/)
+  assert.match(gatewayView, /post<ModelCallTelemetryRecord>\('\/model-telemetry\/records'/)
+  assert.match(gatewayView, /await loadModelTelemetrySummary\(\)/)
+})

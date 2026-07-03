@@ -16,6 +16,8 @@ export interface CreateProjectParams {
   repoUrl: string
   defaultBranch?: string
   description?: string
+  /** GitLab Personal Access Token（可选），配置后通过 API 获取 diff，无需本地克隆 */
+  gitlabToken?: string
 }
 
 export interface UpdateProjectParams {

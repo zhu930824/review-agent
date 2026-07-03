@@ -67,6 +67,42 @@
       </a-descriptions>
     </a-card>
 
+    <a-card :bordered="false" style="border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 24px">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px">
+        <a-space :size="12">
+          <div style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 12px; background: #f0fdf4; color: #16a34a">
+            <BranchesOutlined style="font-size: 20px" />
+          </div>
+          <a-typography-title :level="5" style="margin: 0">仓库分支</a-typography-title>
+        </a-space>
+        <a-button size="small" :loading="branchesLoading" @click="loadBranches">
+          <template #icon><ReloadOutlined /></template>
+          刷新
+        </a-button>
+      </div>
+
+      <a-spin :spinning="branchesLoading">
+        <a-alert
+          v-if="branchesError"
+          type="warning"
+          show-icon
+          :message="branchesError"
+          style="margin-bottom: 12px"
+        />
+        <a-space v-if="branches.length" wrap :size="[8, 8]">
+          <a-tag
+            v-for="branch in branches"
+            :key="branch"
+            :color="branch === project?.defaultBranch ? 'processing' : 'default'"
+            style="padding: 4px 8px"
+          >
+            {{ branch }}
+          </a-tag>
+        </a-space>
+        <a-empty v-else-if="!branchesError" description="暂无分支数据" :image="undefined" />
+      </a-spin>
+    </a-card>
+
     <!-- 审查记录卡片 -->
     <a-card :bordered="false" style="border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06)">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px">
@@ -138,7 +174,7 @@ import { ref, computed, reactive, onMounted, onUnmounted, watch, nextTick } from
 import { useRouter, useRoute } from 'vue-router'
 import { useApi } from '@/composables/useApi'
 import { message } from 'ant-design-vue'
-import { ArrowLeftOutlined, InfoCircleOutlined, ReloadOutlined, SearchOutlined, PlusOutlined, ArrowRightOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { ArrowLeftOutlined, InfoCircleOutlined, ReloadOutlined, SearchOutlined, PlusOutlined, ArrowRightOutlined, EditOutlined, DeleteOutlined, BranchesOutlined } from '@ant-design/icons-vue'
 import type { Project } from '@/types/project'
 import type { Review } from '@/types/review'
 import type { PageResult } from '@/types/api'
@@ -154,6 +190,9 @@ const deleting = ref(false)
 const editModalOpen = ref(false)
 const project = ref<Project | null>(null)
 const reviews = ref<Review[]>([])
+const branches = ref<string[]>([])
+const branchesLoading = ref(false)
+const branchesError = ref('')
 const editForm = reactive({
   name: '',
   description: '',
@@ -194,16 +233,33 @@ function statusLabel(status: string): string {
 async function loadData() {
   loading.value = true
   try {
-    const [projectRes, reviewsRes] = await Promise.all([
+    const [projectRes, reviewsRes, branchesRes] = await Promise.all([
       get<Project>(`/projects/${projectId.value}`),
       get<PageResult<Review>>(`/reviews?projectId=${projectId.value}&pageNum=1&pageSize=20`),
+      get<string[]>(`/projects/${projectId.value}/branches`).catch(() => null),
     ])
     if (projectRes.data) project.value = projectRes.data
     if (reviewsRes.data) reviews.value = reviewsRes.data.records
+    branches.value = branchesRes?.data ?? []
+    branchesError.value = branchesRes ? '' : '分支列表暂时不可用，请确认仓库已克隆完成后重试'
   } catch (e) {
     console.error('加载项目详情失败', e)
   } finally {
     loading.value = false
+  }
+}
+
+async function loadBranches() {
+  branchesLoading.value = true
+  branchesError.value = ''
+  try {
+    const res = await get<string[]>(`/projects/${projectId.value}/branches`)
+    branches.value = res.data ?? []
+  } catch (e) {
+    console.error('加载项目分支失败', e)
+    branchesError.value = '分支列表暂时不可用，请确认仓库已克隆完成后重试'
+  } finally {
+    branchesLoading.value = false
   }
 }
 

@@ -20,4 +20,8 @@ public interface OperationsRemediationQueueService {
     void confirmFinding(Long findingId);
 
     void dismissFinding(Long findingId);
+
+    void acceptRuleLearningCandidate(Long findingId);
+
+    void rejectRuleLearningCandidate(Long findingId);
 }

@@ -8,6 +8,8 @@ import com.review.agent.domain.enums.FindingCategory;
 import com.review.agent.domain.enums.HumanStatus;
 import com.review.agent.domain.enums.Severity;
 import com.review.agent.infrastructure.persistence.OperationsRemediationQueueRepository;
+import com.review.agent.infrastructure.persistence.OperationsRuleLearningDecisionRepository;
+import com.review.agent.infrastructure.persistence.GovernanceRulePackChangeRepository;
 import com.review.agent.service.OperationsRemediationQueueService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -17,6 +19,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,6 +31,8 @@ public class OperationsRemediationQueueServiceImpl implements OperationsRemediat
     private static final long AVERAGE_MANUAL_REVIEW_MINUTES = 35L;
 
     private final OperationsRemediationQueueRepository repository;
+    private final OperationsRuleLearningDecisionRepository ruleLearningDecisionRepository;
+    private final GovernanceRulePackChangeRepository governanceRulePackChangeRepository;
 
     @Override
     public List<OperationFindingVO> listQueue(int limit) {
@@ -65,9 +70,11 @@ public class OperationsRemediationQueueServiceImpl implements OperationsRemediat
     @Override
     public List<OperationRuleLearningCandidateVO> listRuleLearningCandidates(int limit) {
         int safeLimit = normalizeLimit(limit);
+        Set<Long> decidedFindingIds = ruleLearningDecisionRepository.listDecidedFindingIds(MAX_LIMIT);
         return repository.listFindings(safeLimit).stream()
                 .map(this::toRuleLearningCandidate)
                 .filter(Objects::nonNull)
+                .filter(candidate -> !decidedFindingIds.contains(candidate.getFindingId()))
                 .limit(safeLimit)
                 .toList();
     }
@@ -110,6 +117,38 @@ public class OperationsRemediationQueueServiceImpl implements OperationsRemediat
     @Override
     public void dismissFinding(Long findingId) {
         repository.updateHumanStatus(findingId, HumanStatus.DISMISSED);
+    }
+
+    @Override
+    public void acceptRuleLearningCandidate(Long findingId) {
+        OperationRuleLearningCandidateVO candidate = requireRuleLearningCandidate(findingId);
+        ruleLearningDecisionRepository.upsertDecision(
+                findingId,
+                candidate.getAction(),
+                "ACCEPTED",
+                "operations",
+                candidate.getReason());
+        governanceRulePackChangeRepository.proposeFromRuleLearningCandidate(candidate);
+    }
+
+    @Override
+    public void rejectRuleLearningCandidate(Long findingId) {
+        OperationRuleLearningCandidateVO candidate = requireRuleLearningCandidate(findingId);
+        ruleLearningDecisionRepository.upsertDecision(
+                findingId,
+                candidate.getAction(),
+                "REJECTED",
+                "operations",
+                "Rejected from operations rule learning review.");
+    }
+
+    private OperationRuleLearningCandidateVO requireRuleLearningCandidate(Long findingId) {
+        return repository.listFindings(MAX_LIMIT).stream()
+                .filter(finding -> Objects.equals(finding.getId(), findingId))
+                .map(this::toRuleLearningCandidate)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Rule learning candidate not found: " + findingId));
     }
 
     private int normalizeLimit(int limit) {

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   AUTH_TOKEN_KEY,
   AUTH_USER_KEY,
@@ -44,4 +46,16 @@ test('clearStoredAuth removes token and user consistently', () => {
   assert.equal(storage.getItem('review-agent-token'), null)
   assert.equal(storage.getItem('review-agent-user'), null)
   assert.equal(getStoredAuthToken(storage), null)
+})
+
+test('layout logout actions use the shared auth composable logout', () => {
+  const defaultLayout = readFileSync(join(process.cwd(), 'src/views/layouts/DefaultLayout.vue'), 'utf8')
+  const appHeader = readFileSync(join(process.cwd(), 'src/components/layout/AppHeader.vue'), 'utf8')
+
+  for (const source of [defaultLayout, appHeader]) {
+    assert.match(source, /logout:\s*logoutAuth/)
+    assert.match(source, /await logoutAuth\(\)/)
+    assert.doesNotMatch(source, /localStorage\.removeItem\('review-agent-token'\)/)
+    assert.doesNotMatch(source, /clearAuth\(\)/)
+  }
 })

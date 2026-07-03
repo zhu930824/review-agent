@@ -1,5 +1,5 @@
 <template>
-  <a-space direction="vertical" :size="16" style="width:100%">
+  <a-space direction="vertical" :size="16" style="width:100%" class="governance-page">
     <!-- 标题栏 -->
     <a-space style="width:100%;justify-content:space-between;flex-wrap:wrap">
       <div>
@@ -23,9 +23,9 @@
     </a-space>
 
     <!-- KPI 卡片 -->
-    <a-row :gutter="16">
-      <a-col :xl="6" :md="12" :span="24" style="margin-bottom:16px">
-        <a-card size="small">
+    <a-row :gutter="16" class="kpi-row">
+      <a-col :xl="6" :md="12" :span="24">
+        <a-card size="small" class="governance-kpi-card">
           <a-space :size="8" style="width:100%;justify-content:space-between">
             <div>
               <div style="font-size:12px;font-weight:600;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px">市场能力覆盖</div>
@@ -40,8 +40,8 @@
         </a-card>
       </a-col>
 
-      <a-col :xl="6" :md="12" :span="24" style="margin-bottom:16px">
-        <a-card size="small">
+      <a-col :xl="6" :md="12" :span="24">
+        <a-card size="small" class="governance-kpi-card">
           <a-space :size="8" style="width:100%;justify-content:space-between">
             <div>
               <div style="font-size:12px;font-weight:600;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px">已启用能力</div>
@@ -53,8 +53,8 @@
         </a-card>
       </a-col>
 
-      <a-col :xl="6" :md="12" :span="24" style="margin-bottom:16px">
-        <a-card size="small">
+      <a-col :xl="6" :md="12" :span="24">
+        <a-card size="small" class="governance-kpi-card">
           <a-space :size="8" style="width:100%;justify-content:space-between">
             <div>
               <div style="font-size:12px;font-weight:600;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px">待补齐关键项</div>
@@ -66,8 +66,8 @@
         </a-card>
       </a-col>
 
-      <a-col :xl="6" :md="12" :span="24" style="margin-bottom:16px">
-        <a-card size="small">
+      <a-col :xl="6" :md="12" :span="24">
+        <a-card size="small" class="governance-kpi-card">
           <a-space :size="8" style="width:100%;justify-content:space-between">
             <div>
               <div style="font-size:12px;font-weight:600;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px">工作流模板</div>
@@ -81,10 +81,10 @@
     </a-row>
 
     <!-- 主内容区 -->
-    <a-row :gutter="16">
+    <a-row :gutter="16" class="governance-content-row">
       <!-- 市场能力对标表格 -->
-      <a-col :xl="16" :span="24">
-        <a-card size="small" style="margin-bottom:16px">
+      <a-col :xl="16" :span="24" style="margin-bottom:16px">
+        <a-card size="small">
           <template #title>
             <a-space :size="8">
               <AppstoreOutlined style="font-size:20px;color:#6366f1" />
@@ -129,8 +129,8 @@
 
       <!-- 右侧边栏 -->
       <a-col :xl="8" :span="24">
-        <!-- 优先落地项 -->
-        <a-card size="small" style="margin-bottom:16px">
+        <div class="governance-sidebar-cards">
+        <a-card size="small">
           <template #title>
             <a-space :size="8">
               <ThunderboltOutlined style="font-size:16px;color:#d97706" />
@@ -142,8 +142,7 @@
               v-for="action in recommendedActions"
               :key="action.id"
               size="small"
-              :body-style="{ padding: '12px' }"
-              style="background:#f8fafc"
+              class="governance-nested-card"
             >
               <a-space :size="8" style="width:100%;justify-content:space-between">
                 <div>
@@ -157,7 +156,7 @@
         </a-card>
 
         <!-- 发布门禁策略包 -->
-        <a-card size="small" style="margin-bottom:16px">
+        <a-card size="small">
           <template #title>
             <a-space :size="8">
               <SafetyOutlined style="font-size:16px;color:#ef4444" />
@@ -189,7 +188,117 @@
           </a-space>
         </a-card>
 
-        <a-card size="small" style="margin-bottom:16px">
+        <a-card size="small">
+          <template #title>
+            <a-space :size="8">
+              <SafetyOutlined style="font-size:16px;color:#059669" />
+              <span style="font-weight:600;font-size:14px">规则包版本</span>
+            </a-space>
+          </template>
+          <a-space v-if="rulePackVersions.length" direction="vertical" :size="8" style="width:100%">
+            <a-card
+              v-for="version in rulePackVersions"
+              :key="version.id"
+              size="small"
+              class="governance-nested-card"
+            >
+              <a-space direction="vertical" :size="6" style="width:100%">
+                <a-space :size="6" wrap>
+                  <a-tag color="processing">{{ version.rulePackKey }}</a-tag>
+                  <a-tag color="green">v{{ version.versionNo }}</a-tag>
+                  <a-tag :color="rulePackVersionStatusColor(version.versionStatus)">{{ version.versionStatus }}</a-tag>
+                </a-space>
+                <div style="font-weight:600;font-size:13px">{{ version.title }}</div>
+                <div style="font-size:12px;color:#64748b;line-height:1.5">{{ version.rationale || '暂无版本说明' }}</div>
+                <div style="font-size:12px;color:#94a3b8">Change #{{ version.sourceChangeId }} · {{ version.createdBy || 'governance' }}</div>
+                <a-button
+                  size="small"
+                  :disabled="!version.controlsSnapshot"
+                  @click="viewRulePackVersionSnapshot(version)"
+                >
+                  查看快照
+                </a-button>
+              </a-space>
+            </a-card>
+          </a-space>
+          <a-empty v-else description="暂无规则包版本" :image="undefined" />
+        </a-card>
+
+        <a-card size="small">
+          <template #title>
+            <a-space :size="8">
+              <ThunderboltOutlined style="font-size:16px;color:#059669" />
+              <span style="font-weight:600;font-size:14px">规则包变更</span>
+            </a-space>
+          </template>
+          <a-space v-if="rulePackChanges.length" direction="vertical" :size="8" style="width:100%">
+            <a-card
+              v-for="change in rulePackChanges"
+              :key="change.id"
+              size="small"
+              class="governance-nested-card"
+            >
+              <a-space direction="vertical" :size="6" style="width:100%">
+                <a-space :size="6" wrap>
+                  <a-tag color="processing">{{ change.rulePackKey }}</a-tag>
+                  <a-tag :color="rulePackChangeStatusColor(change.status)">{{ change.status }}</a-tag>
+                  <a-tag>{{ change.changeType }}</a-tag>
+                </a-space>
+                <div style="font-weight:600;font-size:13px">{{ change.title }}</div>
+                <div style="font-size:12px;color:#64748b;line-height:1.5">{{ change.rationale || '暂无变更说明' }}</div>
+                <div style="font-size:12px;color:#94a3b8">Finding #{{ change.findingId }} · {{ change.createdBy || 'operations' }}</div>
+                <a-space :size="4" wrap>
+                  <a-button
+                    v-if="change.status === 'PROPOSED' || change.status === 'APPROVED'"
+                    size="small"
+                    :loading="actingRulePackChangeId === change.id && actingRulePackChangeAction === 'dry-run'"
+                    @click="previewRulePackChange(change)"
+                  >
+                    预览
+                  </a-button>
+                  <a-button
+                    v-if="change.status === 'PROPOSED'"
+                    type="primary"
+                    size="small"
+                    :loading="actingRulePackChangeId === change.id && actingRulePackChangeAction === 'approve'"
+                    @click="handleRulePackChangeAction(change, 'approve')"
+                  >
+                    批准
+                  </a-button>
+                  <a-button
+                    v-if="change.status === 'APPROVED'"
+                    type="primary"
+                    size="small"
+                    :loading="actingRulePackChangeId === change.id && actingRulePackChangeAction === 'apply'"
+                    @click="handleRulePackChangeAction(change, 'apply')"
+                  >
+                    应用
+                  </a-button>
+                  <a-button
+                    v-if="change.status === 'PROPOSED' || change.status === 'APPROVED'"
+                    size="small"
+                    danger
+                    :loading="actingRulePackChangeId === change.id && actingRulePackChangeAction === 'reject'"
+                    @click="handleRulePackChangeAction(change, 'reject')"
+                  >
+                    拒绝
+                  </a-button>
+                  <a-button
+                    v-if="change.status === 'APPLIED'"
+                    size="small"
+                    :loading="actingRulePackChangeId === change.id && actingRulePackChangeAction === 'rollback'"
+                    @click="handleRulePackChangeAction(change, 'rollback')"
+                  >
+                    回滚
+                  </a-button>
+                </a-space>
+              </a-space>
+            </a-card>
+          </a-space>
+          <a-empty v-else description="暂无规则包变更" :image="undefined" />
+        </a-card>
+
+        <a-card size="small">
           <template #title>
             <a-space :size="8">
               <EnvironmentOutlined style="font-size:16px;color:#0891b2" />
@@ -201,8 +310,7 @@
               v-for="action in telemetryGapActions"
               :key="action.key"
               size="small"
-              :body-style="{ padding: '12px' }"
-              style="background:#f8fafc"
+              class="governance-nested-card"
             >
               <a-space direction="vertical" :size="6" style="width:100%">
                 <a-space :size="6" wrap>
@@ -218,7 +326,7 @@
           <a-empty v-else description="暂无遥测缺口" :image="undefined" />
         </a-card>
 
-        <a-card size="small">
+        <a-card size="small" class="governance-card-scroll">
           <template #title>
             <a-space :size="8">
               <SyncOutlined style="font-size:16px;color:#6366f1" />
@@ -290,8 +398,7 @@
                   v-for="item in ciWritebacks"
                   :key="item.id"
                   size="small"
-                  :body-style="{ padding: '10px 12px' }"
-                  style="background:#f8fafc"
+                  class="governance-sub-card"
                 >
                   <a-space :size="8" style="width:100%;justify-content:space-between;align-items:flex-start">
                     <div style="min-width:0">
@@ -323,8 +430,7 @@
                   v-for="item in integrationActions"
                   :key="item.id"
                   size="small"
-                  :body-style="{ padding: '10px 12px' }"
-                  style="background:#f8fafc"
+                  class="governance-sub-card"
                 >
                   <a-space :size="8" style="width:100%;justify-content:space-between;align-items:flex-start">
                     <div style="min-width:0">
@@ -342,13 +448,14 @@
             </div>
           </a-space>
         </a-card>
+        </div>
       </a-col>
     </a-row>
 
     <!-- 底部区域：集成路线图 + 业务工作流模板 -->
-    <a-row :gutter="16">
+    <a-row :gutter="16" class="governance-bottom-row">
       <!-- 集成路线图 -->
-      <a-col :xl="12" :span="24" style="margin-bottom:16px">
+      <a-col :xl="12" :span="24">
         <a-card size="small">
           <template #title>
             <a-space :size="8">
@@ -363,7 +470,7 @@
                 <span style="font-weight:600;font-size:13px">{{ stage.label }}</span>
               </a-space>
               <div v-for="connector in connectorsByStage[stage.key]" :key="connector.id">
-                <a-card size="small" :body-style="{ padding: '12px' }" style="background:#f8fafc;margin-bottom:8px">
+                <a-card size="small" class="governance-nested-card" style="margin-bottom:8px">
                   <div style="font-weight:600;font-size:13px">{{ connector.name }}</div>
                   <div style="font-size:12px;color:#94a3b8;margin-top:4px;line-height:1.4">{{ connector.businessValue }}</div>
                   <div style="font-size:12px;color:#94a3b8;margin-top:4px">{{ connector.implementationHint }}</div>
@@ -375,7 +482,7 @@
       </a-col>
 
       <!-- 业务工作流模板 -->
-      <a-col :xl="12" :span="24" style="margin-bottom:16px">
+      <a-col :xl="12" :span="24">
         <a-card size="small">
           <template #title>
             <a-space :size="8">
@@ -388,8 +495,7 @@
               v-for="workflow in workflowTemplates"
               :key="workflow.id"
               size="small"
-              :body-style="{ padding: '16px' }"
-              style="background:#f8fafc"
+              class="governance-nested-card"
             >
               <a-space :size="8" style="width:100%;justify-content:space-between;flex-wrap:wrap">
                 <div>
@@ -408,13 +514,79 @@
         </a-card>
       </a-col>
     </a-row>
+
+    <a-modal
+      v-model:open="rulePackDryRunModalOpen"
+      title="规则包变更预览"
+      :footer="null"
+      width="720px"
+    >
+      <a-space v-if="rulePackDryRun" direction="vertical" :size="12" style="width:100%">
+        <a-space :size="6" wrap>
+          <a-tag color="processing">{{ rulePackDryRun.rulePackKey }}</a-tag>
+          <a-tag>{{ rulePackDryRun.changeType }}</a-tag>
+          <a-tag color="blue">已有 {{ rulePackDryRun.existingControlCount }} 条</a-tag>
+          <a-tag color="green">拟新增 {{ rulePackDryRun.proposedControlCount }} 条</a-tag>
+        </a-space>
+        <div style="font-weight:600">{{ rulePackDryRun.title }}</div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:#64748b;margin-bottom:6px">影响摘要</div>
+          <a-space direction="vertical" :size="4" style="width:100%">
+            <div v-for="item in rulePackDryRun.impactSummary" :key="item" style="font-size:12px;color:#475569;line-height:1.5">{{ item }}</div>
+          </a-space>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:#64748b;margin-bottom:6px">拟新增控制项</div>
+          <a-space direction="vertical" :size="6" style="width:100%">
+            <a-card
+              v-for="control in rulePackDryRun.proposedControls"
+              :key="control"
+              size="small"
+              :body-style="{ padding: '10px 12px' }"
+              style="background:#f8fafc"
+            >
+              <span style="font-size:12px;color:#334155;line-height:1.5">{{ control }}</span>
+            </a-card>
+          </a-space>
+        </div>
+        <div v-if="rulePackDryRun.controlsSnapshot">
+          <div style="font-size:12px;font-weight:600;color:#64748b;margin-bottom:6px">快照 JSON</div>
+          <pre style="margin:0;padding:12px;background:#0f172a;color:#e2e8f0;border-radius:8px;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;max-height:240px;overflow:auto">{{ formatJson(rulePackDryRun.controlsSnapshot) }}</pre>
+        </div>
+      </a-space>
+      <a-empty v-else description="暂无预览数据" :image="undefined" />
+    </a-modal>
+
+    <a-modal
+      v-model:open="rulePackVersionSnapshotModalOpen"
+      title="规则包版本快照"
+      :footer="null"
+      width="760px"
+    >
+      <a-space v-if="selectedRulePackVersion" direction="vertical" :size="12" style="width:100%">
+        <a-space :size="6" wrap>
+          <a-tag color="processing">{{ selectedRulePackVersion.rulePackKey }}</a-tag>
+          <a-tag color="green">v{{ selectedRulePackVersion.versionNo }}</a-tag>
+          <a-tag :color="rulePackVersionStatusColor(selectedRulePackVersion.versionStatus)">{{ selectedRulePackVersion.versionStatus }}</a-tag>
+          <a-tag>Change #{{ selectedRulePackVersion.sourceChangeId }}</a-tag>
+        </a-space>
+        <div style="font-weight:600">{{ selectedRulePackVersion.title }}</div>
+        <div style="font-size:12px;color:#64748b;line-height:1.5">{{ selectedRulePackVersion.rationale || '暂无版本说明' }}</div>
+        <div v-if="selectedRulePackVersion.controlsSnapshot">
+          <div style="font-size:12px;font-weight:600;color:#64748b;margin-bottom:6px">控制项快照 JSON</div>
+          <pre style="margin:0;padding:12px;background:#0f172a;color:#e2e8f0;border-radius:8px;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;max-height:360px;overflow:auto">{{ formatJson(selectedRulePackVersion.controlsSnapshot) }}</pre>
+        </div>
+        <a-empty v-else description="暂无快照内容" :image="undefined" />
+      </a-space>
+      <a-empty v-else description="暂无版本数据" :image="undefined" />
+    </a-modal>
   </a-space>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { BarChartOutlined, CheckCircleOutlined, ExclamationCircleOutlined, AppstoreOutlined, ThunderboltOutlined, SafetyOutlined, UserOutlined, EnvironmentOutlined, SyncOutlined, PlayCircleOutlined, SettingOutlined, ClockCircleOutlined } from '@ant-design/icons-vue'
-import type { BusinessImpact, CapabilityStatus, CiStatusConfigVO, CiStatusWritebackLogVO, GovernanceRulePack, IntegrationActionLogVO, IntegrationConnector, MarketCapability, RolloutStage, WorkflowTemplate } from '@/types/governance'
+import type { BusinessImpact, CapabilityStatus, CiStatusConfigVO, CiStatusWritebackLogVO, GovernanceRulePack, GovernanceRulePackChange, GovernanceRulePackDryRun, GovernanceRulePackVersion, IntegrationActionLogVO, IntegrationConnector, MarketCapability, RolloutStage, WorkflowTemplate } from '@/types/governance'
 import type { TelemetryReadinessItem } from '@/types/operations'
 import { useApi } from '@/composables/useApi'
 import { compileGovernancePolicyPack, getCapabilityCoverageSummary, getCiStatusIntegrationReadiness, getConnectorsByStage, getRecommendedNextActions, governanceRulePacks as fallbackRulePacks, integrationConnectors as fallbackConnectors, marketCapabilities as fallbackCapabilities, workflowTemplates as fallbackWorkflowTemplates } from '@/utils/governanceCatalog'
@@ -425,6 +597,14 @@ const marketCapabilities = ref<MarketCapability[]>(fallbackCapabilities)
 const integrationConnectors = ref<IntegrationConnector[]>(fallbackConnectors)
 const governanceRulePacks = ref<GovernanceRulePack[]>(fallbackRulePacks)
 const workflowTemplates = ref<WorkflowTemplate[]>(fallbackWorkflowTemplates)
+const rulePackChanges = ref<GovernanceRulePackChange[]>([])
+const rulePackVersions = ref<GovernanceRulePackVersion[]>([])
+const actingRulePackChangeId = ref<number | null>(null)
+const actingRulePackChangeAction = ref<'dry-run' | 'approve' | 'apply' | 'reject' | 'rollback' | null>(null)
+const rulePackDryRun = ref<GovernanceRulePackDryRun | null>(null)
+const rulePackDryRunModalOpen = ref(false)
+const selectedRulePackVersion = ref<GovernanceRulePackVersion | null>(null)
+const rulePackVersionSnapshotModalOpen = ref(false)
 const coverage = computed(() => getCapabilityCoverageSummary(marketCapabilities.value))
 const recommendedActions = computed(() => getRecommendedNextActions(5, marketCapabilities.value))
 const connectorsByStage = computed(() => getConnectorsByStage(integrationConnectors.value))
@@ -458,19 +638,83 @@ const telemetryGapActions = computed(() => buildTelemetryGapActions(telemetryRea
 
 async function loadGovernanceCatalog() {
   try {
-    const [capabilitiesRes, connectorsRes, rulePacksRes, workflowsRes] = await Promise.all([
+    const [capabilitiesRes, connectorsRes, rulePacksRes, workflowsRes, rulePackChangesRes, rulePackVersionsRes] = await Promise.all([
       get<MarketCapability[]>('/governance/capabilities').catch(() => null),
       get<IntegrationConnector[]>('/governance/connectors').catch(() => null),
       get<GovernanceRulePack[]>('/governance/rule-packs').catch(() => null),
       get<WorkflowTemplate[]>('/governance/workflows').catch(() => null),
+      get<GovernanceRulePackChange[]>('/governance/rule-pack-changes?limit=20').catch(() => null),
+      get<GovernanceRulePackVersion[]>('/governance/rule-pack-versions?limit=20').catch(() => null),
     ])
     if (capabilitiesRes?.data?.length) marketCapabilities.value = capabilitiesRes.data
     if (connectorsRes?.data?.length) integrationConnectors.value = connectorsRes.data
     if (rulePacksRes?.data?.length) governanceRulePacks.value = rulePacksRes.data
     if (workflowsRes?.data?.length) workflowTemplates.value = workflowsRes.data
+    rulePackChanges.value = rulePackChangesRes?.data ?? []
+    rulePackVersions.value = rulePackVersionsRes?.data ?? []
   } catch (e) {
     console.error('加载治理目录失败，将使用本地目录兜底', e)
   }
+}
+
+async function loadRulePackChanges() {
+  try {
+    const res = await get<GovernanceRulePackChange[]>('/governance/rule-pack-changes?limit=20')
+    rulePackChanges.value = res.data ?? []
+  } catch (e) {
+    console.error('加载规则包变更失败', e)
+  }
+}
+
+async function loadRulePackVersions() {
+  try {
+    const res = await get<GovernanceRulePackVersion[]>('/governance/rule-pack-versions?limit=20')
+    rulePackVersions.value = res.data ?? []
+  } catch (e) {
+    console.error('加载规则包版本失败', e)
+  }
+}
+
+async function handleRulePackChangeAction(change: GovernanceRulePackChange, action: 'approve' | 'apply' | 'reject' | 'rollback') {
+  actingRulePackChangeId.value = change.id
+  actingRulePackChangeAction.value = action
+  try {
+    await post<unknown>(`/governance/rule-pack-changes/${change.id}/${action}`)
+    await Promise.all([loadRulePackChanges(), loadRulePackVersions()])
+  } catch (e) {
+    console.error('更新规则包变更状态失败', e)
+  } finally {
+    actingRulePackChangeId.value = null
+    actingRulePackChangeAction.value = null
+  }
+}
+
+async function previewRulePackChange(change: GovernanceRulePackChange) {
+  actingRulePackChangeId.value = change.id
+  actingRulePackChangeAction.value = 'dry-run'
+  try {
+    const res = await post<GovernanceRulePackDryRun>(`/governance/rule-pack-changes/${change.id}/dry-run`)
+    rulePackDryRun.value = res.data ?? null
+    rulePackDryRunModalOpen.value = true
+  } catch (e) {
+    console.error('预览规则包变更失败', e)
+  } finally {
+    actingRulePackChangeId.value = null
+    actingRulePackChangeAction.value = null
+  }
+}
+
+function formatJson(value: string) {
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2)
+  } catch {
+    return value
+  }
+}
+
+function viewRulePackVersionSnapshot(version: GovernanceRulePackVersion) {
+  selectedRulePackVersion.value = version
+  rulePackVersionSnapshotModalOpen.value = true
 }
 
 function applyCiStatusConfig(config: CiStatusConfigVO) {
@@ -595,4 +839,6 @@ function impactColor(impact: BusinessImpact) { return { HIGH: 'red', MEDIUM: 'bl
 function categoryLabel(category: string) { return { AI_REVIEW: 'AI 审查', QUALITY: '质量', SECURITY: '安全', INTEGRATION: '集成', KNOWLEDGE: '知识库', ANALYTICS: '分析' }[category] ?? category }
 function writebackStatusColor(status: string) { return { SUCCESS: 'green', FAILED: 'red', SKIPPED: 'default' }[status] ?? 'default' }
 function actionStatusColor(status: string) { return { UPLOADED: 'green', POSTED: 'green', FAILED: 'red', SKIPPED: 'default' }[status] ?? 'default' }
+function rulePackChangeStatusColor(status: string) { return { PROPOSED: 'orange', APPROVED: 'blue', APPLIED: 'green', REJECTED: 'red', ROLLED_BACK: 'default' }[status] ?? 'default' }
+function rulePackVersionStatusColor(status: string) { return { ACTIVE: 'green', ARCHIVED: 'default', ROLLED_BACK: 'orange' }[status] ?? 'default' }
 </script>

@@ -241,6 +241,23 @@
                   {{ candidate.action === 'PROMOTE_TO_RULE' ? '固化' : '降噪' }}
                 </a-tag>
               </a-space>
+              <a-space :size="4" wrap style="margin-top:10px">
+                <a-button
+                  type="primary"
+                  size="small"
+                  :loading="actingRuleCandidateId === candidate.findingId && actingRuleCandidateAction === 'ACCEPT'"
+                  @click="handleRuleLearningAction(candidate, 'ACCEPT')"
+                >
+                  采纳
+                </a-button>
+                <a-button
+                  size="small"
+                  :loading="actingRuleCandidateId === candidate.findingId && actingRuleCandidateAction === 'REJECT'"
+                  @click="handleRuleLearningAction(candidate, 'REJECT')"
+                >
+                  拒绝
+                </a-button>
+              </a-space>
             </a-card>
           </a-space>
         </a-card>
@@ -289,6 +306,8 @@ const { get, post } = useApi()
 const remediationQueueLoading = ref(false)
 const actingFindingId = ref<number | null>(null)
 const actingFindingAction = ref<'CONFIRM' | 'DISMISS' | null>(null)
+const actingRuleCandidateId = ref<number | null>(null)
+const actingRuleCandidateAction = ref<'ACCEPT' | 'REJECT' | null>(null)
 const operationalFindings = ref<OperationalFinding[]>([])
 const operationDashboard = ref<OperationDashboard | null>(null)
 const backendOwnerLoad = ref<OperationOwnerLoad[]>([])
@@ -458,6 +477,28 @@ async function handleQueueAction(record: RemediationQueueItem, action: 'CONFIRM'
   } finally {
     actingFindingId.value = null
     actingFindingAction.value = null
+  }
+}
+
+async function handleRuleLearningAction(candidate: RuleLearningCandidate, action: 'ACCEPT' | 'REJECT') {
+  actingRuleCandidateId.value = candidate.findingId
+  actingRuleCandidateAction.value = action
+  const endpoint = action === 'ACCEPT'
+    ? `/operations/rule-learning-candidates/${candidate.findingId}/accept`
+    : `/operations/rule-learning-candidates/${candidate.findingId}/reject`
+  try {
+    await post(endpoint)
+    message.success(action === 'ACCEPT' ? '已采纳规则学习候选' : '已拒绝规则学习候选')
+    await Promise.all([
+      loadRuleLearningCandidates(),
+      loadBusinessImpact(),
+    ])
+  } catch (e) {
+    console.error('更新规则学习候选失败', e)
+    message.error('更新规则学习候选失败')
+  } finally {
+    actingRuleCandidateId.value = null
+    actingRuleCandidateAction.value = null
   }
 }
 

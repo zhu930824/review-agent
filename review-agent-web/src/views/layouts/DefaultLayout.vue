@@ -54,12 +54,12 @@
       </a-menu>
     </a-layout-sider>
 
-    <a-layout style="background: transparent">
+    <a-layout class="app-main-layout">
       <a-layout-header class="app-header">
         <a-breadcrumb>
           <a-breadcrumb-item v-for="item in breadcrumbItems" :key="item">{{ item }}</a-breadcrumb-item>
         </a-breadcrumb>
-        <a-button type="text" @click="logout" style="color: var(--ra-color-text-muted)"><LogoutOutlined /> 退出</a-button>
+        <a-button type="text" @click="handleLogout" style="color: var(--ra-color-text-muted)"><LogoutOutlined /> 退出</a-button>
       </a-layout-header>
       <a-layout-content class="app-content">
         <router-view />
@@ -76,9 +76,11 @@ import {
   AppstoreOutlined, PieChartOutlined, GlobalOutlined, ApiOutlined, SettingOutlined,
   LogoutOutlined
 } from '@ant-design/icons-vue'
+import { useAuth } from '@/composables/useAuth'
 
 const route = useRoute()
 const router = useRouter()
+const { logout: logoutAuth } = useAuth()
 
 const breadcrumbMap: Record<string, string> = {
   '': '仪表盘', projects: '项目管理', reviews: '审查详情',
@@ -107,8 +109,7 @@ function navigate({ key }: { key: string }) {
   router.push(map[key] || '/')
 }
 
-function logout() {
-  localStorage.removeItem('review-agent-token')
-  router.push('/login')
+async function handleLogout() {
+  await logoutAuth()
 }
 </script>

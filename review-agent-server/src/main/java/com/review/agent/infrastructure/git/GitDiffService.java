@@ -17,8 +17,12 @@ public class GitDiffService {
     private final GitOperations gitOperations;
     private final DiffParser diffParser;
     private final ProjectMapper projectMapper;
+    private final GitLabDiffService gitLabDiffService;
 
     public List<FileChange> getBranchDiff(Long projectId, String sourceBranch, String targetBranch) {
+        if (gitLabDiffService.isGitLabConfigured(projectId)) {
+            return gitLabDiffService.getBranchDiff(projectId, sourceBranch, targetBranch);
+        }
         String localPath = resolveLocalPath(projectId);
         gitOperations.fetchRepository(localPath);
         String diffOutput = gitOperations.getDiff(localPath, "origin/" + sourceBranch, "origin/" + targetBranch);
@@ -26,12 +30,18 @@ public class GitDiffService {
     }
 
     public List<FileChange> getCommitDiff(Long projectId, String sourceCommit, String targetCommit) {
+        if (gitLabDiffService.isGitLabConfigured(projectId)) {
+            return gitLabDiffService.getCommitDiff(projectId, sourceCommit, targetCommit);
+        }
         String localPath = resolveLocalPath(projectId);
         String diffOutput = gitOperations.getDiff(localPath, sourceCommit, targetCommit);
         return diffParser.parse(diffOutput);
     }
 
     public String getLatestCommit(Long projectId, String branch) {
+        if (gitLabDiffService.isGitLabConfigured(projectId)) {
+            return gitLabDiffService.getLatestCommit(projectId, branch);
+        }
         String localPath = resolveLocalPath(projectId);
         gitOperations.fetchRepository(localPath);
         return gitOperations.getLatestCommit(localPath, "origin/" + branch);

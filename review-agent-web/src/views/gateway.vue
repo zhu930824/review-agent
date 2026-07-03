@@ -116,12 +116,87 @@
         </a-space>
       </div>
     </a-card>
+    <a-card size="small" title="手动遥测记录">
+      <a-form layout="vertical" :model="telemetryForm">
+        <a-row :gutter="12">
+          <a-col :xs="24" :md="6">
+            <a-form-item label="Strategy">
+              <a-input v-model:value="telemetryForm.strategyKey" placeholder="quality-gate" />
+            </a-form-item>
+          </a-col>
+          <a-col :xs="24" :md="6">
+            <a-form-item label="Provider">
+              <a-input v-model:value="telemetryForm.provider" placeholder="dashscope" />
+            </a-form-item>
+          </a-col>
+          <a-col :xs="24" :md="6">
+            <a-form-item label="Model">
+              <a-input v-model:value="telemetryForm.modelName" placeholder="qwen-plus" />
+            </a-form-item>
+          </a-col>
+          <a-col :xs="24" :md="6">
+            <a-form-item label="Status">
+              <a-select v-model:value="telemetryForm.status" :options="telemetryStatusOptions" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-row :gutter="12">
+          <a-col :xs="24" :md="6">
+            <a-form-item label="Latency ms">
+              <a-input-number v-model:value="telemetryForm.latencyMs" :min="0" style="width:100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :xs="24" :md="6">
+            <a-form-item label="Prompt Tokens">
+              <a-input-number v-model:value="telemetryForm.promptTokens" :min="0" style="width:100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :xs="24" :md="6">
+            <a-form-item label="Completion Tokens">
+              <a-input-number v-model:value="telemetryForm.completionTokens" :min="0" style="width:100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :xs="24" :md="6">
+            <a-form-item label="Cost Micro Cents">
+              <a-input-number v-model:value="telemetryForm.costMicroCents" :min="0" style="width:100%" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-row :gutter="12">
+          <a-col :xs="24" :md="8">
+            <a-form-item label="Role">
+              <a-input v-model:value="telemetryForm.role" placeholder="WORKER" />
+            </a-form-item>
+          </a-col>
+          <a-col :xs="24" :md="8">
+            <a-form-item label="Prompt Version">
+              <a-input v-model:value="telemetryForm.promptVersion" placeholder="manual-telemetry-v1" />
+            </a-form-item>
+          </a-col>
+          <a-col :xs="24" :md="8">
+            <a-form-item label="Review ID">
+              <a-input-number v-model:value="telemetryForm.reviewId" :min="1" style="width:100%" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-form-item label="Error Message">
+          <a-textarea v-model:value="telemetryForm.errorMessage" :rows="2" placeholder="失败时填写错误信息" />
+        </a-form-item>
+        <a-space :size="8" wrap>
+          <a-button type="primary" :loading="telemetryRecording" @click="recordTelemetry">
+            写入遥测记录
+          </a-button>
+          <a-button @click="resetTelemetryForm">重置</a-button>
+        </a-space>
+      </a-form>
+    </a-card>
   </a-space>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { reactive, ref, onMounted } from 'vue'
 import { useApi } from '@/composables/useApi'
+import { message } from 'ant-design-vue'
 
 interface StrategyTelemetry {
   strategyKey: string
@@ -158,8 +233,25 @@ interface ModelTelemetrySummary {
   strategies: StrategyTelemetry[]
 }
 
-const { get } = useApi()
+interface ModelCallTelemetryRecord {
+  id: number
+  reviewId?: number
+  strategyKey: string
+  provider: string
+  modelName: string
+  role: string
+  promptVersion: string
+  status: string
+  latencyMs?: number
+  promptTokens?: number
+  completionTokens?: number
+  costMicroCents?: number
+  errorMessage?: string
+}
+
+const { get, post } = useApi()
 const promptsLoading = ref(false)
+const telemetryRecording = ref(false)
 const prompts = ref<any[]>([])
 const selectedPrompt = ref<any>(null)
 const stats = ref<any>(null)
@@ -172,6 +264,24 @@ const modelTelemetrySummary = ref<ModelTelemetrySummary>({
   failureRatePercent: 0,
   avgCostMicroCents: 0,
   strategies: [],
+})
+const telemetryStatusOptions = [
+  { value: 'SUCCESS', label: 'SUCCESS' },
+  { value: 'FAILED', label: 'FAILED' },
+]
+const telemetryForm = reactive({
+  reviewId: undefined as number | undefined,
+  strategyKey: 'manual-gateway-check',
+  provider: 'manual',
+  modelName: 'manual-model',
+  role: 'WORKER',
+  promptVersion: 'manual-telemetry-v1',
+  status: 'SUCCESS',
+  latencyMs: 1200,
+  promptTokens: 100,
+  completionTokens: 50,
+  costMicroCents: 0,
+  errorMessage: '',
 })
 
 function formatTokens(n: number): string {
@@ -216,6 +326,50 @@ async function loadModelTelemetrySummary() {
   } catch (e) {
     console.error(e)
     await loadStats()
+  }
+}
+
+function resetTelemetryForm() {
+  Object.assign(telemetryForm, {
+    reviewId: undefined,
+    strategyKey: 'manual-gateway-check',
+    provider: 'manual',
+    modelName: 'manual-model',
+    role: 'WORKER',
+    promptVersion: 'manual-telemetry-v1',
+    status: 'SUCCESS',
+    latencyMs: 1200,
+    promptTokens: 100,
+    completionTokens: 50,
+    costMicroCents: 0,
+    errorMessage: '',
+  })
+}
+
+async function recordTelemetry() {
+  telemetryRecording.value = true
+  try {
+    await post<ModelCallTelemetryRecord>('/model-telemetry/records', {
+      reviewId: telemetryForm.reviewId,
+      strategyKey: telemetryForm.strategyKey,
+      provider: telemetryForm.provider,
+      modelName: telemetryForm.modelName,
+      role: telemetryForm.role,
+      promptVersion: telemetryForm.promptVersion,
+      status: telemetryForm.status,
+      latencyMs: telemetryForm.latencyMs,
+      promptTokens: telemetryForm.promptTokens,
+      completionTokens: telemetryForm.completionTokens,
+      costMicroCents: telemetryForm.costMicroCents,
+      errorMessage: telemetryForm.status === 'FAILED' ? telemetryForm.errorMessage : '',
+    })
+    message.success('遥测记录已写入')
+    await loadModelTelemetrySummary()
+  } catch (e) {
+    console.error(e)
+    message.error('遥测记录写入失败')
+  } finally {
+    telemetryRecording.value = false
   }
 }
 
