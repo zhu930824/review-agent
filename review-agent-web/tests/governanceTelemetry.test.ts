@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { buildTelemetryGapActions, telemetryReadinessColor } from '../src/utils/governanceTelemetry'
+import { buildCiHealthActions, ciHealthActionColor, buildTelemetryGapActions, telemetryReadinessColor } from '../src/utils/governanceTelemetry'
+import type { CiIntegrationHealthVO } from '../src/types/governance'
 import type { TelemetryReadinessItem } from '../src/types/operations'
 
 test('buildTelemetryGapActions maps readiness gaps into governance actions', () => {
@@ -43,6 +44,31 @@ test('telemetryReadinessColor maps levels to tag colors', () => {
   assert.equal(telemetryReadinessColor('NOT_CONNECTED'), 'default')
 })
 
+test('buildCiHealthActions turns unhealthy connectors into governance actions', () => {
+  const actions = buildCiHealthActions([
+    ciHealth('github-checks', 'GITHUB', 'HEALTHY', 'SUCCESS'),
+    ciHealth('gitlab-merge-request', 'GITLAB', 'UNHEALTHY', 'FAILED'),
+    ciHealth('jenkins-pipeline', 'JENKINS', 'DEGRADED', 'SUCCESS', 'BUILDING'),
+    ciHealth('github-checks-empty', 'GITHUB', 'NO_DATA'),
+  ])
+
+  assert.deepEqual(actions.map(action => action.connectorKey), [
+    'gitlab-merge-request',
+    'jenkins-pipeline',
+    'github-checks-empty',
+  ])
+  assert.equal(actions[0].severity, 'critical')
+  assert.equal(actions[1].severity, 'warning')
+  assert.equal(actions[1].latestSignal, 'SUCCESS / BUILDING')
+  assert.match(actions[2].recommendation, /smoke test/)
+})
+
+test('ciHealthActionColor maps severities to tag colors', () => {
+  assert.equal(ciHealthActionColor('critical'), 'red')
+  assert.equal(ciHealthActionColor('warning'), 'orange')
+  assert.equal(ciHealthActionColor('info'), 'default')
+})
+
 function item(
   strategyKey: string,
   readinessLevel: TelemetryReadinessItem['readinessLevel'],
@@ -59,5 +85,27 @@ function item(
     readinessLevel,
     gapCode,
     recommendation,
+  }
+}
+
+function ciHealth(
+  connectorKey: string,
+  provider: string,
+  healthStatus: CiIntegrationHealthVO['healthStatus'],
+  latestWritebackStatus: string | null = null,
+  latestExternalResult: string | null = null,
+): CiIntegrationHealthVO {
+  return {
+    connectorKey,
+    provider,
+    healthStatus,
+    totalCount: 1,
+    successCount: latestWritebackStatus === 'SUCCESS' ? 1 : 0,
+    failedCount: latestWritebackStatus === 'FAILED' ? 1 : 0,
+    skippedCount: latestWritebackStatus === 'SKIPPED' ? 1 : 0,
+    latestWritebackStatus,
+    latestExternalResult,
+    latestAt: null,
+    summary: null,
   }
 }

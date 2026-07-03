@@ -21,6 +21,11 @@ public class CiStatusWritebackLog {
     private String state;
     private String writebackStatus;
     private String requestUrl;
+    private String externalQueueUrl;
+    private String externalBuildUrl;
+    private String externalBuildNumber;
+    private String externalBuildResult;
+    private LocalDateTime externalResultUpdatedAt;
     private String errorMessage;
     private Integer retryCount;
     private LocalDateTime nextRetryAt;

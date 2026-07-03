@@ -90,14 +90,27 @@
           style="margin-bottom: 12px"
         />
         <a-space v-if="branches.length" wrap :size="[8, 8]">
-          <a-tag
+          <span
             v-for="branch in branches"
             :key="branch"
-            :color="branch === project?.defaultBranch ? 'processing' : 'default'"
-            style="padding: 4px 8px"
+            style="display:inline-flex;align-items:center;gap:4px"
           >
-            {{ branch }}
-          </a-tag>
+            <a-tag
+              :color="branch === project?.defaultBranch ? 'processing' : 'default'"
+              style="padding: 4px 8px; margin-inline-end: 0"
+            >
+              {{ branch }}
+            </a-tag>
+            <a-button
+              v-if="branch !== project?.defaultBranch"
+              type="link"
+              size="small"
+              style="padding: 0 4px"
+              @click="startReviewFromBranch(branch)"
+            >
+              发起审查
+            </a-button>
+          </span>
         </a-space>
         <a-empty v-else-if="!branchesError" description="暂无分支数据" :image="undefined" />
       </a-spin>
@@ -261,6 +274,15 @@ async function loadBranches() {
   } finally {
     branchesLoading.value = false
   }
+}
+
+function startReviewFromBranch(branch: string) {
+  const query = new URLSearchParams({
+    projectId: String(projectId.value),
+    sourceBranch: branch,
+    targetBranch: project.value?.defaultBranch || 'main',
+  })
+  router.push(`/reviews/create?${query.toString()}`)
 }
 
 async function handleRetryClone() {

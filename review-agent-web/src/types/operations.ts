@@ -137,3 +137,30 @@ export interface TelemetryReadinessItem {
   gapCode: string
   recommendation: string
 }
+
+export interface OperationsCiHealthAction {
+  key: string
+  connectorKey: string
+  provider: string
+  healthStatus: string
+  severity: 'CRITICAL' | 'WARNING' | 'INFO' | string
+  ownerRole: string
+  slaHours: number
+  latestSignal: string
+  recommendation: string
+}
+
+export interface OperationsTask {
+  taskKey: string
+  sourceType: 'FINDING' | 'CI_HEALTH' | string
+  sourceId: string
+  sourceRef: string
+  title: string
+  status: string
+  severity: string
+  ownerRole: string
+  slaHours: number
+  priorityScore: number
+  latestSignal: string | null
+  recommendation: string
+}

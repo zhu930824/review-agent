@@ -133,6 +133,51 @@
           <template #title>
             <a-space :size="8">
               <UnorderedListOutlined style="font-size:20px;color:#6366f1" />
+              <span style="font-weight:600">Unified Operations Tasks</span>
+            </a-space>
+          </template>
+          <template #extra>
+            <a-tag color="processing">{{ operationsTasks.length }} tasks</a-tag>
+          </template>
+          <a-table
+            :columns="taskColumns"
+            :data-source="operationsTasks"
+            :loading="operationsTasksLoading"
+            :pagination="false"
+            row-key="taskKey"
+            size="small"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'title'">
+                <div>
+                  <div style="font-weight:600;font-size:13px">{{ record.title }}</div>
+                  <div style="font-size:12px;color:#94a3b8;margin-top:2px">{{ record.sourceType }} · {{ record.sourceRef }}</div>
+                  <div v-if="record.recommendation" style="font-size:12px;color:#64748b;margin-top:2px;line-height:1.4">{{ record.recommendation }}</div>
+                </div>
+              </template>
+              <template v-else-if="column.key === 'severity'">
+                <a-tag :color="taskSeverityColor(record.severity)">{{ record.severity }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'ownerRole'">
+                <a-tag>{{ record.ownerRole }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'slaHours'">
+                <span style="font-weight:600;font-size:13px">{{ record.slaHours }}h</span>
+              </template>
+              <template v-else-if="column.key === 'status'">
+                <a-tag :color="record.status === 'OPEN' ? 'orange' : 'green'">{{ record.status }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'latestSignal'">
+                <span style="font-size:12px;color:#64748b">{{ record.latestSignal || '-' }}</span>
+              </template>
+            </template>
+          </a-table>
+        </a-card>
+
+        <a-card size="small" style="margin-bottom:16px">
+          <template #title>
+            <a-space :size="8">
+              <UnorderedListOutlined style="font-size:20px;color:#6366f1" />
               <span style="font-weight:600">修复队列</span>
             </a-space>
           </template>
@@ -216,6 +261,36 @@
           </a-space>
         </a-card>
 
+        <a-card size="small" style="margin-bottom:16px">
+          <template #title>
+            <a-space :size="8">
+              <SafetyCertificateOutlined style="font-size:16px;color:#d97706" />
+              <span style="font-weight:600;font-size:14px">CI Health Actions</span>
+            </a-space>
+          </template>
+          <a-space v-if="ciHealthActions.length" direction="vertical" :size="8" style="width:100%">
+            <a-card
+              v-for="action in ciHealthActions"
+              :key="action.key"
+              size="small"
+              :body-style="{ padding: '12px' }"
+              style="background:#f8fafc"
+            >
+              <a-space direction="vertical" :size="6" style="width:100%">
+                <a-space :size="6" wrap>
+                  <a-tag color="processing">{{ action.provider }}</a-tag>
+                  <a-tag :color="ciActionSeverityColor(action.severity)">{{ action.healthStatus }}</a-tag>
+                  <a-tag>{{ action.ownerRole }}</a-tag>
+                  <a-tag color="orange">{{ action.slaHours }}h SLA</a-tag>
+                </a-space>
+                <div style="font-size:12px;color:#64748b">Latest: {{ action.latestSignal }}</div>
+                <div style="font-size:12px;color:#475569;line-height:1.5">{{ action.recommendation }}</div>
+              </a-space>
+            </a-card>
+          </a-space>
+          <a-empty v-else description="No CI health actions" :image="undefined" />
+        </a-card>
+
         <!-- 规则学习 -->
         <a-card size="small" title="规则学习">
           <template #title>
@@ -295,7 +370,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { BarChartOutlined, ExclamationCircleOutlined, ClockCircleOutlined, RiseOutlined, UnorderedListOutlined, TeamOutlined, ExperimentOutlined, CalendarOutlined, AppstoreOutlined, PlayCircleOutlined, SafetyCertificateOutlined, RocketOutlined } from '@ant-design/icons-vue'
-import type { BusinessImpactEstimate, OperationDashboard, OperationOwnerLoad, OperationalFinding, RemediationQueueItem, RuleLearningCandidate, StrategyPressureItem, StrategyPressureLevel, TelemetryReadinessItem, TelemetryReadinessLevel } from '@/types/operations'
+import type { BusinessImpactEstimate, OperationDashboard, OperationOwnerLoad, OperationalFinding, OperationsCiHealthAction, OperationsTask, RemediationQueueItem, RuleLearningCandidate, StrategyPressureItem, StrategyPressureLevel, TelemetryReadinessItem, TelemetryReadinessLevel } from '@/types/operations'
 import type { SeverityLevel } from '@/types/review'
 import { useApi } from '@/composables/useApi'
 import { buildRemediationQueue, deriveOperationsScorecard, estimateReviewBusinessImpact, extractRuleLearningCandidates, summarizeRemediationQueue } from '@/utils/reviewOperations'
@@ -304,6 +379,7 @@ const fallbackBusinessImpact = estimateReviewBusinessImpact({ monthlyReviews: 80
 const router = useRouter()
 const { get, post } = useApi()
 const remediationQueueLoading = ref(false)
+const operationsTasksLoading = ref(false)
 const actingFindingId = ref<number | null>(null)
 const actingFindingAction = ref<'CONFIRM' | 'DISMISS' | null>(null)
 const actingRuleCandidateId = ref<number | null>(null)
@@ -316,6 +392,8 @@ const backendBusinessImpact = ref<BusinessImpactEstimate | null>(null)
 const strategyPressureLoading = ref(false)
 const strategyPressureItems = ref<StrategyPressureItem[]>([])
 const telemetryReadinessItems = ref<TelemetryReadinessItem[]>([])
+const ciHealthActions = ref<OperationsCiHealthAction[]>([])
+const operationsTasks = ref<OperationsTask[]>([])
 const remediationQueue = computed(() => buildRemediationQueue(operationalFindings.value))
 const businessImpact = computed(() => backendBusinessImpact.value ?? fallbackBusinessImpact)
 const learningCandidates = computed(() => backendRuleLearningCandidates.value.length
@@ -358,6 +436,14 @@ const queueColumns = [
   { title: '优先级', key: 'priorityScore', dataIndex: 'priorityScore' },
   { title: '操作', key: 'actions', width: 220 },
 ]
+const taskColumns = [
+  { title: '任务', key: 'title', dataIndex: 'title' },
+  { title: '级别', key: 'severity', dataIndex: 'severity' },
+  { title: '负责人', key: 'ownerRole', dataIndex: 'ownerRole' },
+  { title: 'SLA', key: 'slaHours', dataIndex: 'slaHours' },
+  { title: '状态', key: 'status', dataIndex: 'status' },
+  { title: '最新信号', key: 'latestSignal', dataIndex: 'latestSignal' },
+]
 const ownerLoad = computed(() => backendOwnerLoad.value.length
   ? backendOwnerLoad.value
   : Object.entries(queueSummary.value.byOwner).map(([role, count]) => ({ role, count, percent: queueSummary.value.total ? Math.round((count / queueSummary.value.total) * 100) : 0 })))
@@ -370,12 +456,20 @@ const operatingCadences = [
 
 function severityColor(severity: SeverityLevel) { return { BLOCKER: 'red', MAJOR: 'orange', MINOR: 'blue', INFO: 'default' }[severity] }
 
+function taskSeverityColor(severity: string) {
+  return { BLOCKER: 'red', CRITICAL: 'red', MAJOR: 'orange', WARNING: 'orange', MINOR: 'blue', INFO: 'default' }[severity] ?? 'default'
+}
+
 function pressureColor(level: StrategyPressureLevel) {
   return { HIGH: 'red', MEDIUM: 'orange', LOW: 'green' }[level]
 }
 
 function telemetryReadinessColor(level: TelemetryReadinessLevel) {
   return { READY: 'green', NEEDS_ATTRIBUTION: 'orange', JUDGE_UNSTABLE: 'red', NOT_CONNECTED: 'default' }[level]
+}
+
+function ciActionSeverityColor(severity: string) {
+  return { CRITICAL: 'red', WARNING: 'orange', INFO: 'default' }[severity] ?? 'default'
 }
 
 function formatMicroCents(n: number): string {
@@ -400,6 +494,27 @@ async function loadTelemetryReadiness() {
     if (res.data) telemetryReadinessItems.value = res.data
   } catch (e) {
     console.error(e)
+  }
+}
+
+async function loadCiHealthActions() {
+  try {
+    const res = await get<OperationsCiHealthAction[]>('/operations/ci-health-actions')
+    if (res.data) ciHealthActions.value = res.data
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+async function loadOperationsTasks() {
+  operationsTasksLoading.value = true
+  try {
+    const res = await get<OperationsTask[]>('/operations/tasks?limit=20')
+    if (res.data) operationsTasks.value = res.data
+  } catch (e) {
+    console.error(e)
+  } finally {
+    operationsTasksLoading.value = false
   }
 }
 
@@ -458,6 +573,8 @@ async function reloadOperationsWorkflows() {
     loadRemediationQueue(),
     loadRuleLearningCandidates(),
     loadBusinessImpact(),
+    loadCiHealthActions(),
+    loadOperationsTasks(),
   ])
 }
 
@@ -507,6 +624,8 @@ onMounted(() => {
   loadOwnerLoad()
   loadStrategyPressure()
   loadTelemetryReadiness()
+  loadCiHealthActions()
+  loadOperationsTasks()
   loadRemediationQueue()
   loadRuleLearningCandidates()
   loadBusinessImpact()

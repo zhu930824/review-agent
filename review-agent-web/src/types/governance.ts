@@ -136,11 +136,30 @@ export interface CiStatusWritebackLogVO {
   state: string | null
   writebackStatus: 'SUCCESS' | 'FAILED' | 'SKIPPED'
   requestUrl: string | null
+  externalQueueUrl: string | null
+  externalBuildUrl: string | null
+  externalBuildNumber: string | null
+  externalBuildResult: string | null
+  externalResultUpdatedAt: string | null
   errorMessage: string | null
   retryCount: number
   nextRetryAt: string | null
   createdAt: string
   updatedAt: string
+}
+
+export interface CiIntegrationHealthVO {
+  connectorKey: string
+  provider: string
+  healthStatus: 'HEALTHY' | 'DEGRADED' | 'UNHEALTHY' | 'NO_DATA' | string
+  totalCount: number
+  successCount: number
+  failedCount: number
+  skippedCount: number
+  latestWritebackStatus: string | null
+  latestExternalResult: string | null
+  latestAt: string | null
+  summary: string | null
 }
 
 export interface IntegrationActionLogVO {

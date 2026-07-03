@@ -326,6 +326,34 @@
           <a-empty v-else description="暂无遥测缺口" :image="undefined" />
         </a-card>
 
+        <a-card size="small">
+          <template #title>
+            <a-space :size="8">
+              <SyncOutlined style="font-size:16px;color:#d97706" />
+              <span style="font-weight:600;font-size:14px">CI Health Actions</span>
+            </a-space>
+          </template>
+          <a-space v-if="ciHealthActions.length" direction="vertical" :size="8" style="width:100%">
+            <a-card
+              v-for="action in ciHealthActions"
+              :key="action.key"
+              size="small"
+              class="governance-nested-card"
+            >
+              <a-space direction="vertical" :size="6" style="width:100%">
+                <a-space :size="6" wrap>
+                  <a-tag color="processing">{{ action.provider }}</a-tag>
+                  <a-tag :color="ciHealthActionColor(action.severity)">{{ action.healthStatus }}</a-tag>
+                  <a-tag>{{ action.latestSignal }}</a-tag>
+                </a-space>
+                <div style="font-weight:600;font-size:13px">{{ action.title }}</div>
+                <div style="font-size:12px;color:#64748b;line-height:1.5">{{ action.recommendation }}</div>
+              </a-space>
+            </a-card>
+          </a-space>
+          <a-empty v-else description="No CI health actions" :image="undefined" />
+        </a-card>
+
         <a-card size="small" class="governance-card-scroll">
           <template #title>
             <a-space :size="8">
@@ -357,26 +385,78 @@
                 <span v-for="action in ciStatusReadiness.nextActions" :key="action" style="font-size:12px;color:#475569;line-height:1.5">{{ action }}</span>
               </a-space>
             </div>
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:6px">CI Provider Health</div>
+              <a-row v-if="ciIntegrationHealth.length" :gutter="[8,8]">
+                <a-col
+                  v-for="item in ciIntegrationHealth"
+                  :key="item.connectorKey"
+                  :xs="24"
+                  :md="8"
+                >
+                  <a-card size="small" class="governance-sub-card" style="height:100%">
+                    <a-space direction="vertical" :size="6" style="width:100%">
+                      <a-space :size="4" wrap style="width:100%;justify-content:space-between">
+                        <span style="font-size:12px;font-weight:700">{{ item.provider }}</span>
+                        <a-tag :color="ciHealthColor(item.healthStatus)">{{ item.healthStatus }}</a-tag>
+                      </a-space>
+                      <div style="font-size:12px;color:#64748b;word-break:break-all">{{ item.connectorKey }}</div>
+                      <a-space :size="4" wrap>
+                        <a-tag color="green">S {{ item.successCount }}</a-tag>
+                        <a-tag color="red">F {{ item.failedCount }}</a-tag>
+                        <a-tag>Skip {{ item.skippedCount }}</a-tag>
+                      </a-space>
+                      <div style="font-size:12px;color:#475569;line-height:1.45">{{ item.summary || 'No recent writeback data.' }}</div>
+                      <div v-if="item.latestExternalResult" style="font-size:12px;color:#94a3b8">
+                        Latest external: {{ item.latestExternalResult }}
+                      </div>
+                    </a-space>
+                  </a-card>
+                </a-col>
+              </a-row>
+              <div v-else style="font-size:12px;color:#94a3b8">No CI health data yet.</div>
+            </div>
             <a-form layout="vertical" size="small" style="margin-top:4px">
+              <a-form-item label="CI Provider">
+                <a-select
+                  v-model:value="ciConfigForm.connectorKey"
+                  style="width:100%"
+                  @change="handleCiConnectorChange"
+                >
+                  <a-select-option
+                    v-for="option in ciProviderOptions"
+                    :key="option.connectorKey"
+                    :value="option.connectorKey"
+                  >
+                    {{ option.label }}
+                  </a-select-option>
+                </a-select>
+                <div style="margin-top:4px;font-size:12px;color:#94a3b8;line-height:1.5">
+                  {{ selectedCiProviderOption.description }}
+                </div>
+              </a-form-item>
               <a-row :gutter="8">
                 <a-col :xs="24" :md="12">
-                  <a-form-item label="Repo Owner">
-                    <a-input v-model:value="ciConfigForm.repoOwner" placeholder="zhu930824" />
+                  <a-form-item :label="selectedCiProviderOption.ownerLabel">
+                    <a-input v-model:value="ciConfigForm.repoOwner" :placeholder="selectedCiProviderOption.ownerPlaceholder" />
                   </a-form-item>
                 </a-col>
                 <a-col :xs="24" :md="12">
-                  <a-form-item label="Repo Name">
-                    <a-input v-model:value="ciConfigForm.repoName" placeholder="review-agent" />
+                  <a-form-item :label="selectedCiProviderOption.nameLabel">
+                    <a-input v-model:value="ciConfigForm.repoName" :placeholder="selectedCiProviderOption.namePlaceholder" />
                   </a-form-item>
                 </a-col>
               </a-row>
+              <a-form-item :label="selectedCiProviderOption.urlLabel">
+                <a-input v-model:value="ciConfigForm.repoUrl" :placeholder="selectedCiProviderOption.urlPlaceholder" />
+              </a-form-item>
               <a-form-item label="Status Context">
-                <a-input v-model:value="ciConfigForm.statusContext" placeholder="Review Agent" />
+                <a-input v-model:value="ciConfigForm.statusContext" :placeholder="selectedCiProviderOption.statusPlaceholder" />
               </a-form-item>
               <a-row :gutter="8">
                 <a-col :xs="24" :md="12">
                   <a-form-item label="API Token">
-                    <a-input-password v-model:value="ciConfigForm.apiToken" :placeholder="ciConfigForm.tokenConfigured ? '已配置，留空则不更新' : 'GitHub token'" />
+                    <a-input-password v-model:value="ciConfigForm.apiToken" :placeholder="ciConfigForm.tokenConfigured ? '已配置，留空则不更新' : selectedCiProviderOption.tokenPlaceholder" />
                   </a-form-item>
                 </a-col>
                 <a-col :xs="24" :md="12">
@@ -386,13 +466,18 @@
                 </a-col>
               </a-row>
               <a-space :size="12" wrap>
-                <a-checkbox v-model:checked="ciConfigForm.checksEnabled">启用 Checks 回写</a-checkbox>
+                <a-checkbox v-model:checked="ciConfigForm.checksEnabled">{{ selectedCiProviderOption.writebackLabel }}</a-checkbox>
                 <a-checkbox v-model:checked="ciConfigForm.sarifUploadEnabled">启用 SARIF 上传</a-checkbox>
                 <a-button type="primary" size="small" :loading="ciConfigSaving" @click="saveCiStatusConfig">保存配置</a-button>
               </a-space>
             </a-form>
             <div>
               <div style="font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:6px">最近回写</div>
+              <a-space style="width:100%;justify-content:flex-end;margin-bottom:6px">
+                <a-button size="small" :loading="jenkinsResultRefreshing" @click="refreshJenkinsResults">
+                  刷新 Jenkins 结果
+                </a-button>
+              </a-space>
               <a-space v-if="ciWritebacks.length" direction="vertical" :size="6" style="width:100%">
                 <a-card
                   v-for="item in ciWritebacks"
@@ -404,10 +489,16 @@
                     <div style="min-width:0">
                       <div style="font-size:12px;font-weight:600">#{{ item.reviewId || '-' }} · {{ item.state || '-' }}</div>
                       <div style="font-size:12px;color:#94a3b8;margin-top:2px;word-break:break-all">{{ item.commitSha || 'no commit' }}</div>
+                      <div v-if="item.externalQueueUrl || item.externalBuildUrl" style="font-size:12px;color:#64748b;margin-top:2px;word-break:break-all">
+                        Jenkins: {{ item.externalBuildUrl || item.externalQueueUrl }}
+                      </div>
                       <div v-if="item.errorMessage" style="font-size:12px;color:#dc2626;margin-top:2px;line-height:1.4">{{ item.errorMessage }}</div>
                     </div>
                     <a-space :size="4" wrap style="justify-content:flex-end">
                       <a-tag :color="writebackStatusColor(item.writebackStatus)">{{ item.writebackStatus }}</a-tag>
+                      <a-tag v-if="item.externalBuildResult" :color="jenkinsBuildResultColor(item.externalBuildResult)">
+                        Jenkins {{ item.externalBuildNumber ? `#${item.externalBuildNumber}` : '' }} {{ item.externalBuildResult }}
+                      </a-tag>
                       <a-tag>retry {{ item.retryCount }}</a-tag>
                       <a-button
                         v-if="item.writebackStatus === 'FAILED'"
@@ -586,11 +677,11 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { BarChartOutlined, CheckCircleOutlined, ExclamationCircleOutlined, AppstoreOutlined, ThunderboltOutlined, SafetyOutlined, UserOutlined, EnvironmentOutlined, SyncOutlined, PlayCircleOutlined, SettingOutlined, ClockCircleOutlined } from '@ant-design/icons-vue'
-import type { BusinessImpact, CapabilityStatus, CiStatusConfigVO, CiStatusWritebackLogVO, GovernanceRulePack, GovernanceRulePackChange, GovernanceRulePackDryRun, GovernanceRulePackVersion, IntegrationActionLogVO, IntegrationConnector, MarketCapability, RolloutStage, WorkflowTemplate } from '@/types/governance'
+import type { BusinessImpact, CapabilityStatus, CiIntegrationHealthVO, CiStatusConfigVO, CiStatusWritebackLogVO, GovernanceRulePack, GovernanceRulePackChange, GovernanceRulePackDryRun, GovernanceRulePackVersion, IntegrationActionLogVO, IntegrationConnector, MarketCapability, RolloutStage, WorkflowTemplate } from '@/types/governance'
 import type { TelemetryReadinessItem } from '@/types/operations'
 import { useApi } from '@/composables/useApi'
 import { compileGovernancePolicyPack, getCapabilityCoverageSummary, getCiStatusIntegrationReadiness, getConnectorsByStage, getRecommendedNextActions, governanceRulePacks as fallbackRulePacks, integrationConnectors as fallbackConnectors, marketCapabilities as fallbackCapabilities, workflowTemplates as fallbackWorkflowTemplates } from '@/utils/governanceCatalog'
-import { buildTelemetryGapActions, telemetryReadinessColor } from '@/utils/governanceTelemetry'
+import { buildCiHealthActions, ciHealthActionColor, buildTelemetryGapActions, telemetryReadinessColor } from '@/utils/governanceTelemetry'
 
 const { get, post, put } = useApi()
 const marketCapabilities = ref<MarketCapability[]>(fallbackCapabilities)
@@ -615,9 +706,58 @@ const releasePolicy = computed(() => compileGovernancePolicyPack(
 const ciStatusReadiness = getCiStatusIntegrationReadiness()
 const ciConfigSaving = ref(false)
 const ciWritebacks = ref<CiStatusWritebackLogVO[]>([])
+const ciIntegrationHealth = ref<CiIntegrationHealthVO[]>([])
 const integrationActions = ref<IntegrationActionLogVO[]>([])
 const telemetryReadinessItems = ref<TelemetryReadinessItem[]>([])
 const ciWritebackRetryingIds = ref<Set<number>>(new Set())
+const jenkinsResultRefreshing = ref(false)
+const ciProviderOptions = [
+  {
+    connectorKey: 'github-checks',
+    provider: 'GITHUB',
+    label: 'GitHub Checks / Status',
+    description: '将 Gate 结果写回 GitHub commit status，并复用 SARIF / PR Summary 集成。',
+    ownerLabel: 'Repo Owner',
+    ownerPlaceholder: 'zhu930824',
+    nameLabel: 'Repo Name',
+    namePlaceholder: 'review-agent',
+    urlLabel: 'Repository URL',
+    urlPlaceholder: 'https://github.com/owner/repo',
+    statusPlaceholder: 'Review Agent',
+    tokenPlaceholder: 'GitHub token',
+    writebackLabel: '启用 Checks 回写',
+  },
+  {
+    connectorKey: 'gitlab-merge-request',
+    provider: 'GITLAB',
+    label: 'GitLab Merge Request / Pipeline',
+    description: '面向企业 GitLab 私有化流程，保存 MR / Pipeline 状态回写所需的仓库绑定。',
+    ownerLabel: 'Group / Namespace',
+    ownerPlaceholder: 'platform/team',
+    nameLabel: 'Project Path',
+    namePlaceholder: 'review-agent',
+    urlLabel: 'GitLab Project URL',
+    urlPlaceholder: 'https://gitlab.example.com/platform/team/review-agent',
+    statusPlaceholder: 'review-agent/gate',
+    tokenPlaceholder: 'GitLab access token',
+    writebackLabel: '启用 Pipeline 状态回写',
+  },
+  {
+    connectorKey: 'jenkins-pipeline',
+    provider: 'JENKINS',
+    label: 'Jenkins Pipeline Gate',
+    description: '面向企业 Jenkins 流水线，保存 Job、实例地址和凭证，作为后续 Gate 回写与构建阻断入口。',
+    ownerLabel: 'Folder / Team',
+    ownerPlaceholder: 'platform',
+    nameLabel: 'Job Name',
+    namePlaceholder: 'review-agent-ci',
+    urlLabel: 'Jenkins Base URL',
+    urlPlaceholder: 'https://jenkins.example.com',
+    statusPlaceholder: 'Review Agent Gate',
+    tokenPlaceholder: 'Jenkins API token',
+    writebackLabel: '启用 Jenkins Gate 回写',
+  },
+]
 const ciConfigForm = reactive({
   connectorKey: 'github-checks',
   provider: 'GITHUB',
@@ -635,6 +775,10 @@ const ciConfigForm = reactive({
 })
 
 const telemetryGapActions = computed(() => buildTelemetryGapActions(telemetryReadinessItems.value))
+const ciHealthActions = computed(() => buildCiHealthActions(ciIntegrationHealth.value))
+const selectedCiProviderOption = computed(() =>
+  ciProviderOptions.find(option => option.connectorKey === ciConfigForm.connectorKey) || ciProviderOptions[0]
+)
 
 async function loadGovernanceCatalog() {
   try {
@@ -718,8 +862,9 @@ function viewRulePackVersionSnapshot(version: GovernanceRulePackVersion) {
 }
 
 function applyCiStatusConfig(config: CiStatusConfigVO) {
-  ciConfigForm.connectorKey = config.connectorKey || 'github-checks'
-  ciConfigForm.provider = config.provider || 'GITHUB'
+  const option = ciProviderOptions.find(item => item.connectorKey === (config.connectorKey || ciConfigForm.connectorKey)) || selectedCiProviderOption.value
+  ciConfigForm.connectorKey = config.connectorKey || option.connectorKey
+  ciConfigForm.provider = config.provider || option.provider
   ciConfigForm.repoOwner = config.repoOwner || ''
   ciConfigForm.repoName = config.repoName || ''
   ciConfigForm.repoUrl = config.repoUrl || ''
@@ -733,13 +878,22 @@ function applyCiStatusConfig(config: CiStatusConfigVO) {
   ciConfigForm.webhookSecret = ''
 }
 
-async function loadCiStatusConfig() {
+async function loadCiStatusConfig(connectorKey = ciConfigForm.connectorKey) {
   try {
-    const res = await get<CiStatusConfigVO>('/integration/ci-config')
+    const res = await get<CiStatusConfigVO>(`/integration/ci-config?connectorKey=${encodeURIComponent(connectorKey)}`)
     if (res.data) applyCiStatusConfig(res.data)
   } catch (e) {
     console.error('加载 CI 回写配置失败', e)
   }
+}
+
+async function handleCiConnectorChange(connectorKey: string) {
+  const option = ciProviderOptions.find(item => item.connectorKey === connectorKey) || ciProviderOptions[0]
+  ciConfigForm.provider = option.provider
+  ciConfigForm.statusContext = option.statusPlaceholder
+  ciConfigForm.apiToken = ''
+  ciConfigForm.webhookSecret = ''
+  await loadCiStatusConfig(connectorKey)
 }
 
 async function loadCiWritebacks() {
@@ -748,6 +902,15 @@ async function loadCiWritebacks() {
     ciWritebacks.value = res.data ?? []
   } catch (e) {
     console.error('加载 CI 回写记录失败', e)
+  }
+}
+
+async function loadCiIntegrationHealth() {
+  try {
+    const res = await get<CiIntegrationHealthVO[]>('/integration/ci-config/writebacks/health')
+    ciIntegrationHealth.value = res.data ?? []
+  } catch (e) {
+    console.error('load CI integration health failed', e)
   }
 }
 
@@ -788,6 +951,7 @@ async function saveCiStatusConfig() {
     const res = await put<CiStatusConfigVO>('/integration/ci-config', payload)
     if (res.data) applyCiStatusConfig(res.data)
     await loadCiWritebacks()
+    await loadCiIntegrationHealth()
     await loadIntegrationActions()
   } catch (e) {
     console.error('保存 CI 回写配置失败', e)
@@ -801,6 +965,7 @@ async function retryCiWriteback(item: CiStatusWritebackLogVO) {
   try {
     await post<unknown>(`/integration/ci-config/writebacks/${item.id}/retry`)
     await loadCiWritebacks()
+    await loadCiIntegrationHealth()
   } catch (e) {
     console.error('重试 CI 回写失败', e)
   } finally {
@@ -810,10 +975,24 @@ async function retryCiWriteback(item: CiStatusWritebackLogVO) {
   }
 }
 
+async function refreshJenkinsResults() {
+  jenkinsResultRefreshing.value = true
+  try {
+    await post<number>('/integration/ci-config/writebacks/jenkins/refresh?limit=20')
+    await loadCiWritebacks()
+    await loadCiIntegrationHealth()
+  } catch (e) {
+    console.error('鍒锋柊 Jenkins 鏋勫缓缁撴灉澶辫触', e)
+  } finally {
+    jenkinsResultRefreshing.value = false
+  }
+}
+
 onMounted(() => {
   loadGovernanceCatalog()
   loadCiStatusConfig()
   loadCiWritebacks()
+  loadCiIntegrationHealth()
   loadIntegrationActions()
   loadTelemetryReadiness()
 })
@@ -838,6 +1017,8 @@ function impactLabel(impact: BusinessImpact) { return { HIGH: '高', MEDIUM: '�
 function impactColor(impact: BusinessImpact) { return { HIGH: 'red', MEDIUM: 'blue', LOW: 'default' }[impact] }
 function categoryLabel(category: string) { return { AI_REVIEW: 'AI 审查', QUALITY: '质量', SECURITY: '安全', INTEGRATION: '集成', KNOWLEDGE: '知识库', ANALYTICS: '分析' }[category] ?? category }
 function writebackStatusColor(status: string) { return { SUCCESS: 'green', FAILED: 'red', SKIPPED: 'default' }[status] ?? 'default' }
+function ciHealthColor(status: string) { return { HEALTHY: 'green', DEGRADED: 'orange', UNHEALTHY: 'red', NO_DATA: 'default' }[status] ?? 'default' }
+function jenkinsBuildResultColor(status: string) { return { SUCCESS: 'green', FAILURE: 'red', UNSTABLE: 'orange', ABORTED: 'default', CANCELLED: 'default', BUILDING: 'blue', QUEUED: 'processing' }[status] ?? 'default' }
 function actionStatusColor(status: string) { return { UPLOADED: 'green', POSTED: 'green', FAILED: 'red', SKIPPED: 'default' }[status] ?? 'default' }
 function rulePackChangeStatusColor(status: string) { return { PROPOSED: 'orange', APPROVED: 'blue', APPLIED: 'green', REJECTED: 'red', ROLLED_BACK: 'default' }[status] ?? 'default' }
 function rulePackVersionStatusColor(status: string) { return { ACTIVE: 'green', ARCHIVED: 'default', ROLLED_BACK: 'orange' }[status] ?? 'default' }

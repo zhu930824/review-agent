@@ -6,11 +6,15 @@ import com.review.agent.domain.dto.OperationDashboardVO;
 import com.review.agent.domain.dto.OperationFindingVO;
 import com.review.agent.domain.dto.OperationOwnerLoadVO;
 import com.review.agent.domain.dto.OperationRuleLearningCandidateVO;
+import com.review.agent.domain.dto.OperationsCiHealthActionVO;
 import com.review.agent.domain.dto.OperationsStrategyPressureVO;
+import com.review.agent.domain.dto.OperationsTaskVO;
 import com.review.agent.domain.dto.OperationsTelemetryReadinessVO;
+import com.review.agent.service.OperationsCiHealthActionService;
 import com.review.agent.service.OperationsRemediationQueueService;
 import com.review.agent.service.OperationsService;
 import com.review.agent.service.OperationsStrategyPressureService;
+import com.review.agent.service.OperationsTaskService;
 import com.review.agent.service.OperationsTelemetryReadinessService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,6 +34,8 @@ public class OperationsController {
     private final OperationsService operationsService;
     private final OperationsStrategyPressureService strategyPressureService;
     private final OperationsTelemetryReadinessService telemetryReadinessService;
+    private final OperationsCiHealthActionService ciHealthActionService;
+    private final OperationsTaskService taskService;
     private final OperationsRemediationQueueService remediationQueueService;
 
     @GetMapping("/dashboard")
@@ -45,6 +51,16 @@ public class OperationsController {
     @GetMapping("/telemetry-readiness")
     public Result<List<OperationsTelemetryReadinessVO>> telemetryReadiness() {
         return Result.success(telemetryReadinessService.listReadiness());
+    }
+
+    @GetMapping("/ci-health-actions")
+    public Result<List<OperationsCiHealthActionVO>> ciHealthActions() {
+        return Result.success(ciHealthActionService.listActions());
+    }
+
+    @GetMapping("/tasks")
+    public Result<List<OperationsTaskVO>> tasks(@RequestParam(defaultValue = "50") int limit) {
+        return Result.success(taskService.listTasks(limit));
     }
 
     @GetMapping("/remediation-queue")

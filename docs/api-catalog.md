@@ -42,7 +42,7 @@
 
 当前前端接入状态：
 
-- 项目详情页读取 `/api/projects/{id}/branches` 展示仓库分支列表，并支持手动刷新；创建 Review 页也使用该接口作为源分支/目标分支选项。
+- 项目详情页读取 `/api/projects/{id}/branches` 展示仓库分支列表，并支持手动刷新；非默认分支可直接跳转创建 Review，并通过 query 预填 `projectId`、`sourceBranch`、`targetBranch`。创建 Review 页也使用该接口作为源分支/目标分支选项，并校验 URL 预填分支仍存在。
 
 ## Reviews
 
@@ -51,7 +51,7 @@
 | Method | Path | 用途 | 前端使用位置 |
 | --- | --- | --- | --- |
 | `POST` | `/api/reviews` | 创建普通 Review | 旧入口，后端源码当前受保护 |
-| `POST` | `/api/reviews/pre-pr` | 创建 Pre-PR 审查 | `views/reviews/create.vue`；创建成功后前端初始化 Gate |
+| `POST` | `/api/reviews/pre-pr` | 创建 Pre-PR 审查 | `views/reviews/create.vue`；请求体携带项目、源/目标分支、策略 Key、reviewMode 和 modelsConfig；创建成功后前端初始化 Gate |
 | `GET` | `/api/reviews` | 分页查询 Review | Dashboard、项目详情 |
 | `GET` | `/api/reviews/{id}` | 查询 Review 详情 | Review 详情页 |
 | `PATCH` | `/api/reviews/{reviewId}/finding/{findingId}` | 更新 Finding 人工状态 | Review 详情页 |
@@ -92,9 +92,9 @@
 
 当前阶段状态：
 
-- `POST /api/reviews/pre-pr` 已由前端创建页使用，后端源码当前受保护，按调用契约记录。
+- `POST /api/reviews/pre-pr` 已由前端创建页使用，后端源码当前受保护，按调用契约记录。创建页会把所选策略编排成 `modelsConfig`，高级 JSON 覆盖会先做格式校验，提交时随 `strategyKey`、`strategyId`、`reviewMode` 一起发送。
 - Pre-PR 创建成功后，前端调用 `POST /api/reviews/{id}/gate/initialize`，确保进入详情页前已有持久化 Gate 和初始化历史。
-- GitHub Status 回写已读取持久化 Gate；GitHub Checks API / GitLab 回写仍属于下一阶段。
+- CI 状态发布已读取持久化 Gate；后端会发布到所有启用的 `github-checks`、`gitlab-merge-request`、`jenkins-pipeline` 配置。GitLab 走 Commit Status API，Jenkins 会先尝试读取 crumb，再触发带 Review Agent Gate 参数的 `buildWithParameters` Job。
 
 ## Model Config
 
@@ -170,7 +170,9 @@
 | Method | Path | 用途 |
 | --- | --- | --- |
 | `GET` | `/api/operations/dashboard` | 查询运营中心数据 |
+| `GET` | `/api/operations/tasks` | 查询统一运营任务 | 参数：`limit`，默认 50；合并 Finding 修复项与 CI 健康异常，返回任务来源、Owner、SLA、优先级、最新信号和处理建议 |
 | `GET` | `/api/operations/strategy-pressure` | 查询策略成本/质量压力排行 | 基于模型遥测 summary 生成压力分、压力等级和运营建议 |
+| `GET` | `/api/operations/ci-health-actions` | 查询 CI 健康运营行动项 | 从 CI 集成健康度派生异常 connector 的 owner、SLA、最新信号和处理建议 |
 | `GET` | `/api/operations/remediation-queue` | 查询运营中心修复队列 | 参数：`limit`，默认 50；返回未驳回 Finding，包含 Review、项目、严重度、人工状态、置信度和跨模型命中信息 |
 | `POST` | `/api/operations/remediation-queue/{findingId}/confirm` | 确认修复队列风险项有效 | 将 Finding 人工状态更新为 `CONFIRMED` |
 | `POST` | `/api/operations/remediation-queue/{findingId}/dismiss` | 将修复队列风险项标记为误报 | 将 Finding 人工状态更新为 `DISMISSED` |
@@ -183,10 +185,11 @@
 
 当前前端接入状态：
 
-- 运营中心全局 KPI 优先读取 `/api/operations/dashboard`，修复队列读取 `/api/operations/remediation-queue`，责任人负载读取 `/api/operations/owner-load`，规则学习视图读取 `/api/operations/rule-learning-candidates`，业务收益估算读取 `/api/operations/business-impact`；责任人负载、规则学习候选和业务收益均保留本地推导兜底。
+- 运营中心全局 KPI 优先读取 `/api/operations/dashboard`，统一任务表读取 `/api/operations/tasks`，修复队列读取 `/api/operations/remediation-queue`，责任人负载读取 `/api/operations/owner-load`，规则学习视图读取 `/api/operations/rule-learning-candidates`，业务收益估算读取 `/api/operations/business-impact`；责任人负载、规则学习候选和业务收益均保留本地推导兜底。
 - 运营中心修复队列已支持“确认有效”和“标记误报”，分别调用 `/api/operations/remediation-queue/{findingId}/confirm` 和 `/api/operations/remediation-queue/{findingId}/dismiss`，操作完成后刷新队列、Owner 负载、规则学习候选和业务收益估算。
 - 运营中心规则学习候选已支持“采纳”和“拒绝”，分别调用 `/api/operations/rule-learning-candidates/{findingId}/accept` 和 `/api/operations/rule-learning-candidates/{findingId}/reject`；决策持久化到 `operations_rule_learning_decision`，候选列表过滤已决策项；采纳时同步生成 `governance_rule_pack_change` 变更记录。
 - 运营中心“策略成本/质量压力”面板调用 `/api/operations/strategy-pressure` 和 `/api/operations/telemetry-readiness`，按失败率、误报代理、确认率、策略命中率、Judge 失败率、平均成本和延迟展示后端生成的策略压力分、压力等级、运营建议和遥测接入/归因就绪状态。
+- 运营中心“CI Health Actions”面板调用 `/api/operations/ci-health-actions`，把 GitHub/GitLab/Jenkins 等 connector 的异常健康状态纳入 Owner + SLA 运营视图。
 - 治理中心“遥测行动项”面板调用 `/api/operations/telemetry-readiness`，将 `NO_TELEMETRY`、`WEAK_ATTRIBUTION`、`JUDGE_FAILURE` 等 `gapCode` 转成平台集成待办，便于从治理视角继续补齐模型调用遥测、跨模型归因和 Judge 稳定性。
 
 ## Integration
@@ -195,10 +198,12 @@
 
 | Method | Path | 用途 | 备注 |
 | --- | --- | --- | --- |
-| `GET` | `/api/integration/ci-config` | 查询 CI 回写配置 | 默认 `connectorKey=github-checks` |
-| `PUT` | `/api/integration/ci-config` | 保存 CI 回写配置 | token 和 webhook secret 不在响应中明文返回 |
+| `GET` | `/api/integration/ci-config` | 查询 CI 回写配置 | 支持 `connectorKey`；默认 `github-checks` |
+| `PUT` | `/api/integration/ci-config` | 保存 CI 回写配置 | 支持 `github-checks`、`gitlab-merge-request`、`jenkins-pipeline` 等 connectorKey；token 和 webhook secret 不在响应中明文返回 |
 | `GET` | `/api/integration/ci-config/writebacks` | 查询最近 CI 回写记录 | 参数：`limit`，最大 50 |
+| `GET` | `/api/integration/ci-config/writebacks/health` | 查询 CI 集成健康度 | 参数：`limit`，默认 50；按 GitHub/GitLab/Jenkins connector 聚合最近回写记录，返回 `HEALTHY`、`DEGRADED`、`UNHEALTHY`、`NO_DATA` |
 | `POST` | `/api/integration/ci-config/writebacks/{id}/retry` | 手动重试失败回写 | 仅允许 `FAILED` 记录；重发当前持久化 Gate 状态；到期 `nextRetryAt` 记录也会由后端调度自动重试 |
+| `POST` | `/api/integration/ci-config/writebacks/jenkins/refresh` | 刷新 Jenkins 队列/构建结果 | 参数：`limit`，默认 20；读取 Jenkins queue/build API，把 build URL、build number 和 result 回写到 CI 日志；后端也会按 `review-agent.ci-writeback.jenkins-refresh-delay-ms` 自动刷新 |
 | `POST` | `/api/integration/webhooks/github` | 接收 GitHub webhook 投递 | 校验 `X-Hub-Signature-256`；使用 `X-GitHub-Delivery` 做幂等；写入投递日志 |
 | `POST` | `/api/integration/sarif/upload` | 上传 SARIF 到 GitHub Code Scanning | 读取 GitHub 集成配置；请求体包含 `commitSha`、`ref`、`sarif` |
 | `POST` | `/api/integration/pr-summary/comment` | 回写 PR Summary 评论 | 使用 GitHub Issues comments API；请求体包含 `pullNumber`、`body` |
@@ -209,6 +214,8 @@
 - Review 详情页保留本地 SARIF 下载，同时新增“一键上传扫描”，会读取当前 Review 的 SARIF、`sourceCommit/targetCommit` 和分支 ref 后调用 `/api/integration/sarif/upload`。
 - Review 详情页新增 “PR Summary” 操作，用户输入 Pull Request 编号后，将当前 Review 摘要、Gate 状态、严重度统计和前 5 条 Finding 组合成 Markdown 并调用 `/api/integration/pr-summary/comment`。
 - 治理中心 “CI 回写就绪度” 面板新增最近集成动作列表，调用 `/api/integration/actions` 展示 `SARIF_UPLOAD`、`PR_SUMMARY_COMMENT` 的 `UPLOADED`、`POSTED`、`SKIPPED`、`FAILED` 状态。
+- 治理中心 CI 配置表单已支持在 GitHub Checks / Status、GitLab Merge Request / Pipeline、Jenkins Pipeline Gate 之间切换；切换时按 connectorKey 读取对应配置，保存时写入 provider、仓库/项目或 Jenkins Job 绑定、URL、token 和 webhook secret 配置。后端回写日志会记录对应 provider、request URL、成功/失败/跳过原因和重试时间；Jenkins 触发成功时优先记录 Jenkins 返回的队列 `Location`，并支持手动与自动刷新队列/构建结果。治理中心也会读取 `/writebacks/health` 展示每个 provider 的集成健康状态、成功/失败/跳过计数和最近外部构建结果，并把 `UNHEALTHY`、`DEGRADED`、`NO_DATA` 转成 CI Health Actions，提示凭证、仓库绑定、重试、Jenkins 构建刷新或发布烟测等下一步处理动作。
+- 运营中心调用 `/api/operations/ci-health-actions`，把 CI 健康异常纳入 Owner + SLA 的运营视图，便于企业集成负责人持续处理 GitLab/Jenkins/GitHub 回写异常。
 
 ## Knowledge
 
@@ -255,7 +262,7 @@
 
 2. **CI 与代码扫描集成**
    - 已落地：GitHub Commit Status 回写。
-   - 已落地：CI 回写配置、最近回写日志、失败记录手动重试和到期自动重试。
+   - 已落地：CI 回写配置、provider-aware 状态发布、最近回写日志、失败记录手动重试、到期自动重试、Jenkins 队列/构建结果手动与自动刷新，以及 GitHub/GitLab/Jenkins 集成健康度汇总；治理中心已提供三类连接器配置、健康展示和异常行动项入口。
    - 已落地：GitHub webhook 签名校验、delivery 幂等和投递日志。
    - 已落地：SARIF 导出和 GitHub Code Scanning 上传入口。
    - 已落地：PR Summary 对话区评论回写入口。

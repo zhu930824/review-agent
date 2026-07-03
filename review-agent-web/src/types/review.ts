@@ -102,6 +102,10 @@ export interface CreatePrePrParams {
   projectId: number
   sourceBranch: string
   targetBranch: string
+  reviewMode?: ReviewMode | string
+  strategyKey?: string
+  strategyId?: string
+  modelsConfig?: string
 }
 
 export type AgentRole = 'SECURITY_AUDITOR' | 'PERFORMANCE_ANALYST' | 'CODE_STYLE_CHECKER' | 'EXCEPTION_HANDLER' | 'ARCHITECT_REVIEWER'

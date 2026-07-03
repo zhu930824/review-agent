@@ -9,7 +9,7 @@ test('governance page can load and save ci status config', () => {
   assert.match(governanceView, /ciConfigForm/)
   assert.match(governanceView, /loadCiStatusConfig/)
   assert.match(governanceView, /saveCiStatusConfig/)
-  assert.match(governanceView, /get<CiStatusConfigVO>\('\/integration\/ci-config'\)/)
+  assert.match(governanceView, /get<CiStatusConfigVO>\(`\/integration\/ci-config\?connectorKey=/)
   assert.match(governanceView, /put<CiStatusConfigVO>\('\/integration\/ci-config'/)
 })
 
@@ -18,6 +18,11 @@ test('governance page exposes repository binding fields', () => {
 
   assert.match(governanceView, /repoOwner/)
   assert.match(governanceView, /repoName/)
+  assert.match(governanceView, /ciProviderOptions/)
+  assert.match(governanceView, /jenkins-pipeline/)
+  assert.match(governanceView, /JENKINS/)
+  assert.match(governanceView, /handleCiConnectorChange/)
+  assert.match(governanceView, /connectorKey=\$\{encodeURIComponent\(connectorKey\)\}/)
   assert.match(governanceView, /statusContext/)
   assert.match(governanceView, /sarifUploadEnabled/)
   assert.match(governanceView, /tokenConfigured/)

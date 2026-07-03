@@ -183,6 +183,14 @@ export const integrationConnectors: IntegrationConnector[] = [
     implementationHint: '适配 MR webhook、discussion thread 和 pipeline status。',
   },
   {
+    id: 'jenkins-pipeline',
+    name: 'Jenkins Pipeline Gate',
+    stage: 'next',
+    status: 'PLANNED',
+    businessValue: '覆盖仍以 Jenkins 流水线作为准入门禁的企业交付流程。',
+    implementationHint: '保存 Jenkins 实例、Folder/Job 和 API token，后续适配 build status、quality gate 和失败重试。',
+  },
+  {
     id: 'sarif-code-scanning',
     name: 'SARIF 代码扫描',
     stage: 'next',

@@ -16,13 +16,14 @@ import org.springframework.web.client.RestTemplate;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class GitHubCiStatusService implements CiStatusService, ProviderCiStatusReporter {
+public class GitLabCiStatusService implements ProviderCiStatusReporter {
 
-    private static final String CONNECTOR_KEY = "github-checks";
+    private static final String CONNECTOR_KEY = "gitlab-merge-request";
+    private static final String PROVIDER = "GITLAB";
 
     private final CiStatusConfigMapper ciStatusConfigMapper;
     private final ReviewMapper reviewMapper;
-    private final GitHubStatusRequestFactory requestFactory;
+    private final GitLabStatusRequestFactory requestFactory;
     private final CiStatusWritebackLogService writebackLogService;
     private final RestTemplate restTemplate = new RestTemplate();
 
@@ -49,55 +50,31 @@ public class GitHubCiStatusService implements CiStatusService, ProviderCiStatusR
     private void report(Long reviewId, String state, String description) {
         CiStatusConfig config = loadConfig();
         if (!isReady(config)) {
-            log.info("[CI-Status] github checks config is not ready, skip review={} state={}", reviewId, state);
-            safeRecordSkipped(reviewId, state, "github checks config is not ready");
+            log.info("[CI-Status] gitlab config is not ready, skip review={} state={}", reviewId, state);
+            safeRecordSkipped(reviewId, state, "gitlab config is not ready");
             return;
         }
 
         Review review = reviewMapper.selectById(reviewId);
         String commitSha = resolveCommitSha(review);
         if (!hasText(commitSha)) {
-            log.info("[CI-Status] review={} has no commit sha, skip github status writeback", reviewId);
+            log.info("[CI-Status] review={} has no commit sha, skip gitlab status writeback", reviewId);
             safeRecordSkipped(reviewId, state, "review has no commit sha");
             return;
         }
 
-        GitHubStatusRequest request = null;
+        CiProviderStatusRequest request = null;
         try {
             request = requestFactory.build(config, commitSha, state, description, reviewId);
             HttpHeaders headers = new HttpHeaders();
             request.headers().forEach(headers::set);
             restTemplate.postForEntity(request.url(), new HttpEntity<>(request.body(), headers), String.class);
             safeRecordSuccess(reviewId, commitSha, state, request.url());
-            log.info("[CI-Status] github status posted review={} state={}", reviewId, state);
+            log.info("[CI-Status] gitlab status posted review={} state={}", reviewId, state);
         } catch (Exception e) {
             String requestUrl = request == null ? null : request.url();
             safeRecordFailure(reviewId, commitSha, state, requestUrl, e.getMessage());
-            log.warn("[CI-Status] github status writeback failed review={} state={}", reviewId, state, e);
-        }
-    }
-
-    private void safeRecordSuccess(Long reviewId, String commitSha, String state, String requestUrl) {
-        try {
-            writebackLogService.recordSuccess(reviewId, commitSha, state, requestUrl);
-        } catch (Exception e) {
-            log.warn("[CI-Status] failed to record github status success review={} state={}", reviewId, state, e);
-        }
-    }
-
-    private void safeRecordFailure(Long reviewId, String commitSha, String state, String requestUrl, String errorMessage) {
-        try {
-            writebackLogService.recordFailure(reviewId, commitSha, state, requestUrl, errorMessage);
-        } catch (Exception e) {
-            log.warn("[CI-Status] failed to record github status failure review={} state={}", reviewId, state, e);
-        }
-    }
-
-    private void safeRecordSkipped(Long reviewId, String state, String reason) {
-        try {
-            writebackLogService.recordSkipped(reviewId, state, reason);
-        } catch (Exception e) {
-            log.warn("[CI-Status] failed to record github status skip review={} state={}", reviewId, state, e);
+            log.warn("[CI-Status] gitlab status writeback failed review={} state={}", reviewId, state, e);
         }
     }
 
@@ -109,9 +86,8 @@ public class GitHubCiStatusService implements CiStatusService, ProviderCiStatusR
     private boolean isReady(CiStatusConfig config) {
         return config != null
                 && Boolean.TRUE.equals(config.getChecksEnabled())
-                && "GITHUB".equalsIgnoreCase(config.getProvider())
-                && hasText(config.getRepoOwner())
-                && hasText(config.getRepoName())
+                && PROVIDER.equalsIgnoreCase(config.getProvider())
+                && hasText(config.getRepoUrl())
                 && hasText(config.getStatusContext())
                 && hasText(config.getApiToken());
     }
@@ -124,6 +100,30 @@ public class GitHubCiStatusService implements CiStatusService, ProviderCiStatusR
             return review.getSourceCommit();
         }
         return review.getTargetCommit();
+    }
+
+    private void safeRecordSuccess(Long reviewId, String commitSha, String state, String requestUrl) {
+        try {
+            writebackLogService.recordSuccess(CONNECTOR_KEY, PROVIDER, reviewId, commitSha, state, requestUrl);
+        } catch (Exception e) {
+            log.warn("[CI-Status] failed to record gitlab status success review={} state={}", reviewId, state, e);
+        }
+    }
+
+    private void safeRecordFailure(Long reviewId, String commitSha, String state, String requestUrl, String errorMessage) {
+        try {
+            writebackLogService.recordFailure(CONNECTOR_KEY, PROVIDER, reviewId, commitSha, state, requestUrl, errorMessage);
+        } catch (Exception e) {
+            log.warn("[CI-Status] failed to record gitlab status failure review={} state={}", reviewId, state, e);
+        }
+    }
+
+    private void safeRecordSkipped(Long reviewId, String state, String reason) {
+        try {
+            writebackLogService.recordSkipped(CONNECTOR_KEY, PROVIDER, reviewId, state, reason);
+        } catch (Exception e) {
+            log.warn("[CI-Status] failed to record gitlab status skip review={} state={}", reviewId, state, e);
+        }
     }
 
     private boolean hasText(String value) {

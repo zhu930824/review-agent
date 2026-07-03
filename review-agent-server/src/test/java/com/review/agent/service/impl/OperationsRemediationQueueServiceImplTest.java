@@ -7,19 +7,28 @@ import com.review.agent.domain.dto.OperationRuleLearningCandidateVO;
 import com.review.agent.domain.enums.FindingCategory;
 import com.review.agent.domain.enums.HumanStatus;
 import com.review.agent.domain.enums.Severity;
+import com.review.agent.domain.dto.GovernanceRulePackChangeVO;
+import com.review.agent.infrastructure.persistence.GovernanceRulePackChangeRepository;
 import com.review.agent.infrastructure.persistence.OperationsRemediationQueueRepository;
+import com.review.agent.infrastructure.persistence.OperationsRuleLearningDecisionRepository;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class OperationsRemediationQueueServiceImplTest {
 
     private final FakeRepository repository = new FakeRepository();
-    private final OperationsRemediationQueueServiceImpl service = new OperationsRemediationQueueServiceImpl(repository);
+    private final FakeRuleLearningDecisionRepository decisionRepository = new FakeRuleLearningDecisionRepository();
+    private final FakeGovernanceRulePackChangeRepository changeRepository = new FakeGovernanceRulePackChangeRepository();
+    private final OperationsRemediationQueueServiceImpl service = new OperationsRemediationQueueServiceImpl(
+            repository,
+            decisionRepository,
+            changeRepository);
 
     @Test
     void listsOpenFindingsByOperationalPriority() {
@@ -144,6 +153,36 @@ class OperationsRemediationQueueServiceImplTest {
             allFindingCalls++;
             lastLimit = limit;
             return findings;
+        }
+
+        @Override
+        public void updateHumanStatus(Long findingId, HumanStatus humanStatus) {
+        }
+    }
+
+    private static class FakeRuleLearningDecisionRepository implements OperationsRuleLearningDecisionRepository {
+        @Override
+        public Set<Long> listDecidedFindingIds(int limit) {
+            return Set.of();
+        }
+
+        @Override
+        public void upsertDecision(Long findingId, String action, String decision, String decidedBy, String reason) {
+        }
+    }
+
+    private static class FakeGovernanceRulePackChangeRepository implements GovernanceRulePackChangeRepository {
+        @Override
+        public List<GovernanceRulePackChangeVO> listRecent(int limit) {
+            return List.of();
+        }
+
+        @Override
+        public void proposeFromRuleLearningCandidate(OperationRuleLearningCandidateVO candidate) {
+        }
+
+        @Override
+        public void updateStatus(Long id, String status) {
         }
     }
 }

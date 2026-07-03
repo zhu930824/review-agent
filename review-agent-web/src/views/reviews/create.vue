@@ -217,9 +217,10 @@
 import { ref, computed, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useApi } from '@/composables/useApi'
+import { message } from 'ant-design-vue'
 import { SettingOutlined, ApiOutlined, PlayCircleOutlined, SafetyOutlined, CodeOutlined } from '@ant-design/icons-vue'
 import type { Project } from '@/types/project'
-import type { PrePrGate, ReviewDetailResponse } from '@/types/review'
+import type { CreatePrePrParams, PrePrGate, ReviewDetailResponse } from '@/types/review'
 import type { PageResult } from '@/types/api'
 
 interface ApiReviewStrategy {
@@ -252,8 +253,8 @@ const form = reactive({
   projectId: (route.query.projectId as string) || '',
   strategyId: '',
   strategyKey: '',
-  sourceBranch: '',
-  targetBranch: '',
+  sourceBranch: (route.query.sourceBranch as string) || '',
+  targetBranch: (route.query.targetBranch as string) || '',
   mcpEnabled: false,
   modelsConfigOverride: '',
 })
@@ -321,6 +322,8 @@ async function loadBranches(projectId: string) {
     const res = await get<string[]>(`/projects/${projectId}/branches`)
     if (res.data) {
       branchOptions.value = res.data.map(b => ({ label: b, value: b }))
+      if (form.sourceBranch && !res.data.includes(form.sourceBranch)) form.sourceBranch = ''
+      if (form.targetBranch && !res.data.includes(form.targetBranch)) form.targetBranch = ''
     }
   } catch (e) { console.error('加载分支列表失败', e) }
   finally { loadingBranches.value = false }
@@ -348,20 +351,42 @@ async function loadStrategies() {
 }
 
 async function handleSubmit() {
-  if (!form.projectId || !form.sourceBranch || !form.targetBranch || !form.strategyKey) return
+  if (!form.projectId || !form.sourceBranch || !form.targetBranch || !form.strategyKey) {
+    message.warning('请选择项目、分支和审查策略')
+    return
+  }
+  const modelsConfig = buildModelsConfigPayload()
+  if (!modelsConfig) return
   submitting.value = true
   try {
-    const res = await post<ReviewDetailResponse>('/reviews/pre-pr', {
+    const payload: CreatePrePrParams = {
       projectId: Number(form.projectId),
       sourceBranch: form.sourceBranch,
       targetBranch: form.targetBranch,
-    })
+      reviewMode: selectedStrategy.value?.reviewMode || compiledConfig.value.reviewMode,
+      strategyKey: form.strategyKey,
+      strategyId: form.strategyId,
+      modelsConfig,
+    }
+    const res = await post<ReviewDetailResponse>('/reviews/pre-pr', payload)
     if (res.data?.review?.id) {
       await initializePrePrGate(res.data.review.id)
       router.push(`/reviews/${res.data.review.id}`)
     }
   } catch { }
   finally { submitting.value = false }
+}
+
+function buildModelsConfigPayload(): string | null {
+  if (form.modelsConfigOverride.trim()) {
+    try {
+      return JSON.stringify(JSON.parse(form.modelsConfigOverride))
+    } catch {
+      message.error('高级 JSON 配置格式不正确，请修正后再提交')
+      return null
+    }
+  }
+  return JSON.stringify(compiledConfig.value.modelsConfig)
 }
 
 async function initializePrePrGate(reviewId: number) {

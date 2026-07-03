@@ -59,6 +59,7 @@ test('connectors can be grouped by rollout stage', () => {
 
   assert.ok(connectorsByStage.live.some(connector => connector.id === 'local-repository'))
   assert.ok(connectorsByStage.next.some(connector => connector.id === 'github-checks'))
+  assert.ok(connectorsByStage.next.some(connector => connector.id === 'jenkins-pipeline'))
   assert.ok(connectorsByStage.later.some(connector => connector.id === 'jira-linear-sync'))
 })
 
