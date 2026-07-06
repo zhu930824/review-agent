@@ -1,0 +1,23 @@
+CREATE TABLE IF NOT EXISTS operations_task (
+    id              BIGINT        NOT NULL AUTO_INCREMENT PRIMARY KEY COMMENT 'Primary key',
+    task_key        VARCHAR(160)  NOT NULL COMMENT 'Stable task key, for example FINDING-1 or CI-jenkins-pipeline-UNHEALTHY',
+    source_type     VARCHAR(40)   NOT NULL COMMENT 'FINDING/CI_HEALTH',
+    source_id       VARCHAR(160)  NOT NULL COMMENT 'Source object identifier',
+    source_ref      VARCHAR(200)  DEFAULT NULL COMMENT 'Human readable source reference',
+    title           VARCHAR(500)  NOT NULL COMMENT 'Task title',
+    task_status     VARCHAR(40)   NOT NULL DEFAULT 'OPEN' COMMENT 'OPEN/IN_PROGRESS/RESOLVED/ACCEPTED_RISK',
+    severity        VARCHAR(40)   NOT NULL COMMENT 'Task severity',
+    owner_role      VARCHAR(100)  DEFAULT NULL COMMENT 'Owner role',
+    sla_hours       BIGINT        DEFAULT NULL COMMENT 'Suggested SLA in hours',
+    priority_score  INT           DEFAULT 0 COMMENT 'Sorting score',
+    latest_signal   VARCHAR(500)  DEFAULT NULL COMMENT 'Latest source signal',
+    recommendation  VARCHAR(1000) DEFAULT NULL COMMENT 'Suggested action',
+    close_reason    VARCHAR(1000) DEFAULT NULL COMMENT 'Close reason',
+    closed_at       DATETIME      DEFAULT NULL COMMENT 'Closed timestamp',
+    created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Created timestamp',
+    updated_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Updated timestamp',
+    UNIQUE KEY uk_operations_task_key (task_key),
+    INDEX idx_operations_task_status (task_status),
+    INDEX idx_operations_task_source (source_type, source_id),
+    INDEX idx_operations_task_owner (owner_role)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Operations unified task table';
