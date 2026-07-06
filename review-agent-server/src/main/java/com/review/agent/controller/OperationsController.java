@@ -1,15 +1,19 @@
 package com.review.agent.controller;
 
 import com.review.agent.common.result.Result;
+import com.review.agent.domain.dto.BatchUpdateOperationsTaskRequest;
+import com.review.agent.domain.dto.CloseOperationsTaskRequest;
 import com.review.agent.domain.dto.OperationBusinessImpactVO;
 import com.review.agent.domain.dto.OperationDashboardVO;
 import com.review.agent.domain.dto.OperationFindingVO;
 import com.review.agent.domain.dto.OperationOwnerLoadVO;
 import com.review.agent.domain.dto.OperationRuleLearningCandidateVO;
 import com.review.agent.domain.dto.OperationsCiHealthActionVO;
+import com.review.agent.domain.dto.OperationsExternalIssueVO;
 import com.review.agent.domain.dto.OperationsStrategyPressureVO;
 import com.review.agent.domain.dto.OperationsTaskVO;
 import com.review.agent.domain.dto.OperationsTelemetryReadinessVO;
+import com.review.agent.domain.dto.UpdateOperationsTaskRequest;
 import com.review.agent.service.OperationsCiHealthActionService;
 import com.review.agent.service.OperationsRemediationQueueService;
 import com.review.agent.service.OperationsService;
@@ -19,7 +23,9 @@ import com.review.agent.service.OperationsTelemetryReadinessService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -61,6 +67,56 @@ public class OperationsController {
     @GetMapping("/tasks")
     public Result<List<OperationsTaskVO>> tasks(@RequestParam(defaultValue = "50") int limit) {
         return Result.success(taskService.listTasks(limit));
+    }
+
+    @GetMapping("/tasks/sla-alerts")
+    public Result<List<OperationsTaskVO>> taskSlaAlerts(@RequestParam(defaultValue = "20") int limit) {
+        return Result.success(taskService.listSlaAlerts(limit));
+    }
+
+    @PostMapping("/tasks/sync")
+    public Result<List<OperationsTaskVO>> syncTasks(@RequestParam(defaultValue = "50") int limit) {
+        return Result.success(taskService.syncTasks(limit));
+    }
+
+    @PatchMapping("/tasks/batch")
+    public Result<Void> batchUpdateTasks(@RequestBody BatchUpdateOperationsTaskRequest request) {
+        taskService.updateTasks(
+                request.getTaskKeys(),
+                request.getStatus(),
+                request.getOwnerRole(),
+                request.getSlaHours());
+        return Result.success();
+    }
+
+    @PatchMapping("/tasks/{taskKey}")
+    public Result<Void> updateTask(
+            @PathVariable("taskKey") String taskKey,
+            @RequestBody(required = false) UpdateOperationsTaskRequest request) {
+        taskService.updateTask(
+                taskKey,
+                request == null ? null : request.getStatus(),
+                request == null ? null : request.getOwnerRole(),
+                request == null ? null : request.getSlaHours());
+        return Result.success();
+    }
+
+    @PostMapping("/tasks/{taskKey}/gitlab-issue")
+    public Result<OperationsExternalIssueVO> syncTaskToGitLabIssue(@PathVariable("taskKey") String taskKey) {
+        return Result.success(taskService.syncGitLabIssue(taskKey));
+    }
+
+    @PostMapping("/tasks/{taskKey}/gitlab-issue/refresh")
+    public Result<OperationsExternalIssueVO> refreshTaskGitLabIssue(@PathVariable("taskKey") String taskKey) {
+        return Result.success(taskService.refreshGitLabIssue(taskKey));
+    }
+
+    @PostMapping("/tasks/{taskKey}/close")
+    public Result<Void> closeTask(
+            @PathVariable("taskKey") String taskKey,
+            @RequestBody(required = false) CloseOperationsTaskRequest request) {
+        taskService.closeTask(taskKey, request == null ? null : request.getCloseReason());
+        return Result.success();
     }
 
     @GetMapping("/remediation-queue")

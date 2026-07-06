@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
@@ -14,6 +15,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * GitLab REST API 客户端。
@@ -84,6 +86,70 @@ public class GitLabApiClient {
                 .toList();
     }
 
+    /**
+     * 创建 GitLab Issue。
+     *
+     * @param config      GitLab 集成配置
+     * @param title       Issue 标题
+     * @param description Issue 描述
+     * @param labels      Issue labels，逗号分隔
+     * @return 创建结果
+     */
+    public GitLabIssueCreateResult createIssue(ProjectGitLabConfig config, String title, String description, String labels) {
+        String url = buildApiUrl(config, "/projects/%s/issues".formatted(config.getProjectPath()));
+        Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("title", title);
+        body.put("description", description);
+        if (labels != null && !labels.isBlank()) {
+            body.put("labels", labels);
+        }
+
+        log.info("[GitLab API] create issue: projectPath={}, title={}", config.getProjectPath(), title);
+        Map<String, Object> response = post(url, config.getGitlabToken(), body);
+        return new GitLabIssueCreateResult(
+                stringValue(response.get("id")),
+                stringValue(response.get("iid")),
+                stringValue(response.get("web_url")),
+                stringValue(response.get("state")),
+                stringValue(response.get("title")),
+                labelsValue(response.get("labels")),
+                assigneeUsername(response),
+                usernameValue(response.get("author")),
+                dateTimeValue(response.get("updated_at")),
+                dateTimeValue(response.get("closed_at")),
+                url);
+    }
+
+    /**
+     * 鑾峰彇 GitLab Issue 褰撳墠鐘舵€併€?
+     *
+     * @param config   GitLab 闆嗘垚閰嶇疆
+     * @param issueIid 椤圭洰鍐呯殑 Issue IID
+     * @return Issue 鐘舵€佽鍙栫粨鏋?
+     */
+    public GitLabIssueStateResult getIssue(ProjectGitLabConfig config, String issueIid) {
+        String url = buildApiUrl(config, "/projects/%s/issues/%s"
+                .formatted(config.getProjectPath(), encode(issueIid)));
+
+        log.info("[GitLab API] get issue: projectPath={}, issueIid={}", config.getProjectPath(), issueIid);
+        Map<String, Object> response = get(url, config.getGitlabToken(), Map.class);
+        if (response == null) {
+            response = Map.of();
+        }
+        return new GitLabIssueStateResult(
+                stringValue(response.get("id")),
+                stringValue(response.get("iid")),
+                stringValue(response.get("web_url")),
+                stringValue(response.get("state")),
+                stringValue(response.get("title")),
+                labelsValue(response.get("labels")),
+                assigneeUsername(response),
+                usernameValue(response.get("author")),
+                dateTimeValue(response.get("updated_at")),
+                dateTimeValue(response.get("closed_at")),
+                url);
+    }
+
     private <T> T get(String url, String token, Class<T> responseType) {
         try {
             HttpHeaders headers = new HttpHeaders();
@@ -94,6 +160,24 @@ public class GitLabApiClient {
                 return response.getBody();
             }
             return null;
+        } catch (RestClientException e) {
+            log.error("[GitLab API] 请求失败: url={}, error={}", url, e.getMessage());
+            throw new BizException(CommonExceptionEnum.GIT_FETCH_FAILED, e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> post(String url, String token, Map<String, Object> body) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("PRIVATE-TOKEN", token);
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, entity, Map.class);
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return (Map<String, Object>) response.getBody();
+            }
+            return Map.of();
         } catch (RestClientException e) {
             log.error("[GitLab API] 请求失败: url={}, error={}", url, e.getMessage());
             throw new BizException(CommonExceptionEnum.GIT_FETCH_FAILED, e);
@@ -133,6 +217,61 @@ public class GitLabApiClient {
             return java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8);
         } catch (Exception e) {
             return value;
+        }
+    }
+
+    private String stringValue(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private String labelsValue(Object labels) {
+        if (labels instanceof List<?> list) {
+            return list.stream()
+                    .map(this::stringValue)
+                    .filter(value -> value != null && !value.isBlank())
+                    .collect(Collectors.joining(","));
+        }
+        return stringValue(labels);
+    }
+
+    @SuppressWarnings("unchecked")
+    private String assigneeUsername(Map<String, Object> response) {
+        Object assignee = response.get("assignee");
+        if (assignee != null) {
+            return usernameValue(assignee);
+        }
+        Object assignees = response.get("assignees");
+        if (assignees instanceof List<?> list && !list.isEmpty()) {
+            return list.stream()
+                    .map(this::usernameValue)
+                    .filter(value -> value != null && !value.isBlank())
+                    .collect(Collectors.joining(","));
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private String usernameValue(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            Object username = ((Map<String, Object>) map).get("username");
+            return stringValue(username);
+        }
+        return stringValue(value);
+    }
+
+    private java.time.LocalDateTime dateTimeValue(Object value) {
+        String text = stringValue(value);
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        try {
+            return java.time.OffsetDateTime.parse(text).toLocalDateTime();
+        } catch (RuntimeException ignored) {
+            try {
+                return java.time.LocalDateTime.parse(text);
+            } catch (RuntimeException ignoredAgain) {
+                return null;
+            }
         }
     }
 }

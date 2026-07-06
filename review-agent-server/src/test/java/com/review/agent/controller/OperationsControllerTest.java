@@ -1,15 +1,19 @@
 package com.review.agent.controller;
 
 import com.review.agent.common.result.Result;
+import com.review.agent.domain.dto.BatchUpdateOperationsTaskRequest;
+import com.review.agent.domain.dto.CloseOperationsTaskRequest;
 import com.review.agent.domain.dto.OperationBusinessImpactVO;
 import com.review.agent.domain.dto.OperationDashboardVO;
 import com.review.agent.domain.dto.OperationFindingVO;
 import com.review.agent.domain.dto.OperationOwnerLoadVO;
 import com.review.agent.domain.dto.OperationRuleLearningCandidateVO;
 import com.review.agent.domain.dto.OperationsCiHealthActionVO;
+import com.review.agent.domain.dto.OperationsExternalIssueVO;
 import com.review.agent.domain.dto.OperationsStrategyPressureVO;
 import com.review.agent.domain.dto.OperationsTaskVO;
 import com.review.agent.domain.dto.OperationsTelemetryReadinessVO;
+import com.review.agent.domain.dto.UpdateOperationsTaskRequest;
 import com.review.agent.service.OperationsCiHealthActionService;
 import com.review.agent.service.OperationsRemediationQueueService;
 import com.review.agent.service.OperationsService;
@@ -115,6 +119,89 @@ class OperationsControllerTest {
         assertEquals("FINDING-7", result.getData().get(0).getTaskKey());
     }
 
+    @Test
+    void syncTasksDelegatesToService() {
+        Result<List<OperationsTaskVO>> result = controller.syncTasks(12);
+
+        assertTrue(result.isSuccess());
+        assertEquals(12, taskService.lastSyncLimit);
+        assertEquals("FINDING-7", result.getData().get(0).getTaskKey());
+    }
+
+    @Test
+    void taskSlaAlertsDelegateToService() {
+        Result<List<OperationsTaskVO>> result = controller.taskSlaAlerts(9);
+
+        assertTrue(result.isSuccess());
+        assertEquals(9, taskService.lastSlaAlertLimit);
+        assertEquals("OVERDUE", result.getData().get(0).getSlaState());
+    }
+
+    @Test
+    void closeTaskDelegatesToService() {
+        CloseOperationsTaskRequest request = new CloseOperationsTaskRequest();
+        request.setCloseReason("Fixed");
+
+        Result<Void> result = controller.closeTask("FINDING-7", request);
+
+        assertTrue(result.isSuccess());
+        assertEquals("FINDING-7", taskService.closedTaskKey);
+        assertEquals("Fixed", taskService.closeReason);
+    }
+
+    @Test
+    void updateTaskDelegatesToService() {
+        UpdateOperationsTaskRequest request = new UpdateOperationsTaskRequest();
+        request.setStatus("IN_PROGRESS");
+        request.setOwnerRole("Platform Owner");
+        request.setSlaHours(8L);
+
+        Result<Void> result = controller.updateTask("FINDING-7", request);
+
+        assertTrue(result.isSuccess());
+        assertEquals("FINDING-7", taskService.updatedTaskKey);
+        assertEquals("IN_PROGRESS", taskService.updatedStatus);
+        assertEquals("Platform Owner", taskService.updatedOwnerRole);
+        assertEquals(8L, taskService.updatedSlaHours);
+    }
+
+    @Test
+    void batchUpdateTasksDelegatesToService() {
+        BatchUpdateOperationsTaskRequest request = new BatchUpdateOperationsTaskRequest();
+        request.setTaskKeys(List.of("FINDING-7", "CI-jenkins-pipeline-UNHEALTHY"));
+        request.setStatus("IN_PROGRESS");
+        request.setOwnerRole("Security Desk");
+        request.setSlaHours(12L);
+
+        Result<Void> result = controller.batchUpdateTasks(request);
+
+        assertTrue(result.isSuccess());
+        assertEquals(List.of("FINDING-7", "CI-jenkins-pipeline-UNHEALTHY"), taskService.batchUpdatedTaskKeys);
+        assertEquals("IN_PROGRESS", taskService.batchUpdatedStatus);
+        assertEquals("Security Desk", taskService.batchUpdatedOwnerRole);
+        assertEquals(12L, taskService.batchUpdatedSlaHours);
+    }
+
+    @Test
+    void syncTaskToGitLabIssueDelegatesToService() {
+        Result<OperationsExternalIssueVO> result = controller.syncTaskToGitLabIssue("FINDING-7");
+
+        assertTrue(result.isSuccess());
+        assertEquals("FINDING-7", taskService.syncedIssueTaskKey);
+        assertEquals("SYNCED", result.getData().getIssueStatus());
+        assertEquals("https://gitlab.example.com/team/review-agent/-/issues/9", result.getData().getExternalIssueUrl());
+    }
+
+    @Test
+    void refreshTaskGitLabIssueDelegatesToService() {
+        Result<OperationsExternalIssueVO> result = controller.refreshTaskGitLabIssue("FINDING-7");
+
+        assertTrue(result.isSuccess());
+        assertEquals("FINDING-7", taskService.refreshedIssueTaskKey);
+        assertEquals("SYNCED", result.getData().getIssueStatus());
+        assertEquals("closed", result.getData().getExternalIssueState());
+    }
+
     private static class FakeOperationsService implements OperationsService {
         @Override
         public OperationDashboardVO getDashboard() {
@@ -162,6 +249,20 @@ class OperationsControllerTest {
 
     private static class FakeTaskService implements OperationsTaskService {
         private int lastLimit;
+        private int lastSyncLimit;
+        private int lastSlaAlertLimit;
+        private String updatedTaskKey;
+        private String updatedStatus;
+        private String updatedOwnerRole;
+        private Long updatedSlaHours;
+        private List<String> batchUpdatedTaskKeys;
+        private String batchUpdatedStatus;
+        private String batchUpdatedOwnerRole;
+        private Long batchUpdatedSlaHours;
+        private String syncedIssueTaskKey;
+        private String refreshedIssueTaskKey;
+        private String closedTaskKey;
+        private String closeReason;
 
         @Override
         public List<OperationsTaskVO> listTasks(int limit) {
@@ -169,6 +270,70 @@ class OperationsControllerTest {
             OperationsTaskVO vo = new OperationsTaskVO();
             vo.setTaskKey("FINDING-7");
             return List.of(vo);
+        }
+
+        @Override
+        public List<OperationsTaskVO> syncTasks(int limit) {
+            lastSyncLimit = limit;
+            return listTasks(limit);
+        }
+
+        @Override
+        public List<OperationsTaskVO> listSlaAlerts(int limit) {
+            lastSlaAlertLimit = limit;
+            OperationsTaskVO vo = new OperationsTaskVO();
+            vo.setTaskKey("FINDING-7");
+            vo.setSlaState("OVERDUE");
+            return List.of(vo);
+        }
+
+        @Override
+        public void updateTask(String taskKey, String status, String ownerRole, Long slaHours) {
+            updatedTaskKey = taskKey;
+            updatedStatus = status;
+            updatedOwnerRole = ownerRole;
+            updatedSlaHours = slaHours;
+        }
+
+        @Override
+        public void updateTasks(List<String> taskKeys, String status, String ownerRole, Long slaHours) {
+            batchUpdatedTaskKeys = taskKeys;
+            batchUpdatedStatus = status;
+            batchUpdatedOwnerRole = ownerRole;
+            batchUpdatedSlaHours = slaHours;
+        }
+
+        @Override
+        public OperationsExternalIssueVO syncGitLabIssue(String taskKey) {
+            syncedIssueTaskKey = taskKey;
+            OperationsExternalIssueVO vo = new OperationsExternalIssueVO();
+            vo.setTaskKey(taskKey);
+            vo.setProvider("GITLAB");
+            vo.setIssueStatus("SYNCED");
+            vo.setExternalIssueUrl("https://gitlab.example.com/team/review-agent/-/issues/9");
+            return vo;
+        }
+
+        @Override
+        public OperationsExternalIssueVO refreshGitLabIssue(String taskKey) {
+            refreshedIssueTaskKey = taskKey;
+            OperationsExternalIssueVO vo = new OperationsExternalIssueVO();
+            vo.setTaskKey(taskKey);
+            vo.setProvider("GITLAB");
+            vo.setIssueStatus("SYNCED");
+            vo.setExternalIssueState("closed");
+            return vo;
+        }
+
+        @Override
+        public int refreshRecentGitLabIssues(int limit) {
+            return limit;
+        }
+
+        @Override
+        public void closeTask(String taskKey, String closeReason) {
+            closedTaskKey = taskKey;
+            this.closeReason = closeReason;
         }
     }
 

@@ -170,7 +170,14 @@
 | Method | Path | 用途 |
 | --- | --- | --- |
 | `GET` | `/api/operations/dashboard` | 查询运营中心数据 |
-| `GET` | `/api/operations/tasks` | 查询统一运营任务 | 参数：`limit`，默认 50；合并 Finding 修复项与 CI 健康异常，返回任务来源、Owner、SLA、优先级、最新信号和处理建议 |
+| `GET` | `/api/operations/tasks` | 查询统一运营任务 | 参数：`limit`，默认 50；合并 Finding 修复项与 CI 健康异常，并叠加 `operations_task` 中的状态、关闭原因和更新时间 |
+| `GET` | `/api/operations/tasks/sla-alerts` | 查询 SLA 告警任务 | 参数：`limit`，默认 20；返回 `OVERDUE` 和 `DUE_SOON` 的统一任务，包含到期时间、剩余小时数和 SLA 状态 |
+| `POST` | `/api/operations/tasks/sync` | 同步统一运营任务 | 参数：`limit`，默认 50；把当前推导出的 Finding/CI 健康任务 upsert 到 `operations_task` |
+| `PATCH` | `/api/operations/tasks/batch` | 批量更新统一运营任务 | 请求体传 `taskKeys`，可同时传 `status`、`ownerRole`、`slaHours`；用于批量分派任务和统一 SLA |
+| `PATCH` | `/api/operations/tasks/{taskKey}` | 更新统一运营任务 | 请求体可传 `status`、`ownerRole`、`slaHours`；支持接手处理中、接受风险、Owner/SLA 调整等运营流转 |
+| `POST` | `/api/operations/tasks/{taskKey}/gitlab-issue` | 同步统一运营任务到 GitLab Issue | 仅 Finding 来源任务会尝试创建 GitLab Issue；无项目 GitLab 配置时记录 `SKIPPED`，失败时记录 `FAILED` |
+| `POST` | `/api/operations/tasks/{taskKey}/gitlab-issue/refresh` | 刷新 GitLab Issue 状态 | 读取已关联 GitLab Issue 的 `state`、标题、labels、作者、负责人、更新时间和关闭时间，记录到 `OperationsExternalIssueVO`；当 GitLab Issue 为 `closed` 时关闭统一运营任务。后端也会按 `review-agent.operations.gitlab-issue-refresh-delay-ms` 自动批量刷新最近的 GitLab Issue |
+| `POST` | `/api/operations/tasks/{taskKey}/close` | 关闭统一运营任务 | 请求体可传 `closeReason`；将任务状态标记为 `RESOLVED` 并记录关闭原因 |
 | `GET` | `/api/operations/strategy-pressure` | 查询策略成本/质量压力排行 | 基于模型遥测 summary 生成压力分、压力等级和运营建议 |
 | `GET` | `/api/operations/ci-health-actions` | 查询 CI 健康运营行动项 | 从 CI 集成健康度派生异常 connector 的 owner、SLA、最新信号和处理建议 |
 | `GET` | `/api/operations/remediation-queue` | 查询运营中心修复队列 | 参数：`limit`，默认 50；返回未驳回 Finding，包含 Review、项目、严重度、人工状态、置信度和跨模型命中信息 |
@@ -185,7 +192,7 @@
 
 当前前端接入状态：
 
-- 运营中心全局 KPI 优先读取 `/api/operations/dashboard`，统一任务表读取 `/api/operations/tasks`，修复队列读取 `/api/operations/remediation-queue`，责任人负载读取 `/api/operations/owner-load`，规则学习视图读取 `/api/operations/rule-learning-candidates`，业务收益估算读取 `/api/operations/business-impact`；责任人负载、规则学习候选和业务收益均保留本地推导兜底。
+- 运营中心全局 KPI 优先读取 `/api/operations/dashboard`，统一任务表读取 `/api/operations/tasks`，SLA Alerts 面板读取 `/api/operations/tasks/sla-alerts`，并支持通过 `/api/operations/tasks/sync` 同步任务、`PATCH /api/operations/tasks/{taskKey}` 更新状态/Owner/SLA、`PATCH /api/operations/tasks/batch` 批量分派、`POST /api/operations/tasks/{taskKey}/gitlab-issue` 创建/记录 GitLab Issue、`POST /api/operations/tasks/{taskKey}/gitlab-issue/refresh` 刷新 GitLab Issue 状态并回流关闭、`/api/operations/tasks/{taskKey}/close` 关闭任务；修复队列读取 `/api/operations/remediation-queue`，责任人负载读取 `/api/operations/owner-load`，规则学习视图读取 `/api/operations/rule-learning-candidates`，业务收益估算读取 `/api/operations/business-impact`；责任人负载、规则学习候选和业务收益均保留本地推导兜底。
 - 运营中心修复队列已支持“确认有效”和“标记误报”，分别调用 `/api/operations/remediation-queue/{findingId}/confirm` 和 `/api/operations/remediation-queue/{findingId}/dismiss`，操作完成后刷新队列、Owner 负载、规则学习候选和业务收益估算。
 - 运营中心规则学习候选已支持“采纳”和“拒绝”，分别调用 `/api/operations/rule-learning-candidates/{findingId}/accept` 和 `/api/operations/rule-learning-candidates/{findingId}/reject`；决策持久化到 `operations_rule_learning_decision`，候选列表过滤已决策项；采纳时同步生成 `governance_rule_pack_change` 变更记录。
 - 运营中心“策略成本/质量压力”面板调用 `/api/operations/strategy-pressure` 和 `/api/operations/telemetry-readiness`，按失败率、误报代理、确认率、策略命中率、Judge 失败率、平均成本和延迟展示后端生成的策略压力分、压力等级、运营建议和遥测接入/归因就绪状态。

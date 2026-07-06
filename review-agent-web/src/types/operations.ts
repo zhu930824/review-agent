@@ -163,4 +163,31 @@ export interface OperationsTask {
   priorityScore: number
   latestSignal: string | null
   recommendation: string
+  closeReason?: string | null
+  externalIssue?: OperationsExternalIssue | null
+  createdAt?: string | null
+  closedAt?: string | null
+  updatedAt?: string | null
+  slaDueAt?: string | null
+  slaState?: 'ON_TRACK' | 'DUE_SOON' | 'OVERDUE' | 'CLOSED' | 'UNTRACKED' | 'NO_SLA' | string
+  remainingHours?: number | null
+}
+
+export interface OperationsExternalIssue {
+  taskKey: string
+  provider: string
+  issueStatus: 'SYNCED' | 'SKIPPED' | 'FAILED' | string
+  externalIssueId?: string | null
+  externalIssueIid?: string | null
+  externalIssueUrl?: string | null
+  externalIssueState?: string | null
+  externalIssueTitle?: string | null
+  externalIssueLabels?: string | null
+  externalIssueAssignee?: string | null
+  externalIssueAuthor?: string | null
+  externalUpdatedAt?: string | null
+  externalClosedAt?: string | null
+  requestUrl?: string | null
+  errorMessage?: string | null
+  syncedAt?: string | null
 }

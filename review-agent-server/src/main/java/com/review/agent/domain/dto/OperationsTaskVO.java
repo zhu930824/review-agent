@@ -2,6 +2,8 @@ package com.review.agent.domain.dto;
 
 import lombok.Data;
 
+import java.time.LocalDateTime;
+
 @Data
 public class OperationsTaskVO {
 
@@ -17,4 +19,12 @@ public class OperationsTaskVO {
     private Integer priorityScore;
     private String latestSignal;
     private String recommendation;
+    private String closeReason;
+    private OperationsExternalIssueVO externalIssue;
+    private LocalDateTime createdAt;
+    private LocalDateTime closedAt;
+    private LocalDateTime updatedAt;
+    private LocalDateTime slaDueAt;
+    private String slaState;
+    private Long remainingHours;
 }

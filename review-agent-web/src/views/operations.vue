@@ -137,13 +137,19 @@
             </a-space>
           </template>
           <template #extra>
-            <a-tag color="processing">{{ operationsTasks.length }} tasks</a-tag>
+            <a-space :size="8">
+              <a-tag color="processing">{{ operationsTasks.length }} tasks</a-tag>
+              <a-tag v-if="selectedTaskKeys.length" color="blue">{{ selectedTaskKeys.length }} selected</a-tag>
+              <a-button size="small" :disabled="!selectedTaskKeys.length" :loading="batchAssigningTasks" @click="batchAssignOperationsTasks">Batch assign</a-button>
+              <a-button size="small" :loading="operationsTasksSyncing" @click="syncOperationsTasks">Sync tasks</a-button>
+            </a-space>
           </template>
           <a-table
             :columns="taskColumns"
             :data-source="operationsTasks"
             :loading="operationsTasksLoading"
             :pagination="false"
+            :row-selection="taskRowSelection"
             row-key="taskKey"
             size="small"
           >
@@ -153,6 +159,44 @@
                   <div style="font-weight:600;font-size:13px">{{ record.title }}</div>
                   <div style="font-size:12px;color:#94a3b8;margin-top:2px">{{ record.sourceType }} · {{ record.sourceRef }}</div>
                   <div v-if="record.recommendation" style="font-size:12px;color:#64748b;margin-top:2px;line-height:1.4">{{ record.recommendation }}</div>
+                  <div v-if="record.externalIssue" style="font-size:12px;margin-top:4px">
+                    <a
+                      v-if="record.externalIssue.externalIssueUrl"
+                      :href="record.externalIssue.externalIssueUrl"
+                      target="_blank"
+                      rel="noreferrer"
+                      style="color:#2563eb"
+                    >
+                      GitLab issue #{{ record.externalIssue.externalIssueIid || record.externalIssue.externalIssueId }}
+                    </a>
+                    <a-tag
+                      v-if="record.externalIssue.externalIssueState"
+                      :color="externalIssueStateColor(record.externalIssue.externalIssueState)"
+                      style="margin-left:6px;margin-inline-end:0"
+                    >
+                      {{ record.externalIssue.externalIssueState }}
+                    </a-tag>
+                    <a-tag v-else :color="externalIssueStatusColor(record.externalIssue.issueStatus)">
+                      {{ record.externalIssue.provider }} {{ record.externalIssue.issueStatus }}
+                    </a-tag>
+                    <span v-if="record.externalIssue.syncedAt" style="color:#94a3b8;margin-left:6px">
+                      auto sync {{ formatExternalIssueSyncedAt(record.externalIssue.syncedAt) }}
+                    </span>
+                    <div
+                      v-if="record.externalIssue.externalIssueAssignee || record.externalIssue.externalIssueLabels || record.externalIssue.externalUpdatedAt"
+                      style="color:#64748b;margin-top:2px"
+                    >
+                      <span v-if="record.externalIssue.externalIssueAssignee">
+                        assignee {{ record.externalIssue.externalIssueAssignee }}
+                      </span>
+                      <span v-if="record.externalIssue.externalIssueLabels" style="margin-left:6px">
+                        labels {{ record.externalIssue.externalIssueLabels }}
+                      </span>
+                      <span v-if="record.externalIssue.externalUpdatedAt" style="margin-left:6px">
+                        updated {{ formatExternalIssueSyncedAt(record.externalIssue.externalUpdatedAt) }}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </template>
               <template v-else-if="column.key === 'severity'">
@@ -162,13 +206,73 @@
                 <a-tag>{{ record.ownerRole }}</a-tag>
               </template>
               <template v-else-if="column.key === 'slaHours'">
-                <span style="font-weight:600;font-size:13px">{{ record.slaHours }}h</span>
+                <a-space direction="vertical" :size="2">
+                  <span style="font-weight:600;font-size:13px">{{ record.slaHours }}h</span>
+                  <a-tag v-if="record.slaState" :color="slaStateColor(record.slaState)" style="margin-inline-end:0">
+                    {{ record.slaState }}{{ formatRemainingHours(record.remainingHours) }}
+                  </a-tag>
+                </a-space>
               </template>
               <template v-else-if="column.key === 'status'">
-                <a-tag :color="record.status === 'OPEN' ? 'orange' : 'green'">{{ record.status }}</a-tag>
+                <a-tag :color="taskStatusColor(record.status)">{{ record.status }}</a-tag>
               </template>
               <template v-else-if="column.key === 'latestSignal'">
                 <span style="font-size:12px;color:#64748b">{{ record.latestSignal || '-' }}</span>
+              </template>
+              <template v-else-if="column.key === 'actions'">
+                <a-space v-if="record.status !== 'RESOLVED'" :size="4" wrap>
+                  <a-button
+                    v-if="record.status === 'OPEN' || record.status === 'CONFIRMED'"
+                    type="link"
+                    size="small"
+                    :loading="updatingTaskKey === record.taskKey"
+                    @click="updateOperationsTaskStatus(record, 'IN_PROGRESS')"
+                  >
+                    Start
+                  </a-button>
+                  <a-button
+                    type="link"
+                    size="small"
+                    :loading="updatingTaskKey === record.taskKey"
+                    @click="editOperationsTaskOwner(record)"
+                  >
+                    Owner/SLA
+                  </a-button>
+                  <a-button
+                    type="link"
+                    size="small"
+                    :loading="updatingTaskKey === record.taskKey"
+                    @click="updateOperationsTaskStatus(record, 'ACCEPTED_RISK')"
+                  >
+                    Accept risk
+                  </a-button>
+                  <a-button
+                    type="link"
+                    size="small"
+                    :loading="syncingIssueTaskKey === record.taskKey"
+                    @click="syncOperationsTaskGitLabIssue(record)"
+                  >
+                    GitLab Issue
+                  </a-button>
+                  <a-button
+                    v-if="record.externalIssue?.externalIssueIid"
+                    type="link"
+                    size="small"
+                    :loading="syncingIssueTaskKey === record.taskKey"
+                    @click="refreshOperationsTaskGitLabIssue(record)"
+                  >
+                    Refresh Issue
+                  </a-button>
+                  <a-button
+                    type="link"
+                    size="small"
+                    :loading="closingTaskKey === record.taskKey"
+                    @click="closeOperationsTask(record)"
+                  >
+                    Close
+                  </a-button>
+                </a-space>
+                <span v-else style="font-size:12px;color:#94a3b8">{{ record.closeReason || 'Resolved' }}</span>
               </template>
             </template>
           </a-table>
@@ -242,6 +346,43 @@
 
       <!-- 右侧边栏 -->
       <a-col :xl="8" :span="24">
+        <a-card size="small" style="margin-bottom:16px">
+          <template #title>
+            <a-space :size="8">
+              <ClockCircleOutlined style="font-size:16px;color:#dc2626" />
+              <span style="font-weight:600;font-size:14px">SLA Alerts</span>
+            </a-space>
+          </template>
+          <a-space v-if="slaAlertTasks.length" direction="vertical" :size="8" style="width:100%">
+            <a-card
+              v-for="task in slaAlertTasks"
+              :key="task.taskKey"
+              size="small"
+              :body-style="{ padding: '12px' }"
+              style="background:#fff7ed;border-color:#fed7aa"
+            >
+              <a-space direction="vertical" :size="6" style="width:100%">
+                <a-space :size="6" wrap>
+                  <a-tag :color="slaStateColor(task.slaState || 'ON_TRACK')">{{ task.slaState }}</a-tag>
+                  <a-tag>{{ task.ownerRole }}</a-tag>
+                  <a-tag :color="taskSeverityColor(task.severity)">{{ task.severity }}</a-tag>
+                  <a-tag color="orange">{{ task.slaHours }}h SLA</a-tag>
+                </a-space>
+                <div style="font-weight:600;font-size:13px;color:#334155">{{ task.title }}</div>
+                <div style="font-size:12px;color:#64748b">
+                  {{ task.sourceType }} · {{ task.sourceRef }} · {{ formatRemainingHours(task.remainingHours) || 'due time tracked' }}
+                </div>
+                <a-space :size="4" wrap>
+                  <a-button type="link" size="small" @click="updateOperationsTaskStatus(task, 'IN_PROGRESS')">Start</a-button>
+                  <a-button type="link" size="small" @click="editOperationsTaskOwner(task)">Owner/SLA</a-button>
+                  <a-button type="link" size="small" @click="closeOperationsTask(task)">Close</a-button>
+                </a-space>
+              </a-space>
+            </a-card>
+          </a-space>
+          <a-empty v-else description="No SLA alerts" :image="undefined" />
+        </a-card>
+
         <!-- 责任人负载 -->
         <a-card size="small" style="margin-bottom:16px">
           <template #title>
@@ -370,16 +511,22 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { BarChartOutlined, ExclamationCircleOutlined, ClockCircleOutlined, RiseOutlined, UnorderedListOutlined, TeamOutlined, ExperimentOutlined, CalendarOutlined, AppstoreOutlined, PlayCircleOutlined, SafetyCertificateOutlined, RocketOutlined } from '@ant-design/icons-vue'
-import type { BusinessImpactEstimate, OperationDashboard, OperationOwnerLoad, OperationalFinding, OperationsCiHealthAction, OperationsTask, RemediationQueueItem, RuleLearningCandidate, StrategyPressureItem, StrategyPressureLevel, TelemetryReadinessItem, TelemetryReadinessLevel } from '@/types/operations'
+import type { BusinessImpactEstimate, OperationDashboard, OperationOwnerLoad, OperationalFinding, OperationsCiHealthAction, OperationsExternalIssue, OperationsTask, RemediationQueueItem, RuleLearningCandidate, StrategyPressureItem, StrategyPressureLevel, TelemetryReadinessItem, TelemetryReadinessLevel } from '@/types/operations'
 import type { SeverityLevel } from '@/types/review'
 import { useApi } from '@/composables/useApi'
 import { buildRemediationQueue, deriveOperationsScorecard, estimateReviewBusinessImpact, extractRuleLearningCandidates, summarizeRemediationQueue } from '@/utils/reviewOperations'
 
 const fallbackBusinessImpact = estimateReviewBusinessImpact({ monthlyReviews: 80, averageManualReviewMinutes: 35, automationCoveragePercent: 65, blockerFindings: 6, majorFindings: 18 })
 const router = useRouter()
-const { get, post } = useApi()
+const { get, post, patch } = useApi()
 const remediationQueueLoading = ref(false)
 const operationsTasksLoading = ref(false)
+const operationsTasksSyncing = ref(false)
+const batchAssigningTasks = ref(false)
+const updatingTaskKey = ref<string | null>(null)
+const syncingIssueTaskKey = ref<string | null>(null)
+const closingTaskKey = ref<string | null>(null)
+const selectedTaskKeys = ref<string[]>([])
 const actingFindingId = ref<number | null>(null)
 const actingFindingAction = ref<'CONFIRM' | 'DISMISS' | null>(null)
 const actingRuleCandidateId = ref<number | null>(null)
@@ -394,6 +541,7 @@ const strategyPressureItems = ref<StrategyPressureItem[]>([])
 const telemetryReadinessItems = ref<TelemetryReadinessItem[]>([])
 const ciHealthActions = ref<OperationsCiHealthAction[]>([])
 const operationsTasks = ref<OperationsTask[]>([])
+const slaAlertTasks = ref<OperationsTask[]>([])
 const remediationQueue = computed(() => buildRemediationQueue(operationalFindings.value))
 const businessImpact = computed(() => backendBusinessImpact.value ?? fallbackBusinessImpact)
 const learningCandidates = computed(() => backendRuleLearningCandidates.value.length
@@ -443,10 +591,17 @@ const taskColumns = [
   { title: 'SLA', key: 'slaHours', dataIndex: 'slaHours' },
   { title: '状态', key: 'status', dataIndex: 'status' },
   { title: '最新信号', key: 'latestSignal', dataIndex: 'latestSignal' },
+  { title: '操作', key: 'actions', width: 260 },
 ]
 const ownerLoad = computed(() => backendOwnerLoad.value.length
   ? backendOwnerLoad.value
   : Object.entries(queueSummary.value.byOwner).map(([role, count]) => ({ role, count, percent: queueSummary.value.total ? Math.round((count / queueSummary.value.total) * 100) : 0 })))
+const taskRowSelection = computed(() => ({
+  selectedRowKeys: selectedTaskKeys.value,
+  onChange: (keys: Array<string | number>) => {
+    selectedTaskKeys.value = keys.map(String)
+  },
+}))
 
 const operatingCadences = [
   { name: '每日风险清理', iconComp: SafetyCertificateOutlined, description: '每天处理 BLOCKER 和 24 小时内到期项，避免风险穿透到正式 PR。' },
@@ -460,6 +615,33 @@ function taskSeverityColor(severity: string) {
   return { BLOCKER: 'red', CRITICAL: 'red', MAJOR: 'orange', WARNING: 'orange', MINOR: 'blue', INFO: 'default' }[severity] ?? 'default'
 }
 
+function taskStatusColor(status: string) {
+  return {
+    OPEN: 'orange',
+    CONFIRMED: 'blue',
+    IN_PROGRESS: 'processing',
+    ACCEPTED_RISK: 'purple',
+    RESOLVED: 'green',
+  }[status] ?? 'default'
+}
+
+function slaStateColor(state: string) {
+  return {
+    OVERDUE: 'red',
+    DUE_SOON: 'orange',
+    ON_TRACK: 'green',
+    CLOSED: 'default',
+    UNTRACKED: 'default',
+    NO_SLA: 'default',
+  }[state] ?? 'default'
+}
+
+function formatRemainingHours(remainingHours?: number | null) {
+  if (remainingHours === null || remainingHours === undefined) return ''
+  if (remainingHours < 0) return ` · overdue ${Math.abs(remainingHours)}h`
+  return ` · ${remainingHours}h left`
+}
+
 function pressureColor(level: StrategyPressureLevel) {
   return { HIGH: 'red', MEDIUM: 'orange', LOW: 'green' }[level]
 }
@@ -470,6 +652,19 @@ function telemetryReadinessColor(level: TelemetryReadinessLevel) {
 
 function ciActionSeverityColor(severity: string) {
   return { CRITICAL: 'red', WARNING: 'orange', INFO: 'default' }[severity] ?? 'default'
+}
+
+function externalIssueStatusColor(status: string) {
+  return { SYNCED: 'green', SKIPPED: 'default', FAILED: 'red' }[status] ?? 'default'
+}
+
+function externalIssueStateColor(state: string) {
+  return { opened: 'processing', closed: 'green', reopened: 'blue' }[state] ?? 'default'
+}
+
+function formatExternalIssueSyncedAt(value: string) {
+  if (!value) return ''
+  return value.replace('T', ' ').slice(0, 16)
 }
 
 function formatMicroCents(n: number): string {
@@ -515,6 +710,150 @@ async function loadOperationsTasks() {
     console.error(e)
   } finally {
     operationsTasksLoading.value = false
+  }
+}
+
+async function loadOperationsTaskSlaAlerts() {
+  try {
+    const res = await get<OperationsTask[]>('/operations/tasks/sla-alerts?limit=8')
+    if (res.data) slaAlertTasks.value = res.data
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+async function syncOperationsTasks() {
+  operationsTasksSyncing.value = true
+  try {
+    const res = await post<OperationsTask[]>('/operations/tasks/sync?limit=20')
+    if (res.data) operationsTasks.value = res.data
+    await loadOperationsTaskSlaAlerts()
+  } catch (e) {
+    console.error(e)
+  } finally {
+    operationsTasksSyncing.value = false
+  }
+}
+
+async function updateOperationsTaskStatus(task: OperationsTask, status: string) {
+  updatingTaskKey.value = task.taskKey
+  try {
+    await patch(`/operations/tasks/${encodeURIComponent(task.taskKey)}`, { status })
+    message.success(`Task moved to ${status}`)
+    await Promise.all([loadOperationsTasks(), loadOperationsTaskSlaAlerts()])
+  } catch (e) {
+    console.error(e)
+    message.error('Failed to update task status')
+  } finally {
+    updatingTaskKey.value = null
+  }
+}
+
+async function batchAssignOperationsTasks() {
+  if (!selectedTaskKeys.value.length) return
+  const ownerRole = window.prompt('Owner role', 'Code Owner')
+  if (ownerRole === null) return
+  const slaInput = window.prompt('SLA hours', '24')
+  if (slaInput === null) return
+  const slaHours = Number.parseInt(slaInput, 10)
+  if (!Number.isFinite(slaHours) || slaHours <= 0) {
+    message.warning('SLA hours must be a positive number')
+    return
+  }
+  batchAssigningTasks.value = true
+  try {
+    await patch('/operations/tasks/batch', {
+      taskKeys: selectedTaskKeys.value,
+      status: 'IN_PROGRESS',
+      ownerRole,
+      slaHours,
+    })
+    message.success(`Batch assigned ${selectedTaskKeys.value.length} tasks`)
+    selectedTaskKeys.value = []
+    await Promise.all([loadOperationsTasks(), loadOperationsTaskSlaAlerts(), loadOwnerLoad()])
+  } catch (e) {
+    console.error(e)
+    message.error('Failed to batch assign tasks')
+  } finally {
+    batchAssigningTasks.value = false
+  }
+}
+
+async function editOperationsTaskOwner(task: OperationsTask) {
+  const ownerRole = window.prompt('Owner role', task.ownerRole || 'Code Owner')
+  if (ownerRole === null) return
+  const slaInput = window.prompt('SLA hours', String(task.slaHours || 24))
+  if (slaInput === null) return
+  const slaHours = Number.parseInt(slaInput, 10)
+  if (!Number.isFinite(slaHours) || slaHours <= 0) {
+    message.warning('SLA hours must be a positive number')
+    return
+  }
+  updatingTaskKey.value = task.taskKey
+  try {
+    await patch(`/operations/tasks/${encodeURIComponent(task.taskKey)}`, { ownerRole, slaHours })
+    message.success('Task owner and SLA updated')
+    await Promise.all([loadOperationsTasks(), loadOperationsTaskSlaAlerts()])
+  } catch (e) {
+    console.error(e)
+    message.error('Failed to update task owner')
+  } finally {
+    updatingTaskKey.value = null
+  }
+}
+
+async function syncOperationsTaskGitLabIssue(task: OperationsTask) {
+  syncingIssueTaskKey.value = task.taskKey
+  try {
+    const res = await post<OperationsExternalIssue>(`/operations/tasks/${encodeURIComponent(task.taskKey)}/gitlab-issue`)
+    if (res.data?.issueStatus === 'SYNCED') {
+      message.success('GitLab issue created')
+    } else if (res.data?.issueStatus === 'SKIPPED') {
+      message.warning(res.data.errorMessage || 'GitLab issue sync skipped')
+    } else {
+      message.error(res.data?.errorMessage || 'GitLab issue sync failed')
+    }
+    await loadOperationsTasks()
+  } catch (e) {
+    console.error(e)
+    message.error('Failed to sync GitLab issue')
+  } finally {
+    syncingIssueTaskKey.value = null
+  }
+}
+
+async function refreshOperationsTaskGitLabIssue(task: OperationsTask) {
+  syncingIssueTaskKey.value = task.taskKey
+  try {
+    const res = await post<OperationsExternalIssue>(`/operations/tasks/${encodeURIComponent(task.taskKey)}/gitlab-issue/refresh`)
+    if (res.data?.issueStatus === 'SYNCED') {
+      const state = res.data.externalIssueState ? `: ${res.data.externalIssueState}` : ''
+      message.success(`GitLab issue refreshed${state}`)
+    } else if (res.data?.issueStatus === 'SKIPPED') {
+      message.warning(res.data.errorMessage || 'GitLab issue refresh skipped')
+    } else {
+      message.error(res.data?.errorMessage || 'GitLab issue refresh failed')
+    }
+    await Promise.all([loadOperationsTasks(), loadOperationsTaskSlaAlerts()])
+  } catch (e) {
+    console.error(e)
+    message.error('Failed to refresh GitLab issue')
+  } finally {
+    syncingIssueTaskKey.value = null
+  }
+}
+
+async function closeOperationsTask(task: OperationsTask) {
+  const closeReason = window.prompt('Close reason', 'Resolved from operations workbench')
+  if (closeReason === null) return
+  closingTaskKey.value = task.taskKey
+  try {
+    await post(`/operations/tasks/${encodeURIComponent(task.taskKey)}/close`, { closeReason })
+    await Promise.all([loadOperationsTasks(), loadOperationsTaskSlaAlerts()])
+  } catch (e) {
+    console.error(e)
+  } finally {
+    closingTaskKey.value = null
   }
 }
 
@@ -575,6 +914,7 @@ async function reloadOperationsWorkflows() {
     loadBusinessImpact(),
     loadCiHealthActions(),
     loadOperationsTasks(),
+    loadOperationsTaskSlaAlerts(),
   ])
 }
 
@@ -626,6 +966,7 @@ onMounted(() => {
   loadTelemetryReadiness()
   loadCiHealthActions()
   loadOperationsTasks()
+  loadOperationsTaskSlaAlerts()
   loadRemediationQueue()
   loadRuleLearningCandidates()
   loadBusinessImpact()
