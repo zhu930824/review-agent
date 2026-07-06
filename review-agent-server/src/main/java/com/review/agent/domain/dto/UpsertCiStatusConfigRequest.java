@@ -25,6 +25,10 @@ public class UpsertCiStatusConfigRequest {
     @NotBlank(message = "状态检查名称不能为空")
     private String statusContext = "Review Agent";
 
+    private String jenkinsParameterTemplate;
+
+    private String notificationWebhookUrl;
+
     private Boolean checksEnabled = true;
 
     private Boolean sarifUploadEnabled = false;

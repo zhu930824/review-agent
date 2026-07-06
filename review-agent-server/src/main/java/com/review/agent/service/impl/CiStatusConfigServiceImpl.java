@@ -55,6 +55,8 @@ public class CiStatusConfigServiceImpl implements CiStatusConfigService {
         config.setRepoUrl(request.getRepoUrl());
         config.setDefaultBranch(request.getDefaultBranch());
         config.setStatusContext(request.getStatusContext());
+        config.setJenkinsParameterTemplate(trimToNull(request.getJenkinsParameterTemplate()));
+        config.setNotificationWebhookUrl(trimToNull(request.getNotificationWebhookUrl()));
         config.setChecksEnabled(request.getChecksEnabled());
         config.setSarifUploadEnabled(request.getSarifUploadEnabled());
         if (hasText(request.getApiToken())) {
@@ -91,6 +93,8 @@ public class CiStatusConfigServiceImpl implements CiStatusConfigService {
         vo.setRepoUrl(config.getRepoUrl());
         vo.setDefaultBranch(config.getDefaultBranch());
         vo.setStatusContext(config.getStatusContext());
+        vo.setJenkinsParameterTemplate(config.getJenkinsParameterTemplate());
+        vo.setNotificationWebhookUrl(config.getNotificationWebhookUrl());
         vo.setChecksEnabled(config.getChecksEnabled());
         vo.setSarifUploadEnabled(config.getSarifUploadEnabled());
         vo.setTokenConfigured(hasText(config.getApiToken()));
@@ -98,5 +102,12 @@ public class CiStatusConfigServiceImpl implements CiStatusConfigService {
         vo.setCreatedAt(config.getCreatedAt());
         vo.setUpdatedAt(config.getUpdatedAt());
         return vo;
+    }
+
+    private String trimToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 }

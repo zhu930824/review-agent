@@ -43,8 +43,8 @@ Review Agent 当前已经不是单点的“AI 代码审查工具”，而是在�
 | Model Config | 模型供应商、模型档案、审查策略、角色绑定 | CRUD 和前端配置页已实现 |
 | Model Invocation & Telemetry | 模型调用抽象、HTTP adapter、调用遥测、策略效果汇总 | `ModelInvocationPort` seam、HTTP adapter、smoke-test、遥测表和汇总已实现；真实主链路迁移未完成 |
 | Governance | 治理能力目录、连接器、规则包、工作流模板、遥测行动项 | 页面和后端目录已实现，规则包变更记录、dry-run 预览、批准/应用/拒绝/回滚状态流、规则控制项写回、版本快照列表与快照详情查看已接入 |
-| Operations | 统一任务视图、修复队列、Owner 负载、规则学习候选、业务收益、策略压力、遥测就绪度、CI 健康行动项 | 后端聚合接口和前端运营页已实现；统一任务视图已合并 Finding 修复项与 CI 健康异常，并支持同步到 `operations_task`、更新状态/Owner/SLA、批量分派、SLA 到期告警、GitLab Issue 创建记录、GitLab Issue 基础字段映射、手动/自动状态刷新与关闭回流、关闭任务和记录关闭原因；修复队列支持确认有效/标记误报，规则学习候选支持采纳/拒绝并生成治理变更，仍缺更多 Issue 系统 |
-| Integration | CI 配置、回写日志、健康度汇总、Webhook、SARIF、PR Summary、动作日志 | 多个接口已实现；治理中心 CI 配置支持 GitHub/GitLab/Jenkins 连接器切换；后端已按 provider 分发 GitHub Status、GitLab Commit Status 与 Jenkins Gate Job 触发，Jenkins 支持 crumb 预取、队列地址记录和队列/构建结果手动与自动刷新；治理中心已展示每个 provider 的 CI 集成健康状态，并把异常健康状态转成 CI Health Actions |
+| Operations | 统一任务视图、修复队列、Owner 负载、规则学习候选、业务收益、策略压力、遥测就绪度、CI 健康行动项 | 后端聚合接口和前端运营页已实现；统一任务视图已合并 Finding 修复项与 CI 健康异常，并支持同步到 `operations_task`、更新状态/Owner/SLA、批量分派、SLA 到期告警、GitLab Issue 创建记录、GitLab Issue 基础字段映射、手动/自动状态刷新与关闭回流、手动绑定 Jira/禅道/其他 Issue、关闭任务和记录关闭原因；CI Health Actions 已派生通知计划载荷，并可通过配置的通用 Webhook 发送、写入动作日志；修复队列支持确认有效/标记误报，规则学习候选支持采纳/拒绝并生成治理变更，仍缺 Jira/禅道 API 自动化和厂商级通知适配器 |
+| Integration | CI 配置、回写日志、健康度汇总、Webhook、SARIF、PR Summary、动作日志 | 多个接口已实现；治理中心 CI 配置支持 GitHub/GitLab/Jenkins 连接器切换；后端已按 provider 分发 GitHub Status、GitLab Commit Status 与 Jenkins Gate Job 触发，Jenkins 支持参数模板、crumb 预取、队列地址记录和队列/构建结果手动与自动刷新；GitHub/GitLab webhook 均已进入签名或 token 校验、幂等和投递日志；治理中心已展示每个 provider 的 CI 集成健康状态，并把异常健康状态转成 CI Health Actions；运营中心可直接重试失败回写和刷新 Jenkins 结果 |
 
 ## 4. 前端页面实现现状
 
@@ -62,8 +62,8 @@ Review Agent 当前已经不是单点的“AI 代码审查工具”，而是在�
 | `/projects/:id` | 项目详情 | 项目信息、仓库分支列表、从分支发起审查、项目下 Review 列表、项目编辑与删除 |
 | `/reviews/create` | 创建 Review | 选择项目、分支、策略，支持从 URL 预填项目/源分支/目标分支，提交策略 Key、reviewMode 和 modelsConfig，创建 Pre-PR Review，并初始化 Gate |
 | `/reviews/:id` | Review 详情 | Review 摘要、Finding、人工状态、Gate、SARIF、PR Summary、风险/测试/重构分析 |
-| `/governance` | 治理中心 | 治理目录、GitHub/GitLab/Jenkins CI 配置、CI 集成健康度、CI Health Actions、写回日志、集成动作、遥测行动项 |
-| `/operations` | 运营中心 | KPI、统一任务视图、SLA Alerts、任务同步/状态流转/Owner/SLA 调整/批量分派/GitLab Issue/关闭、修复队列、Owner 负载、规则学习候选、业务收益、策略压力、遥测就绪度、CI Health Actions |
+| `/governance` | 治理中心 | 治理目录、GitHub/GitLab/Jenkins CI 配置、CI 集成健康度、CI Health Actions、写回日志、集成动作、Webhook 投递日志、遥测行动项 |
+| `/operations` | 运营中心 | KPI、统一任务视图、SLA Alerts、任务同步/状态流转/Owner/SLA 调整/批量分派/GitLab Issue/关闭、修复队列、Owner 负载、规则学习候选、业务收益、策略压力、遥测就绪度、CI Health Actions、CI 回写重试、Jenkins 结果刷新、CI 健康通知计划和 Webhook 发送 |
 | `/settings/models` | 模型配置 | Provider/Profile/Strategy 管理、角色绑定、模型调用烟测 |
 | `/knowledge` | 知识查询 | 调用知识查询接口，并按记忆、规则、发现项展示统计和筛选 |
 | `/gateway` | AI Gateway | Prompt、统计、模型遥测 summary 优先展示，并支持手动写入遥测记录 |
@@ -253,11 +253,12 @@ AI Gateway 页面已经优先读取 `/api/model-telemetry/summary`，如果失�
 Governance 页面当前还接入：
 
 - CI 配置读取和保存，支持在 GitHub Checks、GitLab Merge Request / Pipeline、Jenkins Pipeline Gate 三种连接器之间切换。
-- CI 状态发布服务会发布到所有启用的 connector：GitHub 使用 Commit Status，GitLab 使用 `/api/v4/projects/:id/statuses/:sha`，Jenkins 先尝试读取 `/crumbIssuer/api/json`，再触发 `buildWithParameters` 并携带 Review Agent Gate 参数；触发成功后优先把 Jenkins 返回的队列 `Location` 写入回写日志。治理中心可手动刷新 Jenkins queue/build API；后端也会按 `review-agent.ci-writeback.jenkins-refresh-delay-ms` 自动刷新，把 build URL、build number 和 result 更新到同一条日志。
-- CI 集成健康度汇总，按 GitHub/GitLab/Jenkins connector 聚合最近写回记录，输出 `HEALTHY`、`DEGRADED`、`UNHEALTHY`、`NO_DATA`、成功/失败/跳过计数、最近写回状态和 Jenkins 外部构建结果；前端会把非健康状态转成 CI Health Actions，提示检查凭证、仓库绑定、失败重试、Jenkins 构建刷新或发布烟测。
+- CI 状态发布服务会发布到所有启用的 connector：GitHub 使用 Commit Status，GitLab 使用 `/api/v4/projects/:id/statuses/:sha`，Jenkins 先尝试读取 `/crumbIssuer/api/json`，再触发 `buildWithParameters` 并携带 Review Agent Gate 参数；企业 Jenkins 可在治理中心配置参数模板，用换行或 `&` 分隔 `key=value`，通过 `${reviewId}`、`${jenkinsState}`、`${commitSha}`、`${context}` 等占位符适配既有 Pipeline 参数。触发成功后优先把 Jenkins 返回的队列 `Location` 写入回写日志。治理中心可手动刷新 Jenkins queue/build API；后端也会按 `review-agent.ci-writeback.jenkins-refresh-delay-ms` 自动刷新，把 build URL、build number 和 result 更新到同一条日志。
+- CI 集成健康度汇总，按 GitHub/GitLab/Jenkins connector 聚合最近写回记录，输出 `HEALTHY`、`DEGRADED`、`UNHEALTHY`、`NO_DATA`、成功/失败/跳过计数、最近写回状态、最近 writeback id、请求 URL 和 Jenkins 外部构建结果；前端会把非健康状态转成 CI Health Actions，提示检查凭证、仓库绑定、失败重试、Jenkins 构建刷新或发布烟测。
 - CI 写回日志。
 - 失败写回手动重试。
 - 最近集成动作日志。
+- 最近 Webhook 投递日志，读取 `/api/integration/webhooks/deliveries?limit=10`，展示 GitHub/GitLab 投递的 provider、eventType、deliveryId、状态和错误信息。
 - Operations telemetry-readiness 转成治理行动项。
 - Operations 采纳规则学习候选后生成的规则包变更记录。
 - 规则包变更 dry-run 预览，返回已有控制项数量、拟新增控制项、快照 JSON 和影响摘要。
@@ -288,10 +289,10 @@ Governance 页面当前还接入：
 Operations 页面当前已经把后端聚合能力接入到多个运营视图：
 
 - 全局 KPI。
-- 统一运营任务：合并 Finding 修复项与 CI 健康异常，展示来源、Owner、SLA、优先级、最新信号和处理建议，并支持同步到 `operations_task`、接手处理中、接受风险、调整 Owner/SLA、批量分派、SLA 到期告警、创建并记录 GitLab Issue、映射 GitLab Issue 标题/labels/作者/负责人/更新时间/关闭时间、手动/自动刷新 GitLab Issue 状态并在 Issue 关闭时回流关闭任务、关闭任务和记录关闭原因。
+- 统一运营任务：合并 Finding 修复项与 CI 健康异常，展示来源、Owner、SLA、优先级、最新信号和处理建议，并支持同步到 `operations_task`、接手处理中、接受风险、调整 Owner/SLA、批量分派、SLA 到期告警、创建并记录 GitLab Issue、映射 GitLab Issue 标题/labels/作者/负责人/更新时间/关闭时间、手动/自动刷新 GitLab Issue 状态并在 Issue 关闭时回流关闭任务、手动绑定 Jira/禅道/其他 Issue、关闭任务和记录关闭原因。
 - 策略成本/质量压力。
 - 遥测接入/归因就绪度。
-- CI Health Actions：复用 CI 集成健康度事实数据，将异常 connector 转成 `ownerRole`、`slaHours`、`latestSignal` 和处理建议。
+- CI Health Actions：复用 CI 集成健康度事实数据，将异常 connector 转成 `ownerRole`、`slaHours`、`latestSignal`、最近 writeback id、外部构建链接、处理建议和通知计划；通知计划包含优先级、去重键、标题、正文和目标链接。治理中心可为每个 CI connector 配置 `notificationWebhookUrl`，运营中心可一键发送通用 Webhook，并把发送结果作为 `CI_HEALTH_NOTIFICATION` 写入 `integration_action_log`。运营中心也可直接重试失败回写，Jenkins 行动项可直接刷新队列/构建结果。
 - 修复队列。
 - 队列项确认有效/标记误报。
 - Owner 负载。
@@ -299,7 +300,7 @@ Operations 页面当前已经把后端聚合能力接入到多个运营视图：
 - 规则学习候选采纳/拒绝，决策持久化到 `operations_rule_learning_decision`。
 - 月度业务收益估算。
 
-当前不足是：统一任务已经具备持久化同步、Owner/SLA 调整、批量分派、`IN_PROGRESS` / `ACCEPTED_RISK` 状态流、SLA 到期告警、GitLab Issue 创建、GitLab Issue 基础字段映射、手动/自动状态刷新与关闭回流能力，但仍缺少 Jira/禅道等更多 Issue 系统，以及评论/优先级/迭代等更高级工作流字段。
+当前不足是：统一任务已经具备持久化同步、Owner/SLA 调整、批量分派、`IN_PROGRESS` / `ACCEPTED_RISK` 状态流、SLA 到期告警、GitLab Issue 创建、GitLab Issue 基础字段映射、手动/自动状态刷新与关闭回流、Jira/禅道/其他 Issue 手动绑定能力，CI Health Actions 已具备通知计划载荷与通用 Webhook 发送；但仍缺少 Jira/禅道 API 自动化、企业微信/飞书/Slack 等厂商级通知适配器，以及评论/优先级/迭代等更高级工作流字段。
 
 ### 5.9 Integration
 
@@ -314,6 +315,8 @@ Operations 页面当前已经把后端聚合能力接入到多个运营视图：
 | `POST` | `/api/integration/ci-config/writebacks/{id}/retry` | 手动重试写回 |
 | `POST` | `/api/integration/ci-config/writebacks/jenkins/refresh` | 刷新 Jenkins 队列/构建结果 |
 | `POST` | `/api/integration/webhooks/github` | 接收 GitHub Webhook |
+| `POST` | `/api/integration/webhooks/gitlab` | 接收 GitLab Webhook |
+| `GET` | `/api/integration/webhooks/deliveries` | 最近 Webhook 投递日志 |
 | `POST` | `/api/integration/sarif/upload` | 上传 SARIF 到 GitHub Code Scanning |
 | `POST` | `/api/integration/pr-summary/comment` | 回写 PR Summary 评论 |
 | `GET` | `/api/integration/actions` | 最近集成动作日志 |
@@ -325,7 +328,7 @@ Operations 页面当前已经把后端聚合能力接入到多个运营视图：
 - `integration_webhook_delivery_log`
 - `integration_action_log`
 
-集成链路的设计已经比较清楚：配置、执行、日志、失败重试、动作追踪和健康度汇总都有对应对象。当前治理中心已经可以保存 `github-checks`、`gitlab-merge-request` 和 `jenkins-pipeline` 三类 CI 连接器配置；后端状态发布已经具备 provider-aware 分发，GitHub/GitLab/Jenkins 都能进入同一条 Gate 发布与写回日志链路。Jenkins 已支持 crumb 预取、队列地址记录，以及队列/构建结果的手动与自动刷新。CI Health Actions 已经能把异常健康状态转成治理侧处理建议。后续重点是细粒度参数模板、更多 Provider、权限边界、密钥管理和真实生产环境验证。
+集成链路的设计已经比较清楚：配置、执行、日志、失败重试、动作追踪和健康度汇总都有对应对象。当前治理中心已经可以保存 `github-checks`、`gitlab-merge-request` 和 `jenkins-pipeline` 三类 CI 连接器配置；后端状态发布已经具备 provider-aware 分发，GitHub/GitLab/Jenkins 都能进入同一条 Gate 发布与写回日志链路。GitHub/GitLab webhook 已进入统一投递日志，并可通过治理中心查看最近接收、拒绝或重复投递；Jenkins 已支持参数模板、crumb 预取、队列地址记录，以及队列/构建结果的手动与自动刷新。CI Health Actions 已经能把异常健康状态转成治理侧处理建议。后续重点是更多 Provider、权限边界、密钥管理和真实生产环境验证。
 
 ## 6. 关键业务流程
 
@@ -432,8 +435,8 @@ flowchart LR
 | 模型调用 | 部分可用 | HTTP adapter 和 smoke-test 已有，主审查链路迁移未完成 |
 | 模型遥测 | 可用但数据源不足 | 表、记录、汇总和视图具备，真实调用数据接入不足 |
 | Governance | 部分可用 | 控制台、配置、行动项、规则包变更记录、dry-run、基础状态流、规则控制项写回、版本快照列表和快照详情查看具备，Owner、审批人与跨版本影响面不足 |
-| Operations | 部分可用 | 聚合视图丰富，统一任务视图已合并代码风险和 CI 集成异常，并具备持久化同步、Owner/SLA 调整、批量分派、SLA 到期告警、GitLab Issue 创建记录、GitLab Issue 基础字段映射、手动/自动状态刷新与关闭回流、状态流转和关闭原因记录；队列项可确认/驳回，规则候选可采纳/拒绝并沉淀治理变更，仍缺更多 Issue 系统 |
-| CI/集成 | 部分可用 | GitHub Status、GitLab Commit Status、Jenkins Gate Job 触发、Jenkins crumb 预取、队列/构建结果手动与自动刷新、CI 集成健康度汇总、CI Health Actions、SARIF、PR Summary、Webhook 有实现；Jenkins 参数模板和更多 provider 仍需补齐 |
+| Operations | 部分可用 | 聚合视图丰富，统一任务视图已合并代码风险和 CI 集成异常，并具备持久化同步、Owner/SLA 调整、批量分派、SLA 到期告警、GitLab Issue 创建记录、GitLab Issue 基础字段映射、手动/自动状态刷新与关闭回流、Jira/禅道/其他 Issue 手动绑定、状态流转、关闭原因记录、CI 健康通知计划和通用 Webhook 发送；队列项可确认/驳回，规则候选可采纳/拒绝并沉淀治理变更，仍缺更多 Issue 系统 API 自动化和厂商级通知适配器 |
+| CI/集成 | 部分可用 | GitHub Status、GitLab Commit Status、Jenkins Gate Job 触发、GitHub/GitLab Webhook 接收、Jenkins 参数模板、Jenkins crumb 预取、队列/构建结果手动与自动刷新、CI 集成健康度汇总、CI Health Actions、SARIF、PR Summary 有实现；更多 provider 仍需补齐 |
 | Agent/Skill/MCP | 原型到半成品 | 结构丰富，执行契约和可审计边界不足 |
 
 ## 9. 已发现的实现差距与风险
@@ -482,10 +485,10 @@ flowchart LR
 
 ### 9.5 Operations 任务实体仍缺完整流转
 
-运营中心目前已有统一任务读模型和 `operations_task` 持久化实体，能发现问题、排序问题、给建议，并支持同步、状态更新、Owner/SLA 调整、批量分派、SLA 到期告警、GitLab Issue 创建、GitLab Issue 基础字段映射、GitLab Issue 手动/自动状态刷新与关闭回流。后续仍需要补齐：
+运营中心目前已有统一任务读模型和 `operations_task` 持久化实体，能发现问题、排序问题、给建议，并支持同步、状态更新、Owner/SLA 调整、批量分派、SLA 到期告警、GitLab Issue 创建、GitLab Issue 基础字段映射、GitLab Issue 手动/自动状态刷新与关闭回流、Jira/禅道/其他 Issue 手动绑定，以及 CI 健康通知计划和通用 Webhook 发送。后续仍需要补齐：
 
 - 外部 Issue 评论、优先级、迭代等更高级工作流字段。
-- Jira、禅道等更多 Issue 系统。
+- Jira、禅道等更多 Issue 系统 API 自动创建和状态回流。
 
 ### 9.6 前端验证环境不稳定
 
@@ -523,7 +526,7 @@ flowchart LR
 
 1. 修复队列和 CI Health Actions 已进入统一任务读模型，并已可同步为 `operations_task` 持久化任务。
 2. Owner/SLA 调整、批量分派、`IN_PROGRESS` 和 `ACCEPTED_RISK` 状态流、SLA Alerts 已接入。
-3. GitLab Issue 创建、同步记录、手动/自动状态刷新与关闭回流已接入；下一步补更多 Issue 系统。
+3. GitLab Issue 创建、同步记录、手动/自动状态刷新与关闭回流已接入，Jira/禅道/其他 Issue 已支持手动绑定；下一步补更多 Issue 系统 API 自动化。
 4. 规则学习候选已支持采纳/拒绝；采纳结果已沉淀为规则包变更记录。
 
 ### P4：规则生命周期（已部分完成）
@@ -557,5 +560,5 @@ Review Agent 当前已经完成了研发治理平台的主体框架：
 2. 让 Operations / Governance 消费更多真实遥测，而不是只消费空态和诊断。
 3. 把统一任务继续升级为支持外部 Issue 完整字段映射和更多企业 Issue 系统的运营任务闭环。
 4. 规则包变更已支持 dry-run、`PROPOSED`、`APPROVED`、`APPLIED`、`REJECTED`、`ROLLED_BACK`，且 `APPLIED` 会写回规则控制项并生成规则包版本快照；下一步补 Owner、审批人、抑制策略细化和跨版本影响面。
-5. 继续补齐 GitHub Checks API、Jenkins 参数模板、健康度任务/通知闭环和更多 CI Provider 的生产级回写形态。
+5. 继续补齐 GitHub Checks API、企业微信/飞书/Slack 等厂商级通知适配器和更多 CI Provider 的生产级回写形态。
 6. GitLab API 直连模式已实现 → 扩展到 GitHub API、Gitee 等同类平台。

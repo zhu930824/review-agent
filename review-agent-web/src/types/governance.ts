@@ -121,6 +121,8 @@ export interface CiStatusConfigVO {
   repoUrl: string | null
   defaultBranch: string | null
   statusContext: string
+  jenkinsParameterTemplate: string | null
+  notificationWebhookUrl: string | null
   checksEnabled: boolean
   sarifUploadEnabled: boolean
   tokenConfigured: boolean
@@ -172,6 +174,21 @@ export interface IntegrationActionLogVO {
   commitSha: string | null
   requestUrl: string | null
   errorMessage: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface IntegrationWebhookDeliveryLogVO {
+  id: number
+  connectorKey: string
+  provider: string
+  deliveryId: string
+  eventType: string
+  deliveryStatus: 'ACCEPTED' | 'REJECTED' | 'DUPLICATE' | string
+  payloadDigest: string | null
+  errorMessage: string | null
+  receivedAt: string
+  processedAt: string | null
   createdAt: string
   updatedAt: string
 }

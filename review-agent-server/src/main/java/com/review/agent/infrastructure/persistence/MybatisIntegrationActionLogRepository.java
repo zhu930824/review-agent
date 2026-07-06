@@ -20,4 +20,9 @@ public class MybatisIntegrationActionLogRepository implements IntegrationActionL
                         .orderByDesc(IntegrationActionLog::getCreatedAt)
                         .last("LIMIT " + limit));
     }
+
+    @Override
+    public void save(IntegrationActionLog log) {
+        integrationActionLogMapper.insert(log);
+    }
 }

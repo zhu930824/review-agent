@@ -3,6 +3,8 @@ package com.review.agent.controller;
 import com.review.agent.common.result.Result;
 import com.review.agent.domain.dto.BatchUpdateOperationsTaskRequest;
 import com.review.agent.domain.dto.CloseOperationsTaskRequest;
+import com.review.agent.domain.dto.LinkOperationsExternalIssueRequest;
+import com.review.agent.domain.dto.IntegrationActionLogVO;
 import com.review.agent.domain.dto.OperationBusinessImpactVO;
 import com.review.agent.domain.dto.OperationDashboardVO;
 import com.review.agent.domain.dto.OperationFindingVO;
@@ -64,6 +66,11 @@ public class OperationsController {
         return Result.success(ciHealthActionService.listActions());
     }
 
+    @PostMapping("/ci-health-actions/{actionKey}/notify")
+    public Result<IntegrationActionLogVO> notifyCiHealthAction(@PathVariable("actionKey") String actionKey) {
+        return Result.success(ciHealthActionService.notifyAction(actionKey));
+    }
+
     @GetMapping("/tasks")
     public Result<List<OperationsTaskVO>> tasks(@RequestParam(defaultValue = "50") int limit) {
         return Result.success(taskService.listTasks(limit));
@@ -109,6 +116,13 @@ public class OperationsController {
     @PostMapping("/tasks/{taskKey}/gitlab-issue/refresh")
     public Result<OperationsExternalIssueVO> refreshTaskGitLabIssue(@PathVariable("taskKey") String taskKey) {
         return Result.success(taskService.refreshGitLabIssue(taskKey));
+    }
+
+    @PostMapping("/tasks/{taskKey}/external-issue")
+    public Result<OperationsExternalIssueVO> linkTaskExternalIssue(
+            @PathVariable("taskKey") String taskKey,
+            @RequestBody(required = false) LinkOperationsExternalIssueRequest request) {
+        return Result.success(taskService.linkExternalIssue(taskKey, request));
     }
 
     @PostMapping("/tasks/{taskKey}/close")

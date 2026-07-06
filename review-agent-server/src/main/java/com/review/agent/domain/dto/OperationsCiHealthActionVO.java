@@ -12,6 +12,16 @@ public class OperationsCiHealthActionVO {
     private String severity;
     private String ownerRole;
     private Long slaHours;
+    private Long latestWritebackId;
+    private String latestWritebackStatus;
     private String latestSignal;
+    private String latestRequestUrl;
+    private String latestExternalQueueUrl;
+    private String latestExternalBuildUrl;
     private String recommendation;
+    private String notificationPriority;
+    private String notificationDedupKey;
+    private String notificationTitle;
+    private String notificationBody;
+    private String notificationTargetUrl;
 }

@@ -4,6 +4,8 @@ import com.review.agent.domain.dto.OperationBusinessImpactVO;
 import com.review.agent.domain.dto.OperationFindingVO;
 import com.review.agent.domain.dto.OperationOwnerLoadVO;
 import com.review.agent.domain.dto.OperationRuleLearningCandidateVO;
+import com.review.agent.domain.dto.IntegrationActionLogVO;
+import com.review.agent.domain.dto.LinkOperationsExternalIssueRequest;
 import com.review.agent.domain.dto.OperationsCiHealthActionVO;
 import com.review.agent.domain.dto.OperationsExternalIssueVO;
 import com.review.agent.domain.dto.OperationsTaskVO;
@@ -257,6 +259,27 @@ class OperationsTaskServiceImplTest {
     }
 
     @Test
+    void linkExternalIssueRecordsGenericProviderIssue() {
+        remediationQueueService.findings = List.of(finding(7L, 3L, "Payment service blocker", Severity.BLOCKER, FindingCategory.SECURITY, HumanStatus.PENDING, true));
+        LinkOperationsExternalIssueRequest request = new LinkOperationsExternalIssueRequest();
+        request.setProvider("jira");
+        request.setExternalIssueId("RA-42");
+        request.setExternalIssueUrl("https://jira.example.com/browse/RA-42");
+        request.setExternalIssueState("In Progress");
+        request.setExternalIssueTitle("Fix payment blocker");
+        request.setExternalIssueLabels("review-agent,security");
+        request.setExternalIssueAssignee("security-owner");
+
+        OperationsExternalIssueVO linked = service.linkExternalIssue("FINDING-7", request);
+
+        assertEquals("LINKED", linked.getIssueStatus());
+        assertEquals("JIRA", linked.getProvider());
+        assertEquals("RA-42", linked.getExternalIssueId());
+        assertEquals("https://jira.example.com/browse/RA-42", linked.getExternalIssueUrl());
+        assertEquals("security-owner", linked.getExternalIssueAssignee());
+    }
+
+    @Test
     void rejectsUnsupportedTaskStatusAndInvalidSla() {
         assertThrows(IllegalArgumentException.class,
                 () -> service.updateTask("FINDING-7", "UNKNOWN", null, null));
@@ -348,6 +371,14 @@ class OperationsTaskServiceImplTest {
         @Override
         public List<OperationsCiHealthActionVO> listActions() {
             return actions;
+        }
+
+        @Override
+        public IntegrationActionLogVO notifyAction(String actionKey) {
+            IntegrationActionLogVO vo = new IntegrationActionLogVO();
+            vo.setActionType("CI_HEALTH_NOTIFICATION");
+            vo.setActionStatus("SKIPPED");
+            return vo;
         }
     }
 

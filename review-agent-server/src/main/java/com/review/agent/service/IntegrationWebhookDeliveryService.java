@@ -9,4 +9,10 @@ public interface IntegrationWebhookDeliveryService {
             String eventType,
             String signature,
             String payload);
+
+    IntegrationWebhookDeliveryResultVO receiveGitLabDelivery(
+            String deliveryId,
+            String eventType,
+            String token,
+            String payload);
 }

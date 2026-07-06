@@ -2,6 +2,7 @@ package com.review.agent.service;
 
 import com.review.agent.domain.dto.OperationsExternalIssueVO;
 import com.review.agent.domain.dto.OperationsTaskVO;
+import com.review.agent.domain.dto.LinkOperationsExternalIssueRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -66,6 +67,11 @@ class OperationsGitLabIssueRefreshSchedulerTest {
             calls++;
             lastLimit = limit;
             return limit;
+        }
+
+        @Override
+        public OperationsExternalIssueVO linkExternalIssue(String taskKey, LinkOperationsExternalIssueRequest request) {
+            return new OperationsExternalIssueVO();
         }
 
         @Override

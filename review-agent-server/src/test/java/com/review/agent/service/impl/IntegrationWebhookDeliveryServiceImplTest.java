@@ -80,10 +80,62 @@ class IntegrationWebhookDeliveryServiceImplTest {
         assertTrue(deliveryRepository.saved.isEmpty());
     }
 
+    @Test
+    void recordsAcceptedGitLabDeliveryWhenTokenMatches() {
+        deliveryRepository.config = config("gitlab-merge-request", "GITLAB", "token-1");
+
+        IntegrationWebhookDeliveryResultVO result = service.receiveGitLabDelivery(
+                "gitlab-delivery-1",
+                "Merge Request Hook",
+                "token-1",
+                "{\"object_kind\":\"merge_request\"}");
+
+        assertEquals("ACCEPTED", result.getStatus());
+        assertEquals("gitlab-delivery-1", result.getDeliveryId());
+        assertEquals("Merge Request Hook", result.getEventType());
+        assertEquals("gitlab-merge-request", deliveryRepository.lastFindConfigKey);
+        assertEquals("gitlab-merge-request", deliveryRepository.saved.get(0).getConnectorKey());
+        assertEquals("GITLAB", deliveryRepository.saved.get(0).getProvider());
+        assertEquals("ACCEPTED", deliveryRepository.saved.get(0).getDeliveryStatus());
+        assertEquals(64, deliveryRepository.saved.get(0).getPayloadDigest().length());
+    }
+
+    @Test
+    void rejectsGitLabDeliveryWhenTokenDoesNotMatch() {
+        deliveryRepository.config = config("gitlab-merge-request", "GITLAB", "token-1");
+
+        assertThrows(IllegalArgumentException.class, () -> service.receiveGitLabDelivery(
+                "gitlab-delivery-2",
+                "Push Hook",
+                "wrong",
+                "{}"));
+
+        assertEquals("REJECTED", deliveryRepository.saved.get(0).getDeliveryStatus());
+        assertEquals("Invalid GitLab webhook token", deliveryRepository.saved.get(0).getErrorMessage());
+    }
+
+    @Test
+    void derivesStableGitLabDeliveryIdWhenHeaderIsMissing() {
+        deliveryRepository.config = config("gitlab-merge-request", "GITLAB", "token-1");
+
+        IntegrationWebhookDeliveryResultVO result = service.receiveGitLabDelivery(
+                null,
+                "Merge Request Hook",
+                "token-1",
+                "{\"object_kind\":\"merge_request\"}");
+
+        assertTrue(result.getDeliveryId().startsWith("gitlab:Merge Request Hook:"));
+        assertEquals(result.getDeliveryId(), deliveryRepository.saved.get(0).getDeliveryId());
+    }
+
     private CiStatusConfig config(String secret) {
+        return config("github-checks", "GITHUB", secret);
+    }
+
+    private CiStatusConfig config(String connectorKey, String provider, String secret) {
         CiStatusConfig config = new CiStatusConfig();
-        config.setConnectorKey("github-checks");
-        config.setProvider("GITHUB");
+        config.setConnectorKey(connectorKey);
+        config.setProvider(provider);
         config.setWebhookSecret(secret);
         return config;
     }
@@ -98,15 +150,24 @@ class IntegrationWebhookDeliveryServiceImplTest {
         private CiStatusConfig config;
         private IntegrationWebhookDeliveryLog existing;
         private final List<IntegrationWebhookDeliveryLog> saved = new ArrayList<>();
+        private String lastFindConfigKey;
+        private String lastFindByDeliveryConnectorKey;
 
         @Override
         public Optional<CiStatusConfig> findConfig(String connectorKey) {
+            lastFindConfigKey = connectorKey;
             return Optional.ofNullable(config);
         }
 
         @Override
         public Optional<IntegrationWebhookDeliveryLog> findByDeliveryId(String connectorKey, String deliveryId) {
+            lastFindByDeliveryConnectorKey = connectorKey;
             return Optional.ofNullable(existing);
+        }
+
+        @Override
+        public List<IntegrationWebhookDeliveryLog> listRecent(int limit) {
+            return List.of();
         }
 
         @Override

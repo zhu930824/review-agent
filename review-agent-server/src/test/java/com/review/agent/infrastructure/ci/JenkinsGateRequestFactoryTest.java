@@ -50,4 +50,31 @@ class JenkinsGateRequestFactoryTest {
         assertEquals("crumb-value", withCrumb.headers().get("Jenkins-Crumb"));
         assertEquals(request.url(), withCrumb.url());
     }
+
+    @Test
+    void overlaysJenkinsParameterTemplate() {
+        CiStatusConfig config = new CiStatusConfig();
+        config.setConnectorKey("jenkins-pipeline");
+        config.setRepoUrl("https://jenkins.example.com/");
+        config.setRepoOwner("platform");
+        config.setRepoName("review-agent-ci");
+        config.setDefaultBranch("main");
+        config.setStatusContext("Review Agent Gate");
+        config.setApiToken("jenkins-token");
+        config.setJenkinsParameterTemplate("""
+                REVIEW_AGENT_STATE=${jenkinsState}
+                REVIEW_AGENT_COMMIT_SHA=${commitSha}
+                TEAM_FOLDER=${repoOwner}
+                CUSTOM_REVIEW=${reviewId}
+                CUSTOM_CONTEXT=${context}
+                """);
+
+        CiProviderStatusRequest request = factory.build(config, "abc123", "failure", "review blocked", 42L);
+
+        assertEquals("BLOCKED", request.body().get("REVIEW_AGENT_STATE"));
+        assertEquals("abc123", request.body().get("REVIEW_AGENT_COMMIT_SHA"));
+        assertEquals("platform", request.body().get("TEAM_FOLDER"));
+        assertEquals("42", request.body().get("CUSTOM_REVIEW"));
+        assertEquals("Review Agent Gate", request.body().get("CUSTOM_CONTEXT"));
+    }
 }

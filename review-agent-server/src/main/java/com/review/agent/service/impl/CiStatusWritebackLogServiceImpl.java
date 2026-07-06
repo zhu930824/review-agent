@@ -155,8 +155,12 @@ public class CiStatusWritebackLogServiceImpl implements CiStatusWritebackLogServ
         vo.setFailedCount(failed);
         vo.setSkippedCount(skipped);
         if (latest != null) {
+            vo.setLatestWritebackId(latest.getId());
             vo.setLatestWritebackStatus(latest.getWritebackStatus());
             vo.setLatestExternalResult(latest.getExternalBuildResult());
+            vo.setLatestRequestUrl(latest.getRequestUrl());
+            vo.setLatestExternalQueueUrl(latest.getExternalQueueUrl());
+            vo.setLatestExternalBuildUrl(latest.getExternalBuildUrl());
             vo.setLatestAt(latest.getCreatedAt());
         }
         vo.setHealthStatus(resolveHealthStatus(latest, failed, total));

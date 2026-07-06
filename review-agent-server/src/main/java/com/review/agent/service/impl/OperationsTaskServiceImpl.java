@@ -1,6 +1,7 @@
 package com.review.agent.service.impl;
 
 import com.review.agent.domain.dto.OperationFindingVO;
+import com.review.agent.domain.dto.LinkOperationsExternalIssueRequest;
 import com.review.agent.domain.dto.OperationsCiHealthActionVO;
 import com.review.agent.domain.dto.OperationsExternalIssueVO;
 import com.review.agent.domain.dto.OperationsTaskVO;
@@ -35,6 +36,8 @@ public class OperationsTaskServiceImpl implements OperationsTaskService {
     private static final int MAX_LIMIT = 100;
     private static final List<String> ALLOWED_TASK_STATUSES = List.of(
             "OPEN", "IN_PROGRESS", "CONFIRMED", "RESOLVED", "ACCEPTED_RISK");
+    private static final List<String> ALLOWED_EXTERNAL_ISSUE_PROVIDERS = List.of(
+            "GITLAB", "JIRA", "ZENTAO", "OTHER");
 
     private final OperationsRemediationQueueService remediationQueueService;
     private final OperationsCiHealthActionService ciHealthActionService;
@@ -284,6 +287,39 @@ public class OperationsTaskServiceImpl implements OperationsTaskService {
     }
 
     @Override
+    public OperationsExternalIssueVO linkExternalIssue(String taskKey, LinkOperationsExternalIssueRequest request) {
+        ensureTaskPersisted(taskKey);
+        if (request == null) {
+            throw new IllegalArgumentException("External issue link request is required.");
+        }
+        String provider = normalizeExternalIssueProvider(request.getProvider());
+        String externalIssueUrl = normalizeBlank(request.getExternalIssueUrl());
+        String externalIssueId = normalizeBlank(request.getExternalIssueId());
+        String externalIssueIid = normalizeBlank(request.getExternalIssueIid());
+        if ((externalIssueUrl == null || externalIssueUrl.isBlank())
+                && (externalIssueId == null || externalIssueId.isBlank())
+                && (externalIssueIid == null || externalIssueIid.isBlank())) {
+            throw new IllegalArgumentException("External issue url or id is required.");
+        }
+        return operationsExternalIssueRepository.recordDetailed(
+                taskKey,
+                provider,
+                "LINKED",
+                externalIssueId,
+                externalIssueIid,
+                externalIssueUrl,
+                normalizeBlank(request.getExternalIssueState()),
+                normalizeBlank(request.getExternalIssueTitle()),
+                normalizeBlank(request.getExternalIssueLabels()),
+                normalizeBlank(request.getExternalIssueAssignee()),
+                normalizeBlank(request.getExternalIssueAuthor()),
+                null,
+                null,
+                null,
+                null);
+    }
+
+    @Override
     public void closeTask(String taskKey, String closeReason) {
         ensureTaskPersisted(taskKey);
         operationsTaskRepository.closeTask(taskKey, closeReason == null || closeReason.isBlank()
@@ -468,6 +504,16 @@ public class OperationsTaskServiceImpl implements OperationsTaskService {
         String normalized = status.trim().toUpperCase();
         if (!ALLOWED_TASK_STATUSES.contains(normalized)) {
             throw new IllegalArgumentException("Unsupported operations task status: " + status);
+        }
+        return normalized;
+    }
+
+    private String normalizeExternalIssueProvider(String provider) {
+        String normalized = provider == null || provider.isBlank()
+                ? "OTHER"
+                : provider.trim().toUpperCase();
+        if (!ALLOWED_EXTERNAL_ISSUE_PROVIDERS.contains(normalized)) {
+            return "OTHER";
         }
         return normalized;
     }

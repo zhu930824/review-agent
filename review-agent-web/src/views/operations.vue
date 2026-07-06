@@ -266,6 +266,14 @@
                   <a-button
                     type="link"
                     size="small"
+                    :loading="syncingIssueTaskKey === record.taskKey"
+                    @click="linkOperationsTaskExternalIssue(record)"
+                  >
+                    Link Issue
+                  </a-button>
+                  <a-button
+                    type="link"
+                    size="small"
                     :loading="closingTaskKey === record.taskKey"
                     @click="closeOperationsTask(record)"
                   >
@@ -425,7 +433,54 @@
                   <a-tag color="orange">{{ action.slaHours }}h SLA</a-tag>
                 </a-space>
                 <div style="font-size:12px;color:#64748b">Latest: {{ action.latestSignal }}</div>
+                <div
+                  v-if="action.latestExternalBuildUrl || action.latestExternalQueueUrl || action.latestRequestUrl"
+                  style="font-size:12px;color:#94a3b8;word-break:break-all"
+                >
+                  {{ action.latestExternalBuildUrl || action.latestExternalQueueUrl || action.latestRequestUrl }}
+                </div>
                 <div style="font-size:12px;color:#475569;line-height:1.5">{{ action.recommendation }}</div>
+                <div
+                  v-if="action.notificationTitle"
+                  style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;font-size:12px;color:#334155;line-height:1.5"
+                >
+                  <a-space :size="6" wrap style="margin-bottom:4px">
+                    <a-tag color="blue">{{ action.notificationPriority || 'P3' }}</a-tag>
+                    <span style="font-weight:600">Notification plan</span>
+                    <span style="color:#94a3b8">{{ action.notificationDedupKey }}</span>
+                  </a-space>
+                  <div style="font-weight:600">{{ action.notificationTitle }}</div>
+                  <div style="color:#64748b;margin-top:2px">{{ action.notificationBody }}</div>
+                  <div v-if="action.notificationTargetUrl" style="color:#94a3b8;margin-top:2px;word-break:break-all">
+                    Target: {{ action.notificationTargetUrl }}
+                  </div>
+                </div>
+                <a-space :size="4" wrap>
+                  <a-button
+                    v-if="action.latestWritebackStatus === 'FAILED' && action.latestWritebackId"
+                    size="small"
+                    :loading="retryingCiWritebackIds.has(action.latestWritebackId)"
+                    @click="retryOperationsCiWriteback(action)"
+                  >
+                    Retry writeback
+                  </a-button>
+                  <a-button
+                    v-if="action.provider === 'JENKINS'"
+                    size="small"
+                    :loading="jenkinsResultRefreshing"
+                    @click="refreshOperationsJenkinsResults"
+                  >
+                    Refresh Jenkins
+                  </a-button>
+                  <a-button
+                    v-if="action.notificationTitle"
+                    size="small"
+                    :loading="sendingNotificationKeys.has(action.key)"
+                    @click="sendCiHealthNotification(action)"
+                  >
+                    Send notification
+                  </a-button>
+                </a-space>
               </a-space>
             </a-card>
           </a-space>
@@ -511,7 +566,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { BarChartOutlined, ExclamationCircleOutlined, ClockCircleOutlined, RiseOutlined, UnorderedListOutlined, TeamOutlined, ExperimentOutlined, CalendarOutlined, AppstoreOutlined, PlayCircleOutlined, SafetyCertificateOutlined, RocketOutlined } from '@ant-design/icons-vue'
-import type { BusinessImpactEstimate, OperationDashboard, OperationOwnerLoad, OperationalFinding, OperationsCiHealthAction, OperationsExternalIssue, OperationsTask, RemediationQueueItem, RuleLearningCandidate, StrategyPressureItem, StrategyPressureLevel, TelemetryReadinessItem, TelemetryReadinessLevel } from '@/types/operations'
+import type { BusinessImpactEstimate, LinkOperationsExternalIssueRequest, OperationDashboard, OperationOwnerLoad, OperationalFinding, OperationsCiHealthAction, OperationsExternalIssue, OperationsTask, RemediationQueueItem, RuleLearningCandidate, StrategyPressureItem, StrategyPressureLevel, TelemetryReadinessItem, TelemetryReadinessLevel } from '@/types/operations'
 import type { SeverityLevel } from '@/types/review'
 import { useApi } from '@/composables/useApi'
 import { buildRemediationQueue, deriveOperationsScorecard, estimateReviewBusinessImpact, extractRuleLearningCandidates, summarizeRemediationQueue } from '@/utils/reviewOperations'
@@ -527,6 +582,9 @@ const updatingTaskKey = ref<string | null>(null)
 const syncingIssueTaskKey = ref<string | null>(null)
 const closingTaskKey = ref<string | null>(null)
 const selectedTaskKeys = ref<string[]>([])
+const retryingCiWritebackIds = ref<Set<number>>(new Set())
+const sendingNotificationKeys = ref<Set<string>>(new Set())
+const jenkinsResultRefreshing = ref(false)
 const actingFindingId = ref<number | null>(null)
 const actingFindingAction = ref<'CONFIRM' | 'DISMISS' | null>(null)
 const actingRuleCandidateId = ref<number | null>(null)
@@ -655,7 +713,7 @@ function ciActionSeverityColor(severity: string) {
 }
 
 function externalIssueStatusColor(status: string) {
-  return { SYNCED: 'green', SKIPPED: 'default', FAILED: 'red' }[status] ?? 'default'
+  return { SYNCED: 'green', LINKED: 'blue', SKIPPED: 'default', FAILED: 'red' }[status] ?? 'default'
 }
 
 function externalIssueStateColor(state: string) {
@@ -701,6 +759,10 @@ async function loadCiHealthActions() {
   }
 }
 
+async function refreshOperationsHealth() {
+  await Promise.all([loadCiHealthActions(), loadOperationsTasks(), loadOperationsTaskSlaAlerts()])
+}
+
 async function loadOperationsTasks() {
   operationsTasksLoading.value = true
   try {
@@ -710,6 +772,60 @@ async function loadOperationsTasks() {
     console.error(e)
   } finally {
     operationsTasksLoading.value = false
+  }
+}
+
+async function retryOperationsCiWriteback(action: OperationsCiHealthAction) {
+  if (!action.latestWritebackId) return
+  retryingCiWritebackIds.value = new Set(retryingCiWritebackIds.value).add(action.latestWritebackId)
+  try {
+    await post<unknown>(`/integration/ci-config/writebacks/${action.latestWritebackId}/retry`)
+    message.success('CI writeback retry submitted')
+    await refreshOperationsHealth()
+  } catch (e) {
+    console.error(e)
+    message.error('Failed to retry CI writeback')
+  } finally {
+    const next = new Set(retryingCiWritebackIds.value)
+    next.delete(action.latestWritebackId)
+    retryingCiWritebackIds.value = next
+  }
+}
+
+async function refreshOperationsJenkinsResults() {
+  jenkinsResultRefreshing.value = true
+  try {
+    await post<number>('/integration/ci-config/writebacks/jenkins/refresh?limit=20')
+    message.success('Jenkins results refreshed')
+    await refreshOperationsHealth()
+  } catch (e) {
+    console.error(e)
+    message.error('Failed to refresh Jenkins results')
+  } finally {
+    jenkinsResultRefreshing.value = false
+  }
+}
+
+async function sendCiHealthNotification(action: OperationsCiHealthAction) {
+  sendingNotificationKeys.value = new Set(sendingNotificationKeys.value).add(action.key)
+  try {
+    const res = await post<{ actionStatus: string; errorMessage?: string | null }>(
+      `/operations/ci-health-actions/${encodeURIComponent(action.key)}/notify`
+    )
+    if (res.data?.actionStatus === 'POSTED') {
+      message.success('CI health notification sent')
+    } else if (res.data?.actionStatus === 'SKIPPED') {
+      message.warning(res.data.errorMessage || 'Notification webhook is not configured')
+    } else {
+      message.error(res.data?.errorMessage || 'Failed to send CI health notification')
+    }
+  } catch (e) {
+    console.error(e)
+    message.error('Failed to send CI health notification')
+  } finally {
+    const next = new Set(sendingNotificationKeys.value)
+    next.delete(action.key)
+    sendingNotificationKeys.value = next
   }
 }
 
@@ -838,6 +954,50 @@ async function refreshOperationsTaskGitLabIssue(task: OperationsTask) {
   } catch (e) {
     console.error(e)
     message.error('Failed to refresh GitLab issue')
+  } finally {
+    syncingIssueTaskKey.value = null
+  }
+}
+
+async function linkOperationsTaskExternalIssue(task: OperationsTask) {
+  const provider = window.prompt('Issue provider: GITLAB / JIRA / ZENTAO / OTHER', task.externalIssue?.provider || 'JIRA')
+  if (provider === null) return
+  const externalIssueId = window.prompt('Issue id/key', task.externalIssue?.externalIssueId || task.externalIssue?.externalIssueIid || '')
+  if (externalIssueId === null) return
+  const externalIssueUrl = window.prompt('Issue URL', task.externalIssue?.externalIssueUrl || '')
+  if (externalIssueUrl === null) return
+  if (!externalIssueId.trim() && !externalIssueUrl.trim()) {
+    message.warning('Issue id or URL is required')
+    return
+  }
+  const externalIssueState = window.prompt('Issue state', task.externalIssue?.externalIssueState || 'Open')
+  if (externalIssueState === null) return
+  const externalIssueAssignee = window.prompt('Issue assignee', task.externalIssue?.externalIssueAssignee || task.ownerRole || '')
+  if (externalIssueAssignee === null) return
+  const externalIssueLabels = window.prompt('Issue labels', task.externalIssue?.externalIssueLabels || 'review-agent')
+  if (externalIssueLabels === null) return
+
+  syncingIssueTaskKey.value = task.taskKey
+  try {
+    const payload: LinkOperationsExternalIssueRequest = {
+      provider: provider.trim() || 'OTHER',
+      externalIssueId: externalIssueId.trim() || null,
+      externalIssueUrl: externalIssueUrl.trim() || null,
+      externalIssueState: externalIssueState.trim() || null,
+      externalIssueTitle: task.title,
+      externalIssueAssignee: externalIssueAssignee.trim() || null,
+      externalIssueLabels: externalIssueLabels.trim() || null,
+    }
+    const res = await post<OperationsExternalIssue>(`/operations/tasks/${encodeURIComponent(task.taskKey)}/external-issue`, payload)
+    if (res.data?.issueStatus === 'LINKED') {
+      message.success(`${res.data.provider} issue linked`)
+    } else {
+      message.warning(res.data?.errorMessage || 'External issue link recorded')
+    }
+    await loadOperationsTasks()
+  } catch (e) {
+    console.error(e)
+    message.error('Failed to link external issue')
   } finally {
     syncingIssueTaskKey.value = null
   }

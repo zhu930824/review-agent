@@ -2,6 +2,7 @@ package com.review.agent.service;
 
 import com.review.agent.domain.dto.OperationsTaskVO;
 import com.review.agent.domain.dto.OperationsExternalIssueVO;
+import com.review.agent.domain.dto.LinkOperationsExternalIssueRequest;
 
 import java.util.List;
 
@@ -22,6 +23,8 @@ public interface OperationsTaskService {
     OperationsExternalIssueVO refreshGitLabIssue(String taskKey);
 
     int refreshRecentGitLabIssues(int limit);
+
+    OperationsExternalIssueVO linkExternalIssue(String taskKey, LinkOperationsExternalIssueRequest request);
 
     void closeTask(String taskKey, String closeReason);
 }

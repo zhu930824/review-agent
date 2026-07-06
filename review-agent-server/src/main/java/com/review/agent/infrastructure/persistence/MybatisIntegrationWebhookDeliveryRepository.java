@@ -6,6 +6,7 @@ import com.review.agent.domain.entity.IntegrationWebhookDeliveryLog;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -27,6 +28,14 @@ public class MybatisIntegrationWebhookDeliveryRepository implements IntegrationW
                 new LambdaQueryWrapper<IntegrationWebhookDeliveryLog>()
                         .eq(IntegrationWebhookDeliveryLog::getConnectorKey, connectorKey)
                         .eq(IntegrationWebhookDeliveryLog::getDeliveryId, deliveryId)));
+    }
+
+    @Override
+    public List<IntegrationWebhookDeliveryLog> listRecent(int limit) {
+        return deliveryLogMapper.selectList(
+                new LambdaQueryWrapper<IntegrationWebhookDeliveryLog>()
+                        .orderByDesc(IntegrationWebhookDeliveryLog::getReceivedAt)
+                        .last("LIMIT " + limit));
     }
 
     @Override

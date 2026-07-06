@@ -29,6 +29,8 @@ test('backend ci status config request supports repository binding and secrets',
   assert.match(request, /apiToken/)
   assert.match(request, /webhookSecret/)
   assert.match(request, /sarifUploadEnabled/)
+  assert.match(request, /jenkinsParameterTemplate/)
+  assert.match(request, /notificationWebhookUrl/)
 })
 
 test('backend ci status config response does not expose secrets', () => {
@@ -39,6 +41,26 @@ test('backend ci status config response does not expose secrets', () => {
 
   assert.match(vo, /tokenConfigured/)
   assert.match(vo, /webhookSecretConfigured/)
+  assert.match(vo, /jenkinsParameterTemplate/)
+  assert.match(vo, /notificationWebhookUrl/)
   assert.doesNotMatch(vo, /apiToken;/)
   assert.doesNotMatch(vo, /webhookSecret;/)
+})
+
+test('backend exposes github and gitlab webhook receivers', () => {
+  const controllerPath = join(serverRoot, 'java', 'com', 'review', 'agent', 'controller', 'IntegrationWebhookController.java')
+  const servicePath = join(serverRoot, 'java', 'com', 'review', 'agent', 'service', 'impl', 'IntegrationWebhookDeliveryServiceImpl.java')
+
+  assert.equal(existsSync(controllerPath), true)
+  assert.equal(existsSync(servicePath), true)
+  const controller = readFileSync(controllerPath, 'utf8')
+  const service = readFileSync(servicePath, 'utf8')
+
+  assert.match(controller, /@PostMapping\("\/github"\)/)
+  assert.match(controller, /@PostMapping\("\/gitlab"\)/)
+  assert.match(controller, /X-Gitlab-Token/)
+  assert.match(service, /receiveGitHubDelivery/)
+  assert.match(service, /receiveGitLabDelivery/)
+  assert.match(service, /GITLAB_CONNECTOR_KEY = "gitlab-merge-request"/)
+  assert.match(service, /Invalid GitLab webhook token/)
 })

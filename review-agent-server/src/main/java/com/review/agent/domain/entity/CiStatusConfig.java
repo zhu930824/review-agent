@@ -21,6 +21,8 @@ public class CiStatusConfig {
     private String repoUrl;
     private String defaultBranch;
     private String statusContext;
+    private String jenkinsParameterTemplate;
+    private String notificationWebhookUrl;
     private Boolean checksEnabled;
     private Boolean sarifUploadEnabled;
     private String apiToken;

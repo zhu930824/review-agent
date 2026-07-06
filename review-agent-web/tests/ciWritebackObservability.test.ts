@@ -103,3 +103,37 @@ test('governance page loads and renders recent integration actions', () => {
   assert.match(governanceView, /actionStatus/)
   assert.match(governanceView, /actionStatusColor/)
 })
+
+test('backend exposes webhook delivery log query contract', () => {
+  const controllerPath = join(serverRoot, 'java', 'com', 'review', 'agent', 'controller', 'IntegrationWebhookController.java')
+  const servicePath = join(serverRoot, 'java', 'com', 'review', 'agent', 'service', 'impl', 'IntegrationWebhookDeliveryLogServiceImpl.java')
+  const voPath = join(serverRoot, 'java', 'com', 'review', 'agent', 'domain', 'dto', 'IntegrationWebhookDeliveryLogVO.java')
+
+  assert.equal(existsSync(controllerPath), true)
+  assert.equal(existsSync(servicePath), true)
+  assert.equal(existsSync(voPath), true)
+
+  const controller = readFileSync(controllerPath, 'utf8')
+  const service = readFileSync(servicePath, 'utf8')
+  const vo = readFileSync(voPath, 'utf8')
+
+  assert.match(controller, /@GetMapping\("\/deliveries"\)/)
+  assert.match(controller, /deliveryLogService\.listRecent\(limit\)/)
+  assert.match(service, /repository\.listRecent\(safeLimit\)/)
+  assert.match(vo, /deliveryStatus/)
+  assert.match(vo, /payloadDigest/)
+  assert.match(vo, /receivedAt/)
+})
+
+test('governance page loads and renders recent webhook deliveries', () => {
+  const governanceView = readFileSync(join(process.cwd(), 'src/views/governance.vue'), 'utf8')
+  const governanceTypes = readFileSync(join(process.cwd(), 'src/types/governance.ts'), 'utf8')
+
+  assert.match(governanceView, /webhookDeliveries/)
+  assert.match(governanceView, /loadWebhookDeliveries/)
+  assert.match(governanceView, /get<IntegrationWebhookDeliveryLogVO\[\]>\('\/integration\/webhooks\/deliveries\?limit=10'\)/)
+  assert.match(governanceView, /Recent Webhook Deliveries/)
+  assert.match(governanceView, /webhookDeliveryStatusColor/)
+  assert.match(governanceTypes, /interface IntegrationWebhookDeliveryLogVO/)
+  assert.match(governanceTypes, /deliveryStatus/)
+})

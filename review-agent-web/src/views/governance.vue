@@ -453,6 +453,19 @@
               <a-form-item label="Status Context">
                 <a-input v-model:value="ciConfigForm.statusContext" :placeholder="selectedCiProviderOption.statusPlaceholder" />
               </a-form-item>
+              <a-form-item label="Notification Webhook">
+                <a-input v-model:value="ciConfigForm.notificationWebhookUrl" placeholder="https://hooks.example.com/review-agent-ci-health" />
+              </a-form-item>
+              <a-form-item v-if="ciConfigForm.provider === 'JENKINS'" label="Jenkins Parameters">
+                <a-textarea
+                  v-model:value="ciConfigForm.jenkinsParameterTemplate"
+                  :auto-size="{ minRows: 4, maxRows: 8 }"
+                  placeholder="REVIEW_AGENT_REVIEW_ID=${reviewId}
+REVIEW_AGENT_STATE=${jenkinsState}
+REVIEW_AGENT_COMMIT_SHA=${commitSha}
+REVIEW_AGENT_CONTEXT=${context}"
+                />
+              </a-form-item>
               <a-row :gutter="8">
                 <a-col :xs="24" :md="12">
                   <a-form-item label="API Token">
@@ -536,6 +549,32 @@
                 </a-card>
               </a-space>
               <div v-else style="font-size:12px;color:#94a3b8">暂无集成动作</div>
+            </div>
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:6px">Recent Webhook Deliveries</div>
+              <a-space v-if="webhookDeliveries.length" direction="vertical" :size="6" style="width:100%">
+                <a-card
+                  v-for="item in webhookDeliveries"
+                  :key="item.id"
+                  size="small"
+                  class="governance-sub-card"
+                >
+                  <a-space :size="8" style="width:100%;justify-content:space-between;align-items:flex-start">
+                    <div style="min-width:0">
+                      <a-space :size="4" wrap>
+                        <a-tag color="processing">{{ item.provider }}</a-tag>
+                        <a-tag>{{ item.eventType }}</a-tag>
+                      </a-space>
+                      <div style="font-size:12px;color:#94a3b8;margin-top:4px;word-break:break-all">
+                        {{ item.deliveryId }}
+                      </div>
+                      <div v-if="item.errorMessage" style="font-size:12px;color:#dc2626;margin-top:2px;line-height:1.4">{{ item.errorMessage }}</div>
+                    </div>
+                    <a-tag :color="webhookDeliveryStatusColor(item.deliveryStatus)">{{ item.deliveryStatus }}</a-tag>
+                  </a-space>
+                </a-card>
+              </a-space>
+              <div v-else style="font-size:12px;color:#94a3b8">No webhook deliveries</div>
             </div>
           </a-space>
         </a-card>
@@ -677,7 +716,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { BarChartOutlined, CheckCircleOutlined, ExclamationCircleOutlined, AppstoreOutlined, ThunderboltOutlined, SafetyOutlined, UserOutlined, EnvironmentOutlined, SyncOutlined, PlayCircleOutlined, SettingOutlined, ClockCircleOutlined } from '@ant-design/icons-vue'
-import type { BusinessImpact, CapabilityStatus, CiIntegrationHealthVO, CiStatusConfigVO, CiStatusWritebackLogVO, GovernanceRulePack, GovernanceRulePackChange, GovernanceRulePackDryRun, GovernanceRulePackVersion, IntegrationActionLogVO, IntegrationConnector, MarketCapability, RolloutStage, WorkflowTemplate } from '@/types/governance'
+import type { BusinessImpact, CapabilityStatus, CiIntegrationHealthVO, CiStatusConfigVO, CiStatusWritebackLogVO, GovernanceRulePack, GovernanceRulePackChange, GovernanceRulePackDryRun, GovernanceRulePackVersion, IntegrationActionLogVO, IntegrationConnector, IntegrationWebhookDeliveryLogVO, MarketCapability, RolloutStage, WorkflowTemplate } from '@/types/governance'
 import type { TelemetryReadinessItem } from '@/types/operations'
 import { useApi } from '@/composables/useApi'
 import { compileGovernancePolicyPack, getCapabilityCoverageSummary, getCiStatusIntegrationReadiness, getConnectorsByStage, getRecommendedNextActions, governanceRulePacks as fallbackRulePacks, integrationConnectors as fallbackConnectors, marketCapabilities as fallbackCapabilities, workflowTemplates as fallbackWorkflowTemplates } from '@/utils/governanceCatalog'
@@ -708,6 +747,7 @@ const ciConfigSaving = ref(false)
 const ciWritebacks = ref<CiStatusWritebackLogVO[]>([])
 const ciIntegrationHealth = ref<CiIntegrationHealthVO[]>([])
 const integrationActions = ref<IntegrationActionLogVO[]>([])
+const webhookDeliveries = ref<IntegrationWebhookDeliveryLogVO[]>([])
 const telemetryReadinessItems = ref<TelemetryReadinessItem[]>([])
 const ciWritebackRetryingIds = ref<Set<number>>(new Set())
 const jenkinsResultRefreshing = ref(false)
@@ -766,6 +806,8 @@ const ciConfigForm = reactive({
   repoUrl: '',
   defaultBranch: 'main',
   statusContext: 'Review Agent',
+  jenkinsParameterTemplate: '',
+  notificationWebhookUrl: '',
   checksEnabled: true,
   sarifUploadEnabled: false,
   apiToken: '',
@@ -870,6 +912,8 @@ function applyCiStatusConfig(config: CiStatusConfigVO) {
   ciConfigForm.repoUrl = config.repoUrl || ''
   ciConfigForm.defaultBranch = config.defaultBranch || 'main'
   ciConfigForm.statusContext = config.statusContext || 'Review Agent'
+  ciConfigForm.jenkinsParameterTemplate = config.jenkinsParameterTemplate || ''
+  ciConfigForm.notificationWebhookUrl = config.notificationWebhookUrl || ''
   ciConfigForm.checksEnabled = config.checksEnabled ?? true
   ciConfigForm.sarifUploadEnabled = config.sarifUploadEnabled ?? false
   ciConfigForm.tokenConfigured = config.tokenConfigured
@@ -891,6 +935,8 @@ async function handleCiConnectorChange(connectorKey: string) {
   const option = ciProviderOptions.find(item => item.connectorKey === connectorKey) || ciProviderOptions[0]
   ciConfigForm.provider = option.provider
   ciConfigForm.statusContext = option.statusPlaceholder
+  ciConfigForm.jenkinsParameterTemplate = ''
+  ciConfigForm.notificationWebhookUrl = ''
   ciConfigForm.apiToken = ''
   ciConfigForm.webhookSecret = ''
   await loadCiStatusConfig(connectorKey)
@@ -923,6 +969,15 @@ async function loadIntegrationActions() {
   }
 }
 
+async function loadWebhookDeliveries() {
+  try {
+    const res = await get<IntegrationWebhookDeliveryLogVO[]>('/integration/webhooks/deliveries?limit=10')
+    webhookDeliveries.value = res.data ?? []
+  } catch (e) {
+    console.error('load webhook deliveries failed', e)
+  }
+}
+
 async function loadTelemetryReadiness() {
   try {
     const res = await get<TelemetryReadinessItem[]>('/operations/telemetry-readiness')
@@ -943,6 +998,8 @@ async function saveCiStatusConfig() {
       repoUrl: ciConfigForm.repoUrl,
       defaultBranch: ciConfigForm.defaultBranch,
       statusContext: ciConfigForm.statusContext,
+      jenkinsParameterTemplate: ciConfigForm.provider === 'JENKINS' ? ciConfigForm.jenkinsParameterTemplate : '',
+      notificationWebhookUrl: ciConfigForm.notificationWebhookUrl,
       checksEnabled: ciConfigForm.checksEnabled,
       sarifUploadEnabled: ciConfigForm.sarifUploadEnabled,
       apiToken: ciConfigForm.apiToken,
@@ -953,6 +1010,7 @@ async function saveCiStatusConfig() {
     await loadCiWritebacks()
     await loadCiIntegrationHealth()
     await loadIntegrationActions()
+    await loadWebhookDeliveries()
   } catch (e) {
     console.error('保存 CI 回写配置失败', e)
   } finally {
@@ -994,6 +1052,7 @@ onMounted(() => {
   loadCiWritebacks()
   loadCiIntegrationHealth()
   loadIntegrationActions()
+  loadWebhookDeliveries()
   loadTelemetryReadiness()
 })
 
@@ -1020,6 +1079,7 @@ function writebackStatusColor(status: string) { return { SUCCESS: 'green', FAILE
 function ciHealthColor(status: string) { return { HEALTHY: 'green', DEGRADED: 'orange', UNHEALTHY: 'red', NO_DATA: 'default' }[status] ?? 'default' }
 function jenkinsBuildResultColor(status: string) { return { SUCCESS: 'green', FAILURE: 'red', UNSTABLE: 'orange', ABORTED: 'default', CANCELLED: 'default', BUILDING: 'blue', QUEUED: 'processing' }[status] ?? 'default' }
 function actionStatusColor(status: string) { return { UPLOADED: 'green', POSTED: 'green', FAILED: 'red', SKIPPED: 'default' }[status] ?? 'default' }
+function webhookDeliveryStatusColor(status: string) { return { ACCEPTED: 'green', REJECTED: 'red', DUPLICATE: 'default' }[status] ?? 'default' }
 function rulePackChangeStatusColor(status: string) { return { PROPOSED: 'orange', APPROVED: 'blue', APPLIED: 'green', REJECTED: 'red', ROLLED_BACK: 'default' }[status] ?? 'default' }
 function rulePackVersionStatusColor(status: string) { return { ACTIVE: 'green', ARCHIVED: 'default', ROLLED_BACK: 'orange' }[status] ?? 'default' }
 </script>

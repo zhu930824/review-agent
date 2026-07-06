@@ -37,6 +37,8 @@ class CiStatusWritebackLogServiceImplTest {
         assertEquals("UNHEALTHY", byConnector.get("gitlab-merge-request").getHealthStatus());
         assertEquals("DEGRADED", byConnector.get("jenkins-pipeline").getHealthStatus());
         assertEquals(1L, byConnector.get("github-checks").getTotalCount());
+        assertEquals(3L, byConnector.get("jenkins-pipeline").getLatestWritebackId());
+        assertEquals("https://jenkins.example.com/job/review-agent/12/", byConnector.get("jenkins-pipeline").getLatestExternalBuildUrl());
         assertTrue(byConnector.get("jenkins-pipeline").getSummary().contains("BUILDING"));
     }
 
@@ -57,6 +59,14 @@ class CiStatusWritebackLogServiceImplTest {
             String externalBuildResult,
             LocalDateTime createdAt) {
         CiStatusWritebackLog log = new CiStatusWritebackLog();
+        if ("github-checks".equals(connectorKey)) {
+            log.setId(1L);
+        } else if ("gitlab-merge-request".equals(connectorKey)) {
+            log.setId(2L);
+        } else if ("jenkins-pipeline".equals(connectorKey)) {
+            log.setId(3L);
+            log.setExternalBuildUrl("https://jenkins.example.com/job/review-agent/12/");
+        }
         log.setConnectorKey(connectorKey);
         log.setProvider(provider);
         log.setWritebackStatus(writebackStatus);

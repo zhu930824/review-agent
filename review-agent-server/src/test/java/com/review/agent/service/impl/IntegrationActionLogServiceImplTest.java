@@ -43,5 +43,9 @@ class IntegrationActionLogServiceImplTest {
             this.limit = limit;
             return logs;
         }
+
+        @Override
+        public void save(IntegrationActionLog log) {
+        }
     }
 }

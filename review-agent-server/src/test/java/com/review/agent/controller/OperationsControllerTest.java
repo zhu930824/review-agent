@@ -3,6 +3,8 @@ package com.review.agent.controller;
 import com.review.agent.common.result.Result;
 import com.review.agent.domain.dto.BatchUpdateOperationsTaskRequest;
 import com.review.agent.domain.dto.CloseOperationsTaskRequest;
+import com.review.agent.domain.dto.IntegrationActionLogVO;
+import com.review.agent.domain.dto.LinkOperationsExternalIssueRequest;
 import com.review.agent.domain.dto.OperationBusinessImpactVO;
 import com.review.agent.domain.dto.OperationDashboardVO;
 import com.review.agent.domain.dto.OperationFindingVO;
@@ -111,6 +113,16 @@ class OperationsControllerTest {
     }
 
     @Test
+    void notifyCiHealthActionDelegatesToService() {
+        Result<IntegrationActionLogVO> result = controller.notifyCiHealthAction("jenkins-pipeline-DEGRADED");
+
+        assertTrue(result.isSuccess());
+        assertEquals("jenkins-pipeline-DEGRADED", ciHealthActionService.notifiedActionKey);
+        assertEquals("POSTED", result.getData().getActionStatus());
+        assertEquals("CI_HEALTH_NOTIFICATION", result.getData().getActionType());
+    }
+
+    @Test
     void tasksDelegateToService() {
         Result<List<OperationsTaskVO>> result = controller.tasks(15);
 
@@ -202,6 +214,20 @@ class OperationsControllerTest {
         assertEquals("closed", result.getData().getExternalIssueState());
     }
 
+    @Test
+    void linkTaskExternalIssueDelegatesToService() {
+        LinkOperationsExternalIssueRequest request = new LinkOperationsExternalIssueRequest();
+        request.setProvider("JIRA");
+        request.setExternalIssueId("RA-42");
+
+        Result<OperationsExternalIssueVO> result = controller.linkTaskExternalIssue("FINDING-7", request);
+
+        assertTrue(result.isSuccess());
+        assertEquals("FINDING-7", taskService.linkedIssueTaskKey);
+        assertEquals("JIRA", result.getData().getProvider());
+        assertEquals("LINKED", result.getData().getIssueStatus());
+    }
+
     private static class FakeOperationsService implements OperationsService {
         @Override
         public OperationDashboardVO getDashboard() {
@@ -236,6 +262,7 @@ class OperationsControllerTest {
 
     private static class FakeCiHealthActionService implements OperationsCiHealthActionService {
         private int calls;
+        private String notifiedActionKey;
 
         @Override
         public List<OperationsCiHealthActionVO> listActions() {
@@ -244,6 +271,15 @@ class OperationsControllerTest {
             vo.setConnectorKey("jenkins-pipeline");
             vo.setOwnerRole("CI Owner");
             return List.of(vo);
+        }
+
+        @Override
+        public IntegrationActionLogVO notifyAction(String actionKey) {
+            notifiedActionKey = actionKey;
+            IntegrationActionLogVO vo = new IntegrationActionLogVO();
+            vo.setActionType("CI_HEALTH_NOTIFICATION");
+            vo.setActionStatus("POSTED");
+            return vo;
         }
     }
 
@@ -261,6 +297,7 @@ class OperationsControllerTest {
         private Long batchUpdatedSlaHours;
         private String syncedIssueTaskKey;
         private String refreshedIssueTaskKey;
+        private String linkedIssueTaskKey;
         private String closedTaskKey;
         private String closeReason;
 
@@ -328,6 +365,17 @@ class OperationsControllerTest {
         @Override
         public int refreshRecentGitLabIssues(int limit) {
             return limit;
+        }
+
+        @Override
+        public OperationsExternalIssueVO linkExternalIssue(String taskKey, LinkOperationsExternalIssueRequest request) {
+            linkedIssueTaskKey = taskKey;
+            OperationsExternalIssueVO vo = new OperationsExternalIssueVO();
+            vo.setTaskKey(taskKey);
+            vo.setProvider(request.getProvider());
+            vo.setIssueStatus("LINKED");
+            vo.setExternalIssueId(request.getExternalIssueId());
+            return vo;
         }
 
         @Override

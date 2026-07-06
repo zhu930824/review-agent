@@ -146,8 +146,18 @@ export interface OperationsCiHealthAction {
   severity: 'CRITICAL' | 'WARNING' | 'INFO' | string
   ownerRole: string
   slaHours: number
+  latestWritebackId?: number | null
+  latestWritebackStatus?: string | null
   latestSignal: string
+  latestRequestUrl?: string | null
+  latestExternalQueueUrl?: string | null
+  latestExternalBuildUrl?: string | null
   recommendation: string
+  notificationPriority?: string | null
+  notificationDedupKey?: string | null
+  notificationTitle?: string | null
+  notificationBody?: string | null
+  notificationTargetUrl?: string | null
 }
 
 export interface OperationsTask {
@@ -190,4 +200,16 @@ export interface OperationsExternalIssue {
   requestUrl?: string | null
   errorMessage?: string | null
   syncedAt?: string | null
+}
+
+export interface LinkOperationsExternalIssueRequest {
+  provider: 'GITLAB' | 'JIRA' | 'ZENTAO' | 'OTHER' | string
+  externalIssueId?: string | null
+  externalIssueIid?: string | null
+  externalIssueUrl?: string | null
+  externalIssueState?: string | null
+  externalIssueTitle?: string | null
+  externalIssueLabels?: string | null
+  externalIssueAssignee?: string | null
+  externalIssueAuthor?: string | null
 }
