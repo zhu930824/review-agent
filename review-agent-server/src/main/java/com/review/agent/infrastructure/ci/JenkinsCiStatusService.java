@@ -38,28 +38,46 @@ public class JenkinsCiStatusService implements ProviderCiStatusReporter {
 
     @Override
     public void reportPass(Long reviewId, String description) {
-        report(reviewId, "success", description);
+        report(loadConfig(), reviewId, "success", description);
     }
 
     @Override
     public void reportBlock(Long reviewId, String description) {
-        report(reviewId, "failure", description);
+        report(loadConfig(), reviewId, "failure", description);
     }
 
     @Override
     public void reportRunning(Long reviewId, String description) {
-        report(reviewId, "pending", description);
+        report(loadConfig(), reviewId, "pending", description);
     }
 
-    private void report(Long reviewId, String state, String description) {
-        CiStatusConfig config = loadConfig();
+    @Override
+    public void reportPass(CiStatusConfig config, Long reviewId, String description) {
+        report(config, reviewId, "success", description);
+    }
+
+    @Override
+    public void reportBlock(CiStatusConfig config, Long reviewId, String description) {
+        report(config, reviewId, "failure", description);
+    }
+
+    @Override
+    public void reportRunning(CiStatusConfig config, Long reviewId, String description) {
+        report(config, reviewId, "pending", description);
+    }
+
+    private void report(CiStatusConfig config, Long reviewId, String state, String description) {
         if (!isReady(config)) {
             log.info("[CI-Status] jenkins config is not ready, skip review={} state={}", reviewId, state);
-            safeRecordSkipped(reviewId, state, "jenkins config is not ready");
+            safeRecordSkipped(config == null ? CONNECTOR_KEY : config.getConnectorKey(), reviewId, state,
+                    "jenkins config is not ready");
             return;
         }
 
         Review review = reviewMapper.selectById(reviewId);
+        if (!matchesProject(config, review)) {
+            return;
+        }
         String commitSha = resolveCommitSha(review);
 
         CiProviderStatusRequest request = null;
@@ -69,11 +87,11 @@ public class JenkinsCiStatusService implements ProviderCiStatusReporter {
             HttpHeaders headers = new HttpHeaders();
             request.headers().forEach(headers::set);
             ResponseEntity<String> response = restTemplate.postForEntity(request.url(), new HttpEntity<>(request.body(), headers), String.class);
-            safeRecordSuccess(reviewId, commitSha, state, response.getHeaders().getFirst("Location"), request.url());
+            safeRecordSuccess(config.getConnectorKey(), reviewId, commitSha, state, response.getHeaders().getFirst("Location"), request.url());
             log.info("[CI-Status] jenkins gate job triggered review={} state={}", reviewId, state);
         } catch (Exception e) {
             String requestUrl = request == null ? null : request.url();
-            safeRecordFailure(reviewId, commitSha, state, requestUrl, e.getMessage());
+            safeRecordFailure(config.getConnectorKey(), reviewId, commitSha, state, requestUrl, e.getMessage());
             log.warn("[CI-Status] jenkins gate writeback failed review={} state={}", reviewId, state, e);
         }
     }
@@ -118,6 +136,11 @@ public class JenkinsCiStatusService implements ProviderCiStatusReporter {
                 && hasText(config.getApiToken());
     }
 
+    private boolean matchesProject(CiStatusConfig config, Review review) {
+        return config.getProjectId() == null
+                || (review != null && config.getProjectId().equals(review.getProjectId()));
+    }
+
     private String resolveCommitSha(Review review) {
         if (review == null) {
             return null;
@@ -128,25 +151,25 @@ public class JenkinsCiStatusService implements ProviderCiStatusReporter {
         return review.getTargetCommit();
     }
 
-    private void safeRecordSuccess(Long reviewId, String commitSha, String state, String queueUrl, String requestUrl) {
+    private void safeRecordSuccess(String connectorKey, Long reviewId, String commitSha, String state, String queueUrl, String requestUrl) {
         try {
-            writebackLogService.recordSuccess(CONNECTOR_KEY, PROVIDER, reviewId, commitSha, state, hasText(queueUrl) ? queueUrl : requestUrl);
+            writebackLogService.recordSuccess(connectorKey, PROVIDER, reviewId, commitSha, state, hasText(queueUrl) ? queueUrl : requestUrl);
         } catch (Exception e) {
             log.warn("[CI-Status] failed to record jenkins gate success review={} state={}", reviewId, state, e);
         }
     }
 
-    private void safeRecordFailure(Long reviewId, String commitSha, String state, String requestUrl, String errorMessage) {
+    private void safeRecordFailure(String connectorKey, Long reviewId, String commitSha, String state, String requestUrl, String errorMessage) {
         try {
-            writebackLogService.recordFailure(CONNECTOR_KEY, PROVIDER, reviewId, commitSha, state, requestUrl, errorMessage);
+            writebackLogService.recordFailure(connectorKey, PROVIDER, reviewId, commitSha, state, requestUrl, errorMessage);
         } catch (Exception e) {
             log.warn("[CI-Status] failed to record jenkins gate failure review={} state={}", reviewId, state, e);
         }
     }
 
-    private void safeRecordSkipped(Long reviewId, String state, String reason) {
+    private void safeRecordSkipped(String connectorKey, Long reviewId, String state, String reason) {
         try {
-            writebackLogService.recordSkipped(CONNECTOR_KEY, PROVIDER, reviewId, state, reason);
+            writebackLogService.recordSkipped(connectorKey, PROVIDER, reviewId, state, reason);
         } catch (Exception e) {
             log.warn("[CI-Status] failed to record jenkins gate skip review={} state={}", reviewId, state, e);
         }

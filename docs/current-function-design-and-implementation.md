@@ -36,15 +36,15 @@ Review Agent 当前已经不是单点的“AI 代码审查工具”，而是在�
 
 | 能力域 | 设计目标 | 当前实现状态 |
 | --- | --- | --- |
-| Identity & Auth | 用户注册、登录、JWT 鉴权、前端路由守卫 | 已实现基础能力；登录/注册/退出入口统一走 Auth composable；RBAC、审计、会话管理仍未完成 |
-| Project & Repo | 项目登记、仓库克隆/API 直连、分支读取、项目级 Review 管理 | 基础闭环已实现；项目详情页已展示后端仓库分支列表；新增 GitLab API 模式，支持通过 Personal Access Token 直接获取 diff，无需本地克隆 |
+| Identity & Auth | 用户注册、登录、JWT 鉴权、RBAC、前端路由守卫、权限变更审计 | 已实现四类平台角色、后端实时权限裁决和平台/项目权限变更证据链；首个注册账号为平台管理员，后续自助注册默认为审查员；仍缺组织/租户隔离、SSO 和服务端 token 黑名单 |
+| Project & Repo | 项目登记、仓库克隆/API 直连、分支读取、项目成员与 Review 管理 | 已实现 `OWNER`、`MAINTAINER`、`REVIEWER` 项目角色；项目列表、仓库分支、GitLab 策略和 Review 全链路按成员隔离，项目详情页可管理成员 |
 | Review Core | 创建 Review、展示结果、Finding 人工状态、风险/测试/重构分析 | 页面和接口已接入，部分后端 Review 主链路源码仍受保护 |
 | Pre-PR Gate | 后端计算、持久化、人工决策、CI 状态发布 | 后端服务与表结构已实现；前后端决策接口路径存在不一致风险 |
 | Model Config | 模型供应商、模型档案、审查策略、角色绑定 | CRUD 和前端配置页已实现 |
 | Model Invocation & Telemetry | 模型调用抽象、HTTP adapter、调用遥测、策略效果汇总 | `ModelInvocationPort` seam、HTTP adapter、smoke-test、遥测表和汇总已实现；真实主链路迁移未完成 |
 | Governance | 治理能力目录、连接器、规则包、工作流模板、遥测行动项 | 页面和后端目录已实现，规则包变更记录、dry-run 预览、批准/应用/拒绝/回滚状态流、规则控制项写回、版本快照列表与快照详情查看已接入 |
 | Operations | 统一任务视图、修复队列、Owner 负载、规则学习候选、业务收益、策略压力、遥测就绪度、CI 健康行动项 | 后端聚合接口和前端运营页已实现；统一任务视图已合并 Finding 修复项与 CI 健康异常，并支持同步到 `operations_task`、更新状态/Owner/SLA、批量分派、SLA 到期告警、GitLab Issue 创建记录、GitLab Issue 基础字段映射、手动/自动状态刷新与关闭回流、手动绑定 Jira/禅道/其他 Issue、关闭任务和记录关闭原因；CI Health Actions 已派生通知计划载荷，并可通过配置的通用 Webhook 发送、写入动作日志；修复队列支持确认有效/标记误报，规则学习候选支持采纳/拒绝并生成治理变更，仍缺 Jira/禅道 API 自动化和厂商级通知适配器 |
-| Integration | CI 配置、回写日志、健康度汇总、Webhook、SARIF、PR Summary、动作日志 | 多个接口已实现；治理中心 CI 配置支持 GitHub/GitLab/Jenkins 连接器切换；后端已按 provider 分发 GitHub Status、GitLab Commit Status 与 Jenkins Gate Job 触发，Jenkins 支持参数模板、crumb 预取、队列地址记录和队列/构建结果手动与自动刷新；GitHub/GitLab webhook 均已进入签名或 token 校验、幂等和投递日志；治理中心已展示每个 provider 的 CI 集成健康状态，并把异常健康状态转成 CI Health Actions；运营中心可直接重试失败回写和刷新 Jenkins 结果 |
+| Integration | CI 配置、回写日志、健康度汇总、Webhook、SARIF、PR/MR Summary、动作日志 | 多个接口已实现；治理中心 CI 配置支持 GitHub/GitLab/Jenkins 连接器切换；后端已按 provider 分发 GitHub Status、GitLab Commit Status 与 Jenkins Gate Job 触发，Jenkins 支持参数模板、crumb 预取、队列地址记录和队列/构建结果手动与自动刷新；GitLab MR 事件可自动创建 Pre-PR Review，具备 revision 并发去重、自动退避、死信和手动重试；Review 摘要可发布到 GitHub PR Comment 或 GitLab MR Note并进入动作审计；治理中心已展示 CI 与 MR Review 触发队列健康状态，并把异常 CI 状态转成 CI Health Actions |
 
 ## 4. 前端页面实现现状
 
@@ -85,8 +85,12 @@ Review Agent 当前已经不是单点的“AI 代码审查工具”，而是在�
 | `POST` | `/api/auth/register` | 用户注册 |
 | `POST` | `/api/auth/login` | 用户登录 |
 | `POST` | `/api/auth/logout` | 退出登录 |
+| `GET` | `/api/auth/access-profile` | 查询当前账号的规范化角色和权限集合 |
+| `GET` | `/api/access/users` | 平台管理员查询账号与角色 |
+| `PATCH` | `/api/access/users/{userId}/role` | 平台管理员分配平台角色，且不允许移除最后一个管理员 |
+| `GET` | `/api/access/audit-logs` | 平台管理员按动作类型、项目筛选最近访问权限审计 |
 
-当前实现是基础 JWT 登录态，适合单团队/内测场景。前端登录、注册和退出入口已统一到 `useAuth`，退出会调用 `/api/auth/logout` 并清理本地登录态；企业级 RBAC、组织隔离、服务端 token 失效/黑名单、审计日志未完成。
+JWT 只保存用户身份，权限裁决会在每次请求中读取 `user_account` 的最新角色与状态，因此账号停用或角色降级无需等待 token 过期。`ADMIN` 拥有全部权限；`GOVERNANCE_MANAGER` 管理治理规则、GitLab/Jenkins 连接器、凭据轮换与模型配置；`OPERATOR` 管理运营任务并只读治理和集成健康；`REVIEWER` 聚焦项目和 Review 主流程。外部 GitHub/GitLab Webhook 保持签名/token 校验，不要求用户 JWT；其余 `/api/**` 默认要求登录。前端菜单、受限路由、治理操作和运营只读态与后端策略同步，但后端拦截器始终是最终权限边界。仍缺组织/租户隔离、企业 SSO、服务端 token 失效/黑名单和角色变更审计。
 
 ### 5.2 Project
 
@@ -99,8 +103,15 @@ Review Agent 当前已经不是单点的“AI 代码审查工具”，而是在�
 | `DELETE` | `/api/projects/{id}` | 删除项目 |
 | `POST` | `/api/projects/{id}/retry-clone` | 重试仓库克隆 |
 | `GET` | `/api/projects/{id}/branches` | 查询分支 |
+| `GET` | `/api/projects/{id}/members` | 查询项目成员和项目权限 |
+| `PUT` | `/api/projects/{id}/members` | Owner 按用户名添加成员或调整角色 |
+| `DELETE` | `/api/projects/{id}/members/{userId}` | Owner 移除成员，禁止移除最后一个 Owner |
 
-项目表在 `V1__init_schema.sql` 中定义，包含仓库 URL、默认分支、本地路径、克隆状态、错误信息扩展等。项目详情页已读取 `/api/projects/{id}/branches` 展示仓库分支列表；非默认分支可直接跳转创建 Review 并预填源分支、目标分支。创建 Review 页也会读取该接口作为源分支/目标分支选项，并校验 URL 预填分支仍存在。
+项目表在 `V1__init_schema.sql` 中定义，`V25__project_membership.sql` 新增独立 `project_member` 关系。项目创建者自动成为 `OWNER`；`OWNER` 可管理成员、项目、集成策略和 Review，`MAINTAINER` 可维护项目并执行 Review，`REVIEWER` 可读取仓库并执行/处理 Review。平台 `ADMIN` 保留应急全局访问。历史项目会为现有活跃平台管理员补 Owner。项目列表按成员过滤，项目详情、分支、编辑、删除、GitLab 自动审核策略均在服务端校验项目权限。
+
+Review 权限使用两层保护：`ProjectScopedReviewService` 包装受保护的 Review 主服务，对创建、列表、详情、Finding、决策和 SARIF 反查项目；`ProjectResourceInterceptor` 再覆盖 Gate、风险、测试生成、重构计划等 `/api/reviews/{id}/...` 资源端点。签名验证通过的 GitLab Webhook 作为系统调用不依赖交互用户成员关系。Review 进度 SSE 因浏览器 `EventSource` 无法设置 Header，仅允许在 `/api/reviews/{id}/progress` 使用 `access_token` query 参数，并仍执行 JWT 与项目成员校验；异步切换时会清理认证 ThreadLocal。
+
+`V26__access_audit_log.sql` 新增独立访问审计表。平台角色变更、项目创建者 Owner 分配、项目成员添加、角色调整和移除都与业务变更在同一事务写入审计，保存操作者与目标用户快照、项目 ID、前后角色和发生时间。治理中心仅向具备 `ACCESS_MANAGE` 权限的平台管理员展示最近记录，并支持动作类型和项目 ID 筛选；相同角色的重复提交不会产生审计噪声。
 
 **GitLab API 模式（新增）：** 创建项目时可选提供 GitLab Personal Access Token，系统解析仓库 URL 提取 GitLab 实例地址和项目路径，写入 `project_gitlab_config` 表，项目状态直接标记为 `READY`，跳过本地克隆。后续获取分支列表和 diff 均通过 GitLab REST API：
 
@@ -252,13 +263,14 @@ AI Gateway 页面已经优先读取 `/api/model-telemetry/summary`，如果失�
 
 Governance 页面当前还接入：
 
-- CI 配置读取和保存，支持在 GitHub Checks、GitLab Merge Request / Pipeline、Jenkins Pipeline Gate 三种连接器之间切换。
+- CI 配置读取和保存，支持在 GitHub Checks、GitLab Merge Request / Pipeline、Jenkins Pipeline Gate 三种连接器之间切换；治理中心可“保存并测试”，以只读元数据请求验证仓库、项目或 Jenkins Job 的 URL 与凭证，并记录连接测试动作。API Token、Webhook Secret 和项目 GitLab Token 通过 AES-256-GCM 版本化信封静态加密，旧明文在启动时自动迁移。治理页区分当前密钥、历史密钥、明文和不可解密凭据，并支持经过二次确认的事务化密钥轮换。
 - CI 状态发布服务会发布到所有启用的 connector：GitHub 使用 Commit Status，GitLab 使用 `/api/v4/projects/:id/statuses/:sha`，Jenkins 先尝试读取 `/crumbIssuer/api/json`，再触发 `buildWithParameters` 并携带 Review Agent Gate 参数；企业 Jenkins 可在治理中心配置参数模板，用换行或 `&` 分隔 `key=value`，通过 `${reviewId}`、`${jenkinsState}`、`${commitSha}`、`${context}` 等占位符适配既有 Pipeline 参数。触发成功后优先把 Jenkins 返回的队列 `Location` 写入回写日志。治理中心可手动刷新 Jenkins queue/build API；后端也会按 `review-agent.ci-writeback.jenkins-refresh-delay-ms` 自动刷新，把 build URL、build number 和 result 更新到同一条日志。
+- Jenkins 也支持反向接入企业现有 Pipeline：Jenkinsfile 使用 `X-Review-Agent-Token` 调用 `/api/integration/webhooks/jenkins/reviews` 创建 Pre-PR Review，再轮询 `/jenkins/reviews/{reviewId}/gate` 决定流水线放行或阻断。触发按项目、Job、Build、commit 和分支生成稳定幂等键，失败任务指数退避自动重试，5 次后进入 `EXHAUSTED`，治理中心可查看独立队列健康并手动重试。Gate 查询只接受 Jenkins connector secret，且只暴露由 Jenkins 触发的 Review。
 - CI 集成健康度汇总，按 GitHub/GitLab/Jenkins connector 聚合最近写回记录，输出 `HEALTHY`、`DEGRADED`、`UNHEALTHY`、`NO_DATA`、成功/失败/跳过计数、最近写回状态、最近 writeback id、请求 URL 和 Jenkins 外部构建结果；前端会把非健康状态转成 CI Health Actions，提示检查凭证、仓库绑定、失败重试、Jenkins 构建刷新或发布烟测。
 - CI 写回日志。
 - 失败写回手动重试。
 - 最近集成动作日志。
-- 最近 Webhook 投递日志，读取 `/api/integration/webhooks/deliveries?limit=10`，展示 GitHub/GitLab 投递的 provider、eventType、deliveryId、状态和错误信息。
+- 最近 Webhook 投递日志，读取 `/api/integration/webhooks/deliveries?limit=10`，展示 GitHub/GitLab/Jenkins 投递状态和错误。GitLab MR 事件先经过全局 connector 开关和项目级策略过滤，再以 `project path + MR iid + last commit SHA` 唯一占位并创建 Review；Jenkins 以 Project/Job/Build/commit 唯一占位。两类触发的健康统计、到期领取和重试按 connector 隔离，避免互相污染。项目启用 `publishSummaryEnabled` 后，GitLab 首次触发或重试成功都会由服务端统一 Markdown Builder 将摘要、Gate 和前五条 Finding 发布为 GitLab MR Note；Note 失败与 Review 主状态隔离，只进入投递消息和动作审计。
 - Operations telemetry-readiness 转成治理行动项。
 - Operations 采纳规则学习候选后生成的规则包变更记录。
 - 规则包变更 dry-run 预览，返回已有控制项数量、拟新增控制项、快照 JSON 和影响摘要。
@@ -309,14 +321,28 @@ Operations 页面当前已经把后端聚合能力接入到多个运营视图：
 | Method | Path | 功能 |
 | --- | --- | --- |
 | `GET` | `/api/integration/ci-config` | 查询 CI 配置，支持 `connectorKey` |
-| `PUT` | `/api/integration/ci-config` | 保存 CI 配置，支持 GitHub/GitLab/Jenkins 连接器配置 |
+| `GET` | `/api/integration/ci-config/list` | 按 Provider 查询连接器实例 |
+| `PUT` | `/api/integration/ci-config` | 保存 CI 配置，支持 GitHub/GitLab/Jenkins 多实例配置 |
+| `DELETE` | `/api/integration/ci-config` | 删除指定连接器实例 |
+| `POST` | `/api/integration/ci-config/test` | 只读测试 GitHub/GitLab/Jenkins 连接并记录动作审计 |
+| `GET` | `/api/integration/ci-config/credential-health` | 集成凭证加密密钥与明文残留健康度 |
+| `POST` | `/api/integration/ci-config/credential-rotation` | 将历史密钥或明文凭据事务化轮换到当前主密钥 |
 | `GET` | `/api/integration/ci-config/writebacks` | 最近 CI 写回日志 |
 | `GET` | `/api/integration/ci-config/writebacks/health` | CI 集成健康度汇总 |
 | `POST` | `/api/integration/ci-config/writebacks/{id}/retry` | 手动重试写回 |
 | `POST` | `/api/integration/ci-config/writebacks/jenkins/refresh` | 刷新 Jenkins 队列/构建结果 |
 | `POST` | `/api/integration/webhooks/github` | 接收 GitHub Webhook |
-| `POST` | `/api/integration/webhooks/gitlab` | 接收 GitLab Webhook |
+| `POST` | `/api/integration/webhooks/gitlab` | 接收 GitLab Webhook，并自动触发已打开 MR 的 Pre-PR Review |
+| `POST` | `/api/integration/webhooks/gitlab/review-triggers/retry` | 手动重试失败的 MR Review 触发 |
+| `GET` | `/api/integration/webhooks/gitlab/review-triggers/health` | GitLab MR Review 触发队列健康度 |
+| `POST` | `/api/integration/webhooks/jenkins/reviews` | 指定 Jenkins 实例触发 Pre-PR Review |
+| `GET` | `/api/integration/webhooks/jenkins/reviews/{reviewId}/gate` | Jenkins Pipeline 轮询实例所属 Review Gate |
+| `POST` | `/api/integration/webhooks/jenkins/review-triggers/retry` | 手动重试指定实例的失败触发 |
+| `GET` | `/api/integration/webhooks/jenkins/review-triggers/health` | 指定 Jenkins 实例的触发队列健康度 |
 | `GET` | `/api/integration/webhooks/deliveries` | 最近 Webhook 投递日志 |
+| `GET` | `/api/projects/{projectId}/gitlab-review-policy` | 查询项目级 GitLab 自动审核策略 |
+| `PUT` | `/api/projects/{projectId}/gitlab-review-policy` | 更新自动审核、Draft/WIP、自动 MR Summary 与目标分支规则 |
+| `POST` | `/api/integration/gitlab/merge-requests/summary-note` | 发布 Review 摘要到 GitLab MR Note |
 | `POST` | `/api/integration/sarif/upload` | 上传 SARIF 到 GitHub Code Scanning |
 | `POST` | `/api/integration/pr-summary/comment` | 回写 PR Summary 评论 |
 | `GET` | `/api/integration/actions` | 最近集成动作日志 |
@@ -326,9 +352,12 @@ Operations 页面当前已经把后端聚合能力接入到多个运营视图：
 - `integration_ci_config`
 - `integration_ci_writeback_log`
 - `integration_webhook_delivery_log`
+- `integration_webhook_review_trigger`
 - `integration_action_log`
 
-集成链路的设计已经比较清楚：配置、执行、日志、失败重试、动作追踪和健康度汇总都有对应对象。当前治理中心已经可以保存 `github-checks`、`gitlab-merge-request` 和 `jenkins-pipeline` 三类 CI 连接器配置；后端状态发布已经具备 provider-aware 分发，GitHub/GitLab/Jenkins 都能进入同一条 Gate 发布与写回日志链路。GitHub/GitLab webhook 已进入统一投递日志，并可通过治理中心查看最近接收、拒绝或重复投递；Jenkins 已支持参数模板、crumb 预取、队列地址记录，以及队列/构建结果的手动与自动刷新。CI Health Actions 已经能把异常健康状态转成治理侧处理建议。后续重点是更多 Provider、权限边界、密钥管理和真实生产环境验证。
+集成链路的设计已经比较清楚：配置、执行、日志、失败重试、动作追踪和健康度汇总都有对应对象。治理中心可以保存 `github-checks`、`gitlab-merge-request` 和多个 `jenkins-pipeline:<instance-key>` CI 连接器；GitHub/GitLab/Jenkins 都进入同一条 Gate 发布与写回日志链路。Jenkins 实例可绑定项目，入站触发、幂等、Gate 查询、健康统计、重试、出站回写和构建刷新使用实际 connectorKey 隔离；治理中心提供实例新增、切换、删除和 Shared Library 片段，仓库内 `jenkins-shared-library/vars/reviewAgentGate.groovy` 封装了凭证、Review 触发、Gate 轮询及构建阻断。GitLab MR 自动 Review 具备项目策略、revision 并发去重、失败自动退避和手动补偿，完成后可将摘要、Gate 和 Finding 直接发布为 GitLab MR Note；GitHub 继续支持 PR Summary Comment、SARIF 和 Status。集成密钥已具备静态加密、历史密钥兼容、事务化轮换、健康告警和 `CREDENTIAL_ROTATION` 动作审计；连接器配置、重试和密钥轮换也已纳入 RBAC。后续重点是真实生产环境验证、SSO 与租户隔离。
+
+生产密钥轮换顺序：先把新密钥写入 `REVIEW_AGENT_CREDENTIAL_KEY`，把旧密钥以逗号分隔写入 `REVIEW_AGENT_CREDENTIAL_PREVIOUS_KEYS` 并重启；确认治理中心不存在 `KEY_MISMATCH` 后执行“轮换到当前密钥”；当健康状态不再包含历史密钥凭据后，移除 `REVIEW_AGENT_CREDENTIAL_PREVIOUS_KEYS` 并再次重启。轮换服务会先验证整批凭据可解密，再在单一事务中重加密，避免部分凭据已更新、部分仍使用旧密钥。
 
 ## 6. 关键业务流程
 
@@ -412,11 +441,11 @@ flowchart LR
 
 | 数据域 | 主要表 |
 | --- | --- |
-| 项目与 Review | `project`、`review`、`review_finding`、`review_model_result` |
+| 项目与 Review | `project`、`project_member`、`review`、`review_finding`、`review_model_result` |
 | 模型配置 | `model_provider`、`model_profile`、`review_strategy`、`review_strategy_model` |
 | Pre-PR Gate | `pre_pr_gate`、`pre_pr_gate_history` |
 | Auth | `user_account` |
-| CI/集成 | `integration_ci_config`、`integration_ci_writeback_log`、`integration_webhook_delivery_log`、`integration_action_log` |
+| CI/集成 | `integration_ci_config`、`integration_ci_writeback_log`、`integration_webhook_delivery_log`、`integration_webhook_review_trigger`、`integration_action_log` |
 | Operations | `operations_task`、`operations_rule_learning_decision` |
 | 遥测 | `model_call_telemetry` |
 | 治理 | `governance_capability`、`governance_rule_pack`、`workflow_template`、`governance_rule_pack_change`、`governance_rule_pack_version` |
@@ -427,8 +456,8 @@ flowchart LR
 
 | 模块 | 成熟度 | 判断 |
 | --- | --- | --- |
-| 登录/注册/退出 | 可用 | 基础 JWT 闭环可用，前端退出已接后端 `/auth/logout`，缺 RBAC 和服务端会话失效 |
-| 项目管理 | 可用 | CRUD、本地克隆/API 直连双模式、分支读取和项目详情分支展示具备；GitLab API 模式支持通过 Token 获取 diff，无需本地存储 |
+| 登录/注册/退出 | 可用 | JWT 闭环、四角色 RBAC、用户角色管理、前端权限路由均已实现；缺 SSO、租户隔离和服务端会话失效 |
+| 项目管理 | 可用 | CRUD、API/克隆双模式、项目成员角色、列表过滤、仓库/Review 权限隔离和成员管理页面均已实现 |
 | Review 创建/详情 | 部分可用 | 前端完整，部分后端主链路受保护 |
 | Pre-PR Gate | 接近可用 | 后端持久化和 CI 发布具备，但接口路径需修正 |
 | 模型配置 | 可用 | CRUD 与种子数据具备 |

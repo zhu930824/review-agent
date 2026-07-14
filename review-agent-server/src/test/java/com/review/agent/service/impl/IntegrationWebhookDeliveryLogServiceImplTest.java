@@ -65,5 +65,15 @@ class IntegrationWebhookDeliveryLogServiceImplTest {
         @Override
         public void save(IntegrationWebhookDeliveryLog log) {
         }
+
+        @Override
+        public void updateTriggerResult(
+                String triggerKey,
+                String status,
+                Long reviewId,
+                String message,
+                Integer retryCount,
+                LocalDateTime nextRetryAt) {
+        }
     }
 }

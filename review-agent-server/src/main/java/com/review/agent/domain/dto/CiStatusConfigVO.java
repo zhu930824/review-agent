@@ -9,6 +9,8 @@ public class CiStatusConfigVO {
 
     private Long id;
     private String connectorKey;
+    private String displayName;
+    private Long projectId;
     private String provider;
     private String repoOwner;
     private String repoName;

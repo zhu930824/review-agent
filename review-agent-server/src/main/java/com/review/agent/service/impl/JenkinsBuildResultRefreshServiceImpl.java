@@ -21,7 +21,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class JenkinsBuildResultRefreshServiceImpl implements JenkinsBuildResultRefreshService {
 
-    private static final String CONNECTOR_KEY = "jenkins-pipeline";
     private static final String PROVIDER = "JENKINS";
 
     private final CiStatusConfigMapper ciStatusConfigMapper;
@@ -30,14 +29,11 @@ public class JenkinsBuildResultRefreshServiceImpl implements JenkinsBuildResultR
 
     @Override
     public int refreshRecent(int limit) {
-        CiStatusConfig config = loadConfig();
-        if (config == null) {
-            return 0;
-        }
         int refreshed = 0;
         for (CiStatusWritebackLog writebackLog : listRefreshableLogs(limit)) {
             try {
-                if (refreshLog(config, writebackLog)) {
+                CiStatusConfig config = loadConfig(writebackLog.getConnectorKey());
+                if (config != null && refreshLog(config, writebackLog)) {
                     refreshed++;
                 }
             } catch (RuntimeException ex) {
@@ -78,9 +74,9 @@ public class JenkinsBuildResultRefreshServiceImpl implements JenkinsBuildResultR
         return true;
     }
 
-    private CiStatusConfig loadConfig() {
+    private CiStatusConfig loadConfig(String connectorKey) {
         return ciStatusConfigMapper.selectOne(
-                new LambdaQueryWrapper<CiStatusConfig>().eq(CiStatusConfig::getConnectorKey, CONNECTOR_KEY));
+                new LambdaQueryWrapper<CiStatusConfig>().eq(CiStatusConfig::getConnectorKey, connectorKey));
     }
 
     private List<CiStatusWritebackLog> listRefreshableLogs(int limit) {

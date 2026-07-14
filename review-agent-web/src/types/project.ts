@@ -26,3 +26,26 @@ export interface UpdateProjectParams {
   defaultBranch?: string
   description?: string
 }
+
+export interface ProjectGitLabReviewPolicy {
+  projectId: number
+  configured: boolean
+  autoReviewEnabled: boolean
+  reviewDrafts: boolean
+  publishSummaryEnabled: boolean
+  targetBranchPattern: string | null
+}
+
+export type ProjectMemberRole = 'OWNER' | 'MAINTAINER' | 'REVIEWER'
+
+export interface ProjectMember {
+  userId: number
+  username: string
+  displayName: string | null
+  email: string | null
+  role: ProjectMemberRole
+  status: string
+  currentUser: boolean
+  permissions: string[]
+  updatedAt: string
+}

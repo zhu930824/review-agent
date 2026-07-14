@@ -115,6 +115,8 @@ export interface CiStatusIntegrationReadiness {
 export interface CiStatusConfigVO {
   id: number | null
   connectorKey: string
+  displayName: string | null
+  projectId: number | null
   provider: string
   repoOwner: string | null
   repoName: string | null
@@ -127,6 +129,37 @@ export interface CiStatusConfigVO {
   sarifUploadEnabled: boolean
   tokenConfigured: boolean
   webhookSecretConfigured: boolean
+}
+
+export interface CiConnectionTestResultVO {
+  connectorKey: string
+  provider: string | null
+  status: 'SUCCESS' | 'FAILED' | 'SKIPPED' | string
+  message: string
+  requestUrl: string | null
+  latencyMs: number
+  testedAt: string
+}
+
+export interface CredentialSecurityHealthVO {
+  status: 'SECURE' | 'DEVELOPMENT_KEY' | 'MIGRATION_REQUIRED' | 'ROTATION_REQUIRED' | 'KEY_MISMATCH' | string
+  encryptionEnabled: boolean
+  developmentKey: boolean
+  previousKeysConfigured: boolean
+  rotationRequired: boolean
+  encryptedCredentialCount: number
+  plaintextCredentialCount: number
+  activeKeyCredentialCount: number
+  previousKeyCredentialCount: number
+  unreadableCredentialCount: number
+  recommendation: string
+}
+
+export interface CredentialRotationResultVO {
+  status: 'ROTATED' | string
+  rotatedCredentialCount: number
+  message: string
+  rotatedAt: string
 }
 
 export interface CiStatusWritebackLogVO {
@@ -187,8 +220,26 @@ export interface IntegrationWebhookDeliveryLogVO {
   deliveryStatus: 'ACCEPTED' | 'REJECTED' | 'DUPLICATE' | string
   payloadDigest: string | null
   errorMessage: string | null
+  triggerStatus: 'PROCESSED' | 'DEDUPLICATED' | 'SKIPPED' | 'FAILED' | string | null
+  triggerKey: string | null
+  triggerReviewId: number | null
+  triggerMessage: string | null
+  triggerRetryCount: number | null
+  triggerNextRetryAt: string | null
   receivedAt: string
   processedAt: string | null
   createdAt: string
   updatedAt: string
 }
+
+export interface GitLabReviewTriggerHealthVO {
+  healthStatus: 'HEALTHY' | 'DEGRADED' | 'UNHEALTHY' | string
+  processingCount: number
+  failedCount: number
+  exhaustedCount: number
+  processedCount: number
+  oldestPendingAt: string | null
+  summary: string
+}
+
+export type JenkinsReviewTriggerHealthVO = GitLabReviewTriggerHealthVO

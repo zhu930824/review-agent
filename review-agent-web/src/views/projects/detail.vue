@@ -21,11 +21,12 @@
           <a-typography-title :level="5" style="margin: 0">基本信息</a-typography-title>
         </a-space>
         <a-space :size="8" wrap>
-          <a-button size="small" @click="openEditProject">
+          <a-button v-if="canManageProject" size="small" @click="openEditProject">
             <template #icon><EditOutlined /></template>
             编辑
           </a-button>
           <a-popconfirm
+            v-if="canManageMembers"
             title="确认删除这个项目？"
             ok-text="删除"
             cancel-text="取消"
@@ -37,7 +38,7 @@
             </a-button>
           </a-popconfirm>
           <a-button
-            v-if="project?.status === 'ERROR'"
+            v-if="canManageProject && project?.status === 'ERROR'"
             type="primary"
             size="small"
             :loading="retrying"
@@ -116,6 +117,116 @@
       </a-spin>
     </a-card>
 
+    <a-card
+      v-if="gitLabReviewPolicy?.configured"
+      :bordered="false"
+      style="border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 24px"
+    >
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <a-space :size="12">
+          <div style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:#fff7e6;color:#d97706">
+            <SafetyOutlined style="font-size:20px" />
+          </div>
+          <div>
+            <a-typography-title :level="5" style="margin:0">GitLab 自动审核策略</a-typography-title>
+            <div style="font-size:12px;color:#64748b;margin-top:2px">控制进入 AI 审核队列的 Merge Request</div>
+          </div>
+        </a-space>
+        <a-button v-if="canManageIntegration" type="primary" size="small" :loading="policySaving" @click="saveGitLabReviewPolicy">保存策略</a-button>
+      </div>
+      <a-row :gutter="16">
+        <a-col :xs="24" :md="8">
+          <a-form-item label="自动审核" style="margin-bottom:12px">
+            <a-switch v-model:checked="gitLabReviewPolicy.autoReviewEnabled" :disabled="!canManageIntegration" />
+          </a-form-item>
+        </a-col>
+        <a-col :xs="24" :md="8">
+          <a-form-item label="包含 Draft / WIP" style="margin-bottom:12px">
+            <a-switch v-model:checked="gitLabReviewPolicy.reviewDrafts" :disabled="!canManageIntegration" />
+          </a-form-item>
+        </a-col>
+        <a-col :xs="24" :md="8">
+          <a-form-item label="自动回流 MR 摘要" style="margin-bottom:12px">
+            <a-switch v-model:checked="gitLabReviewPolicy.publishSummaryEnabled" :disabled="!canManageIntegration" />
+          </a-form-item>
+        </a-col>
+        <a-col :xs="24" :md="24">
+          <a-form-item label="目标分支规则" style="margin-bottom:0">
+            <a-textarea
+              v-model:value="gitLabReviewPolicy.targetBranchPattern"
+              :rows="2"
+              :disabled="!canManageIntegration"
+              placeholder="main, release/*（逗号或换行分隔；留空表示全部）"
+              style="width:100%"
+            />
+          </a-form-item>
+        </a-col>
+      </a-row>
+    </a-card>
+
+    <a-card :bordered="false" style="border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.06);margin-bottom:24px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px">
+        <a-space :size="12">
+          <div style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:#eef2ff;color:#4f46e5">
+            <TeamOutlined style="font-size:20px" />
+          </div>
+          <div>
+            <a-typography-title :level="5" style="margin:0">项目成员</a-typography-title>
+            <div style="font-size:12px;color:#64748b;margin-top:2px">仓库、Review 和 GitLab 策略均按项目角色隔离</div>
+          </div>
+        </a-space>
+        <a-space v-if="canManageMembers" :size="8" wrap>
+          <a-input v-model:value="memberForm.username" size="small" placeholder="用户名" style="width:160px" />
+          <a-select v-model:value="memberForm.role" size="small" style="width:140px">
+            <a-select-option value="OWNER">Owner</a-select-option>
+            <a-select-option value="MAINTAINER">Maintainer</a-select-option>
+            <a-select-option value="REVIEWER">Reviewer</a-select-option>
+          </a-select>
+          <a-button type="primary" size="small" :loading="memberSaving" @click="addProjectMember">
+            <template #icon><UserAddOutlined /></template>
+            添加成员
+          </a-button>
+        </a-space>
+      </div>
+      <a-list :data-source="projectMembers" :loading="membersLoading" size="small">
+        <template #renderItem="{ item }">
+          <a-list-item>
+            <a-list-item-meta :description="`${item.email || 'No email'} · ${item.status}`">
+              <template #title>
+                {{ item.displayName || item.username }}
+                <span style="margin-left:6px;color:#94a3b8;font-size:12px">@{{ item.username }}</span>
+                <a-tag v-if="item.currentUser" color="blue" style="margin-left:6px">当前用户</a-tag>
+              </template>
+            </a-list-item-meta>
+            <a-space :size="6">
+              <a-select
+                v-if="canManageMembers"
+                :value="item.role"
+                size="small"
+                style="width:140px"
+                :loading="updatingMemberId === item.userId"
+                @change="updateProjectMemberRole(item, $event)"
+              >
+                <a-select-option value="OWNER">Owner</a-select-option>
+                <a-select-option value="MAINTAINER">Maintainer</a-select-option>
+                <a-select-option value="REVIEWER">Reviewer</a-select-option>
+              </a-select>
+              <a-tag v-else>{{ item.role }}</a-tag>
+              <a-popconfirm
+                v-if="canManageMembers"
+                title="确认移除该项目成员？"
+                ok-text="移除"
+                cancel-text="取消"
+                @confirm="removeProjectMember(item)"
+              >
+                <a-button type="link" size="small" danger :loading="removingMemberId === item.userId">移除</a-button>
+              </a-popconfirm>
+            </a-space>
+          </a-list-item>
+        </template>
+      </a-list>
+    </a-card>
+
     <!-- 审查记录卡片 -->
     <a-card :bordered="false" style="border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06)">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px">
@@ -186,26 +297,40 @@
 import { ref, computed, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useApi } from '@/composables/useApi'
+import { useAccess } from '@/composables/useAccess'
 import { message } from 'ant-design-vue'
-import { ArrowLeftOutlined, InfoCircleOutlined, ReloadOutlined, SearchOutlined, PlusOutlined, ArrowRightOutlined, EditOutlined, DeleteOutlined, BranchesOutlined } from '@ant-design/icons-vue'
-import type { Project } from '@/types/project'
+import { ArrowLeftOutlined, InfoCircleOutlined, ReloadOutlined, SearchOutlined, PlusOutlined, ArrowRightOutlined, EditOutlined, DeleteOutlined, BranchesOutlined, SafetyOutlined, TeamOutlined, UserAddOutlined } from '@ant-design/icons-vue'
+import type { Project, ProjectGitLabReviewPolicy, ProjectMember, ProjectMemberRole } from '@/types/project'
 import type { Review } from '@/types/review'
 import type { PageResult } from '@/types/api'
 
 const router = useRouter()
 const route = useRoute()
 const { get, post, put, del } = useApi()
+const { can } = useAccess()
 const projectId = computed(() => Number(route.params.id))
 const loading = ref(false)
 const retrying = ref(false)
 const updating = ref(false)
 const deleting = ref(false)
+const policySaving = ref(false)
 const editModalOpen = ref(false)
 const project = ref<Project | null>(null)
 const reviews = ref<Review[]>([])
 const branches = ref<string[]>([])
 const branchesLoading = ref(false)
 const branchesError = ref('')
+const gitLabReviewPolicy = ref<ProjectGitLabReviewPolicy | null>(null)
+const projectMembers = ref<ProjectMember[]>([])
+const membersLoading = ref(false)
+const memberSaving = ref(false)
+const updatingMemberId = ref<number | null>(null)
+const removingMemberId = ref<number | null>(null)
+const memberForm = reactive({ username: '', role: 'REVIEWER' as ProjectMemberRole })
+const currentProjectMember = computed(() => projectMembers.value.find(member => member.currentUser) ?? null)
+const canManageMembers = computed(() => can('ACCESS_MANAGE') || currentProjectMember.value?.role === 'OWNER')
+const canManageProject = computed(() => can('ACCESS_MANAGE') || ['OWNER', 'MAINTAINER'].includes(currentProjectMember.value?.role || ''))
+const canManageIntegration = computed(() => can('ACCESS_MANAGE') || currentProjectMember.value?.role === 'OWNER')
 const editForm = reactive({
   name: '',
   description: '',
@@ -246,19 +371,109 @@ function statusLabel(status: string): string {
 async function loadData() {
   loading.value = true
   try {
-    const [projectRes, reviewsRes, branchesRes] = await Promise.all([
+    const [projectRes, reviewsRes, branchesRes, policyRes, membersRes] = await Promise.all([
       get<Project>(`/projects/${projectId.value}`),
       get<PageResult<Review>>(`/reviews?projectId=${projectId.value}&pageNum=1&pageSize=20`),
       get<string[]>(`/projects/${projectId.value}/branches`).catch(() => null),
+      get<ProjectGitLabReviewPolicy>(`/projects/${projectId.value}/gitlab-review-policy`).catch(() => null),
+      get<ProjectMember[]>(`/projects/${projectId.value}/members`).catch(() => null),
     ])
     if (projectRes.data) project.value = projectRes.data
     if (reviewsRes.data) reviews.value = reviewsRes.data.records
     branches.value = branchesRes?.data ?? []
     branchesError.value = branchesRes ? '' : '分支列表暂时不可用，请确认仓库已克隆完成后重试'
+    gitLabReviewPolicy.value = policyRes?.data ?? null
+    projectMembers.value = membersRes?.data ?? []
   } catch (e) {
     console.error('加载项目详情失败', e)
   } finally {
     loading.value = false
+  }
+}
+
+async function loadProjectMembers() {
+  membersLoading.value = true
+  try {
+    const res = await get<ProjectMember[]>(`/projects/${projectId.value}/members`)
+    projectMembers.value = res.data ?? []
+  } catch (e) {
+    console.error('加载项目成员失败', e)
+  } finally {
+    membersLoading.value = false
+  }
+}
+
+async function addProjectMember() {
+  if (!memberForm.username.trim()) {
+    message.warning('请输入用户名')
+    return
+  }
+  memberSaving.value = true
+  try {
+    await put<ProjectMember>(`/projects/${projectId.value}/members`, {
+      username: memberForm.username.trim(),
+      role: memberForm.role,
+    })
+    memberForm.username = ''
+    await loadProjectMembers()
+    message.success('项目成员已保存')
+  } catch (e) {
+    console.error('保存项目成员失败', e)
+    message.error(e instanceof Error ? e.message : '保存项目成员失败')
+  } finally {
+    memberSaving.value = false
+  }
+}
+
+async function updateProjectMemberRole(member: ProjectMember, role: ProjectMemberRole) {
+  updatingMemberId.value = member.userId
+  try {
+    await put<ProjectMember>(`/projects/${projectId.value}/members`, { username: member.username, role })
+    await loadProjectMembers()
+    message.success('项目角色已更新')
+  } catch (e) {
+    console.error('更新项目角色失败', e)
+    message.error(e instanceof Error ? e.message : '更新项目角色失败')
+  } finally {
+    updatingMemberId.value = null
+  }
+}
+
+async function removeProjectMember(member: ProjectMember) {
+  removingMemberId.value = member.userId
+  try {
+    await del(`/projects/${projectId.value}/members/${member.userId}`)
+    if (member.currentUser && !can('ACCESS_MANAGE')) {
+      router.push('/projects')
+      return
+    }
+    await loadProjectMembers()
+    message.success('项目成员已移除')
+  } catch (e) {
+    console.error('移除项目成员失败', e)
+    message.error(e instanceof Error ? e.message : '移除项目成员失败')
+  } finally {
+    removingMemberId.value = null
+  }
+}
+
+async function saveGitLabReviewPolicy() {
+  if (!gitLabReviewPolicy.value) return
+  policySaving.value = true
+  try {
+    const res = await put<ProjectGitLabReviewPolicy>(`/projects/${projectId.value}/gitlab-review-policy`, {
+      autoReviewEnabled: gitLabReviewPolicy.value.autoReviewEnabled,
+      reviewDrafts: gitLabReviewPolicy.value.reviewDrafts,
+      publishSummaryEnabled: gitLabReviewPolicy.value.publishSummaryEnabled,
+      targetBranchPattern: gitLabReviewPolicy.value.targetBranchPattern || null,
+    })
+    if (res.data) gitLabReviewPolicy.value = res.data
+    message.success('GitLab 自动审核策略已保存')
+  } catch (e) {
+    console.error('保存 GitLab 自动审核策略失败', e)
+    message.error('保存 GitLab 自动审核策略失败')
+  } finally {
+    policySaving.value = false
   }
 }
 

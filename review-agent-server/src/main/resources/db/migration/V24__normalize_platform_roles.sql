@@ -1,0 +1,6 @@
+UPDATE user_account
+SET role = 'ADMIN'
+WHERE role IN ('管理员', '平台管理员');
+
+ALTER TABLE user_account
+    MODIFY COLUMN role VARCHAR(50) NOT NULL DEFAULT 'REVIEWER' COMMENT 'Platform role: ADMIN/GOVERNANCE_MANAGER/OPERATOR/REVIEWER';

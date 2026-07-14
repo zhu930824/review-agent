@@ -9,6 +9,10 @@ public class UpsertCiStatusConfigRequest {
     @NotBlank(message = "连接器标识不能为空")
     private String connectorKey = "github-checks";
 
+    private String displayName;
+
+    private Long projectId;
+
     @NotBlank(message = "CI 提供方不能为空")
     private String provider = "GITHUB";
 

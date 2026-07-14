@@ -5,6 +5,8 @@ import com.review.agent.domain.entity.CiStatusConfig;
 import com.review.agent.domain.entity.IntegrationWebhookDeliveryLog;
 import com.review.agent.infrastructure.persistence.IntegrationWebhookDeliveryRepository;
 import com.review.agent.infrastructure.webhook.GitHubWebhookSignatureVerifier;
+import com.review.agent.infrastructure.webhook.GitLabMergeRequestReviewTrigger;
+import com.review.agent.infrastructure.webhook.GitLabMergeRequestReviewTriggerResult;
 import org.junit.jupiter.api.Test;
 
 import javax.crypto.Mac;
@@ -18,13 +20,18 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class IntegrationWebhookDeliveryServiceImplTest {
 
     private final FakeDeliveryRepository deliveryRepository = new FakeDeliveryRepository();
+    private final GitLabMergeRequestReviewTrigger gitLabMergeRequestReviewTrigger = mock(GitLabMergeRequestReviewTrigger.class);
     private final IntegrationWebhookDeliveryServiceImpl service = new IntegrationWebhookDeliveryServiceImpl(
             deliveryRepository,
-            new GitHubWebhookSignatureVerifier());
+            new GitHubWebhookSignatureVerifier(),
+            gitLabMergeRequestReviewTrigger);
 
     @Test
     void recordsAcceptedGitHubDeliveryWhenSignatureMatches() throws Exception {
@@ -83,6 +90,8 @@ class IntegrationWebhookDeliveryServiceImplTest {
     @Test
     void recordsAcceptedGitLabDeliveryWhenTokenMatches() {
         deliveryRepository.config = config("gitlab-merge-request", "GITLAB", "token-1");
+        when(gitLabMergeRequestReviewTrigger.trigger(anyString(), anyString()))
+                .thenReturn(GitLabMergeRequestReviewTriggerResult.processed("project:mr:1:commit:abc", 42L));
 
         IntegrationWebhookDeliveryResultVO result = service.receiveGitLabDelivery(
                 "gitlab-delivery-1",
@@ -97,6 +106,12 @@ class IntegrationWebhookDeliveryServiceImplTest {
         assertEquals("gitlab-merge-request", deliveryRepository.saved.get(0).getConnectorKey());
         assertEquals("GITLAB", deliveryRepository.saved.get(0).getProvider());
         assertEquals("ACCEPTED", deliveryRepository.saved.get(0).getDeliveryStatus());
+        assertEquals("PROCESSED", deliveryRepository.saved.get(0).getTriggerStatus());
+        assertEquals("project:mr:1:commit:abc", deliveryRepository.saved.get(0).getTriggerKey());
+        assertEquals(42L, deliveryRepository.saved.get(0).getTriggerReviewId());
+        assertEquals("PROCESSED", result.getTriggerStatus());
+        assertEquals("project:mr:1:commit:abc", result.getTriggerKey());
+        assertEquals(42L, result.getTriggerReviewId());
         assertEquals(64, deliveryRepository.saved.get(0).getPayloadDigest().length());
     }
 
@@ -117,6 +132,8 @@ class IntegrationWebhookDeliveryServiceImplTest {
     @Test
     void derivesStableGitLabDeliveryIdWhenHeaderIsMissing() {
         deliveryRepository.config = config("gitlab-merge-request", "GITLAB", "token-1");
+        when(gitLabMergeRequestReviewTrigger.trigger(anyString(), anyString()))
+                .thenReturn(GitLabMergeRequestReviewTriggerResult.skipped("not a merge request"));
 
         IntegrationWebhookDeliveryResultVO result = service.receiveGitLabDelivery(
                 null,
@@ -173,6 +190,16 @@ class IntegrationWebhookDeliveryServiceImplTest {
         @Override
         public void save(IntegrationWebhookDeliveryLog log) {
             saved.add(log);
+        }
+
+        @Override
+        public void updateTriggerResult(
+                String triggerKey,
+                String status,
+                Long reviewId,
+                String message,
+                Integer retryCount,
+                java.time.LocalDateTime nextRetryAt) {
         }
     }
 }

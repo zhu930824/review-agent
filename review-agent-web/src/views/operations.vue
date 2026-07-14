@@ -1,5 +1,12 @@
 <template>
   <a-space direction="vertical" :size="16" style="width:100%">
+    <a-alert
+      v-if="!can('OPERATIONS_MANAGE')"
+      type="info"
+      show-icon
+      message="运营中心只读模式"
+      description="当前角色可以查看任务、SLA 和集成健康度，但不能修改任务、发送通知或采纳规则。"
+    />
     <!-- 标题栏 -->
     <a-space style="width:100%;justify-content:space-between;flex-wrap:wrap">
       <div>
@@ -140,8 +147,8 @@
             <a-space :size="8">
               <a-tag color="processing">{{ operationsTasks.length }} tasks</a-tag>
               <a-tag v-if="selectedTaskKeys.length" color="blue">{{ selectedTaskKeys.length }} selected</a-tag>
-              <a-button size="small" :disabled="!selectedTaskKeys.length" :loading="batchAssigningTasks" @click="batchAssignOperationsTasks">Batch assign</a-button>
-              <a-button size="small" :loading="operationsTasksSyncing" @click="syncOperationsTasks">Sync tasks</a-button>
+              <a-button v-if="can('OPERATIONS_MANAGE')" size="small" :disabled="!selectedTaskKeys.length" :loading="batchAssigningTasks" @click="batchAssignOperationsTasks">Batch assign</a-button>
+              <a-button v-if="can('OPERATIONS_MANAGE')" size="small" :loading="operationsTasksSyncing" @click="syncOperationsTasks">Sync tasks</a-button>
             </a-space>
           </template>
           <a-table
@@ -149,7 +156,7 @@
             :data-source="operationsTasks"
             :loading="operationsTasksLoading"
             :pagination="false"
-            :row-selection="taskRowSelection"
+            :row-selection="can('OPERATIONS_MANAGE') ? taskRowSelection : undefined"
             row-key="taskKey"
             size="small"
           >
@@ -220,7 +227,7 @@
                 <span style="font-size:12px;color:#64748b">{{ record.latestSignal || '-' }}</span>
               </template>
               <template v-else-if="column.key === 'actions'">
-                <a-space v-if="record.status !== 'RESOLVED'" :size="4" wrap>
+                <a-space v-if="can('OPERATIONS_MANAGE') && record.status !== 'RESOLVED'" :size="4" wrap>
                   <a-button
                     v-if="record.status === 'OPEN' || record.status === 'CONFIRMED'"
                     type="link"
@@ -231,6 +238,7 @@
                     Start
                   </a-button>
                   <a-button
+                    v-if="can('OPERATIONS_MANAGE')"
                     type="link"
                     size="small"
                     :loading="updatingTaskKey === record.taskKey"
@@ -239,6 +247,7 @@
                     Owner/SLA
                   </a-button>
                   <a-button
+                    v-if="can('OPERATIONS_MANAGE')"
                     type="link"
                     size="small"
                     :loading="updatingTaskKey === record.taskKey"
@@ -280,7 +289,8 @@
                     Close
                   </a-button>
                 </a-space>
-                <span v-else style="font-size:12px;color:#94a3b8">{{ record.closeReason || 'Resolved' }}</span>
+                <span v-else-if="record.status === 'RESOLVED'" style="font-size:12px;color:#94a3b8">{{ record.closeReason || 'Resolved' }}</span>
+                <span v-else style="font-size:12px;color:#94a3b8">只读</span>
               </template>
             </template>
           </a-table>
@@ -326,6 +336,7 @@
               <template v-else-if="column.key === 'actions'">
                 <a-space :size="4" wrap>
                   <a-button
+                    v-if="can('OPERATIONS_MANAGE')"
                     type="link"
                     size="small"
                     :loading="actingFindingId === record.findingId && actingFindingAction === 'CONFIRM'"
@@ -334,6 +345,7 @@
                     确认有效
                   </a-button>
                   <a-button
+                    v-if="can('OPERATIONS_MANAGE')"
                     type="link"
                     size="small"
                     danger
@@ -380,7 +392,7 @@
                 <div style="font-size:12px;color:#64748b">
                   {{ task.sourceType }} · {{ task.sourceRef }} · {{ formatRemainingHours(task.remainingHours) || 'due time tracked' }}
                 </div>
-                <a-space :size="4" wrap>
+                <a-space v-if="can('OPERATIONS_MANAGE')" :size="4" wrap>
                   <a-button type="link" size="small" @click="updateOperationsTaskStatus(task, 'IN_PROGRESS')">Start</a-button>
                   <a-button type="link" size="small" @click="editOperationsTaskOwner(task)">Owner/SLA</a-button>
                   <a-button type="link" size="small" @click="closeOperationsTask(task)">Close</a-button>
@@ -455,7 +467,7 @@
                     Target: {{ action.notificationTargetUrl }}
                   </div>
                 </div>
-                <a-space :size="4" wrap>
+                <a-space v-if="can('OPERATIONS_MANAGE')" :size="4" wrap>
                   <a-button
                     v-if="action.latestWritebackStatus === 'FAILED' && action.latestWritebackId"
                     size="small"
@@ -512,7 +524,7 @@
                   {{ candidate.action === 'PROMOTE_TO_RULE' ? '固化' : '降噪' }}
                 </a-tag>
               </a-space>
-              <a-space :size="4" wrap style="margin-top:10px">
+              <a-space v-if="can('OPERATIONS_MANAGE')" :size="4" wrap style="margin-top:10px">
                 <a-button
                   type="primary"
                   size="small"
@@ -569,11 +581,13 @@ import { BarChartOutlined, ExclamationCircleOutlined, ClockCircleOutlined, RiseO
 import type { BusinessImpactEstimate, LinkOperationsExternalIssueRequest, OperationDashboard, OperationOwnerLoad, OperationalFinding, OperationsCiHealthAction, OperationsExternalIssue, OperationsTask, RemediationQueueItem, RuleLearningCandidate, StrategyPressureItem, StrategyPressureLevel, TelemetryReadinessItem, TelemetryReadinessLevel } from '@/types/operations'
 import type { SeverityLevel } from '@/types/review'
 import { useApi } from '@/composables/useApi'
+import { useAccess } from '@/composables/useAccess'
 import { buildRemediationQueue, deriveOperationsScorecard, estimateReviewBusinessImpact, extractRuleLearningCandidates, summarizeRemediationQueue } from '@/utils/reviewOperations'
 
 const fallbackBusinessImpact = estimateReviewBusinessImpact({ monthlyReviews: 80, averageManualReviewMinutes: 35, automationCoveragePercent: 65, blockerFindings: 6, majorFindings: 18 })
 const router = useRouter()
 const { get, post, patch } = useApi()
+const { can } = useAccess()
 const remediationQueueLoading = ref(false)
 const operationsTasksLoading = ref(false)
 const operationsTasksSyncing = ref(false)

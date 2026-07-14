@@ -9,13 +9,13 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
-import org.springframework.web.servlet.HandlerInterceptor;
+import org.springframework.web.servlet.AsyncHandlerInterceptor;
 
 import java.nio.charset.StandardCharsets;
 
 @Component
 @RequiredArgsConstructor
-public class AuthInterceptor implements HandlerInterceptor {
+public class AuthInterceptor implements AsyncHandlerInterceptor {
 
     private static final String BEARER_PREFIX = "Bearer ";
 
@@ -48,10 +48,22 @@ public class AuthInterceptor implements HandlerInterceptor {
         AuthContext.clear();
     }
 
+    @Override
+    public void afterConcurrentHandlingStarted(
+            HttpServletRequest request, HttpServletResponse response, Object handler) {
+        AuthContext.clear();
+    }
+
     private String resolveToken(HttpServletRequest request) {
         String authorization = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (StringUtils.hasText(authorization) && authorization.startsWith(BEARER_PREFIX)) {
             return authorization.substring(BEARER_PREFIX.length()).trim();
+        }
+        if (request.getRequestURI().matches("/api/reviews/\\d+/progress")) {
+            String queryToken = request.getParameter("access_token");
+            if (StringUtils.hasText(queryToken)) {
+                return queryToken.trim();
+            }
         }
         return null;
     }

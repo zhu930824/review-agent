@@ -18,56 +18,58 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ProviderAwareCiStatusService implements CiStatusService {
 
-    private static final List<String> CONNECTOR_PRIORITY = List.of(
-            "github-checks",
-            "gitlab-merge-request",
-            "jenkins-pipeline");
-
     private final CiStatusConfigMapper ciStatusConfigMapper;
     private final List<ProviderCiStatusReporter> reporters;
 
     @Override
     public void reportPass(Long reviewId, String description) {
-        report(reviewId, description, ProviderCiStatusReporter::reportPass);
+        report(reviewId, description, (reporter, config, id, text) -> reporter.reportPass(config, id, text));
     }
 
     @Override
     public void reportBlock(Long reviewId, String description) {
-        report(reviewId, description, ProviderCiStatusReporter::reportBlock);
+        report(reviewId, description, (reporter, config, id, text) -> reporter.reportBlock(config, id, text));
     }
 
     @Override
     public void reportRunning(Long reviewId, String description) {
-        report(reviewId, description, ProviderCiStatusReporter::reportRunning);
+        report(reviewId, description, (reporter, config, id, text) -> reporter.reportRunning(config, id, text));
     }
 
     private void report(Long reviewId, String description, CiReporterCall call) {
         Map<String, ProviderCiStatusReporter> reporterByConnector = reporters.stream()
                 .collect(Collectors.toMap(ProviderCiStatusReporter::connectorKey, reporter -> reporter));
         boolean reported = false;
-        for (String connectorKey : CONNECTOR_PRIORITY) {
-            CiStatusConfig config = loadConfig(connectorKey);
+        for (CiStatusConfig config : loadConfigs()) {
             if (!isEnabled(config)) {
                 continue;
             }
-            ProviderCiStatusReporter reporter = reporterByConnector.get(connectorKey);
+            String connectorKey = config.getConnectorKey();
+            ProviderCiStatusReporter reporter = reporterByConnector.get(connectorFamily(connectorKey));
             if (reporter == null) {
                 log.info("[CI-Status] no reporter registered for enabled connector={}", connectorKey);
                 continue;
             }
-            call.accept(reporter, reviewId, description);
+            call.accept(reporter, config, reviewId, description);
             reported = true;
         }
 
         ProviderCiStatusReporter fallback = reporterByConnector.get("github-checks");
         if (!reported && fallback != null) {
-            call.accept(fallback, reviewId, description);
+            call.accept(fallback, null, reviewId, description);
         }
     }
 
-    private CiStatusConfig loadConfig(String connectorKey) {
-        return ciStatusConfigMapper.selectOne(
-                new LambdaQueryWrapper<CiStatusConfig>().eq(CiStatusConfig::getConnectorKey, connectorKey));
+    private List<CiStatusConfig> loadConfigs() {
+        return ciStatusConfigMapper.selectList(new LambdaQueryWrapper<CiStatusConfig>()
+                .orderByAsc(CiStatusConfig::getId));
+    }
+
+    private String connectorFamily(String connectorKey) {
+        if (connectorKey != null && connectorKey.startsWith("jenkins-pipeline:")) {
+            return "jenkins-pipeline";
+        }
+        return connectorKey;
     }
 
     private boolean isEnabled(CiStatusConfig config) {
@@ -76,6 +78,10 @@ public class ProviderAwareCiStatusService implements CiStatusService {
 
     @FunctionalInterface
     private interface CiReporterCall {
-        void accept(ProviderCiStatusReporter reporter, Long reviewId, String description);
+        void accept(
+                ProviderCiStatusReporter reporter,
+                CiStatusConfig config,
+                Long reviewId,
+                String description);
     }
 }

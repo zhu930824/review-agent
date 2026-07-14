@@ -49,6 +49,9 @@ logging:
     org.flywaydb: DEBUG
 
 review-agent:
+  credentials:
+    master-key: ${REVIEW_AGENT_CREDENTIAL_KEY:review-agent-dev-credential-key-change-me}
+    previous-keys: ${REVIEW_AGENT_CREDENTIAL_PREVIOUS_KEYS:}
   repo-base-path: ${REPO_BASE_PATH:E:/code/repos}
   gitlab:
     # 默认 GitLab 实例地址（可选，实际以项目配置为准）
@@ -62,6 +65,8 @@ review-agent:
   operations:
     gitlab-issue-refresh-delay-ms: ${OPERATIONS_GITLAB_ISSUE_REFRESH_DELAY_MS:300000}
     gitlab-issue-refresh-limit: ${OPERATIONS_GITLAB_ISSUE_REFRESH_LIMIT:20}
+  jenkins-review:
+    retry-delay-ms: ${JENKINS_REVIEW_RETRY_DELAY_MS:60000}
   agent:
     timeout-minutes: 5
     default-max-steps: 15

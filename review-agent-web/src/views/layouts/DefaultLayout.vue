@@ -31,11 +31,11 @@
           <template #icon><PlayCircleOutlined /></template>
           <span>发起审查</span>
         </a-menu-item>
-        <a-menu-item key="governance">
+        <a-menu-item v-if="can('GOVERNANCE_VIEW')" key="governance">
           <template #icon><AppstoreOutlined /></template>
           <span>治理中心</span>
         </a-menu-item>
-        <a-menu-item key="operations">
+        <a-menu-item v-if="can('OPERATIONS_VIEW')" key="operations">
           <template #icon><PieChartOutlined /></template>
           <span>运营中心</span>
         </a-menu-item>
@@ -43,11 +43,11 @@
           <template #icon><GlobalOutlined /></template>
           <span>知识图谱</span>
         </a-menu-item>
-        <a-menu-item key="gateway">
+        <a-menu-item v-if="can('MODEL_MANAGE')" key="gateway">
           <template #icon><ApiOutlined /></template>
           <span>AI Gateway</span>
         </a-menu-item>
-        <a-menu-item key="models">
+        <a-menu-item v-if="can('MODEL_MANAGE')" key="models">
           <template #icon><SettingOutlined /></template>
           <span>模型配置</span>
         </a-menu-item>
@@ -69,7 +69,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   SafetyCertificateOutlined, DashboardOutlined, FolderOutlined, PlayCircleOutlined,
@@ -77,10 +77,14 @@ import {
   LogoutOutlined
 } from '@ant-design/icons-vue'
 import { useAuth } from '@/composables/useAuth'
+import { useAccess } from '@/composables/useAccess'
 
 const route = useRoute()
 const router = useRouter()
 const { logout: logoutAuth } = useAuth()
+const { can, loadAccessProfile, clearAccessProfile } = useAccess()
+
+onMounted(() => loadAccessProfile())
 
 const breadcrumbMap: Record<string, string> = {
   '': '仪表盘', projects: '项目管理', reviews: '审查详情',
@@ -110,6 +114,7 @@ function navigate({ key }: { key: string }) {
 }
 
 async function handleLogout() {
+  clearAccessProfile()
   await logoutAuth()
 }
 </script>

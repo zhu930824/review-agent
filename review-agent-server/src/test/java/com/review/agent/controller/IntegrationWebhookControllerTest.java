@@ -5,18 +5,24 @@ import com.review.agent.domain.dto.IntegrationWebhookDeliveryLogVO;
 import com.review.agent.domain.dto.IntegrationWebhookDeliveryResultVO;
 import com.review.agent.service.IntegrationWebhookDeliveryLogService;
 import com.review.agent.service.IntegrationWebhookDeliveryService;
+import com.review.agent.service.GitLabReviewTriggerRetryService;
+import com.review.agent.service.GitLabReviewTriggerHealthService;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 class IntegrationWebhookControllerTest {
 
     private final RecordingDeliveryService deliveryService = new RecordingDeliveryService();
     private final RecordingDeliveryLogService deliveryLogService = new RecordingDeliveryLogService();
-    private final IntegrationWebhookController controller = new IntegrationWebhookController(deliveryService, deliveryLogService);
+    private final GitLabReviewTriggerRetryService retryService = mock(GitLabReviewTriggerRetryService.class);
+    private final GitLabReviewTriggerHealthService healthService = mock(GitLabReviewTriggerHealthService.class);
+    private final IntegrationWebhookController controller = new IntegrationWebhookController(
+            deliveryService, deliveryLogService, retryService, healthService);
 
     @Test
     void listDeliveriesDelegatesToLogService() {

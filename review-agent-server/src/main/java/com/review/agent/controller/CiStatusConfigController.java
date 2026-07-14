@@ -5,13 +5,21 @@ import com.review.agent.domain.dto.CiIntegrationHealthVO;
 import com.review.agent.domain.dto.CiStatusConfigVO;
 import com.review.agent.domain.dto.CiStatusWritebackLogVO;
 import com.review.agent.domain.dto.UpsertCiStatusConfigRequest;
+import com.review.agent.domain.dto.CiConnectionTestResultVO;
+import com.review.agent.domain.dto.CredentialSecurityHealthVO;
+import com.review.agent.domain.dto.CredentialRotationRequest;
+import com.review.agent.domain.dto.CredentialRotationResultVO;
 import com.review.agent.service.CiStatusConfigService;
 import com.review.agent.service.CiStatusWritebackLogService;
 import com.review.agent.service.CiStatusWritebackRetryService;
 import com.review.agent.service.JenkinsBuildResultRefreshService;
+import com.review.agent.service.CiConnectionTestService;
+import com.review.agent.service.CredentialSecurityHealthService;
+import com.review.agent.service.CredentialRotationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -31,6 +39,9 @@ public class CiStatusConfigController {
     private final CiStatusWritebackLogService ciStatusWritebackLogService;
     private final CiStatusWritebackRetryService ciStatusWritebackRetryService;
     private final JenkinsBuildResultRefreshService jenkinsBuildResultRefreshService;
+    private final CiConnectionTestService ciConnectionTestService;
+    private final CredentialSecurityHealthService credentialSecurityHealthService;
+    private final CredentialRotationService credentialRotationService;
 
     @GetMapping
     public Result<CiStatusConfigVO> getConfig(
@@ -38,9 +49,38 @@ public class CiStatusConfigController {
         return Result.success(ciStatusConfigService.getConfig(connectorKey));
     }
 
+    @GetMapping("/list")
+    public Result<List<CiStatusConfigVO>> listConfigs(
+            @RequestParam(value = "provider", required = false) String provider) {
+        return Result.success(ciStatusConfigService.listConfigs(provider));
+    }
+
     @PutMapping
     public Result<CiStatusConfigVO> upsertConfig(@Valid @RequestBody UpsertCiStatusConfigRequest request) {
         return Result.success(ciStatusConfigService.upsertConfig(request));
+    }
+
+    @DeleteMapping
+    public Result<Void> deleteConfig(@RequestParam("connectorKey") String connectorKey) {
+        ciStatusConfigService.deleteConfig(connectorKey);
+        return Result.success();
+    }
+
+    @PostMapping("/test")
+    public Result<CiConnectionTestResultVO> testConnection(
+            @RequestParam("connectorKey") String connectorKey) {
+        return Result.success(ciConnectionTestService.test(connectorKey));
+    }
+
+    @GetMapping("/credential-health")
+    public Result<CredentialSecurityHealthVO> getCredentialSecurityHealth() {
+        return Result.success(credentialSecurityHealthService.getHealth());
+    }
+
+    @PostMapping("/credential-rotation")
+    public Result<CredentialRotationResultVO> rotateCredentials(
+            @Valid @RequestBody CredentialRotationRequest request) {
+        return Result.success(credentialRotationService.rotate(request));
     }
 
     @GetMapping("/writebacks")

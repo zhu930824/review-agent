@@ -23,7 +23,11 @@ async function request<T>(method: string, url: string, body?: any): Promise<{ co
     throw new Error('Unauthorized')
   }
 
-  return res.json()
+  const result = await res.json()
+  if (!res.ok || result.code !== 200) {
+    throw new Error(result.message || `Request failed with status ${res.status}`)
+  }
+  return result
 }
 
 export function useApi() {

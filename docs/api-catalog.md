@@ -18,6 +18,10 @@
 | `POST` | `/api/auth/register` | 注册并返回登录态 | 请求体：`RegisterRequest` |
 | `POST` | `/api/auth/login` | 登录并返回登录态 | 请求体：`AuthRequest` |
 | `POST` | `/api/auth/logout` | 退出登录 | 前端 Header/Layout 统一通过 `useAuth.logout()` 调用；当前后端不维护 token 黑名单 |
+| `GET` | `/api/auth/access-profile` | 查询当前访问身份 | 返回数据库中的角色、规范化平台角色和实时权限集合 |
+| `GET` | `/api/access/users` | 查询平台用户角色 | 仅 `ADMIN`，供治理中心访问控制区域使用 |
+| `PATCH` | `/api/access/users/{userId}/role` | 更新平台角色 | 仅 `ADMIN`；角色限 `ADMIN`、`GOVERNANCE_MANAGER`、`OPERATOR`、`REVIEWER`，禁止移除最后一个管理员 |
+| `GET` | `/api/access/audit-logs` | 查询最近权限变更审计 | 仅 `ADMIN`；支持 `limit`、`actionType`、`projectId` 筛选，最多返回 100 条 |
 
 前端认证存储：
 
@@ -25,6 +29,8 @@
 | --- | --- |
 | `review-agent-token` | JWT token |
 | `review-agent-user` | 当前用户信息 |
+
+受限路由会读取 `/api/auth/access-profile`，治理中心、运营中心、AI Gateway 和模型配置按实时权限显示。除登录、注册、GitHub Webhook、GitLab Webhook 和 OpenAPI 文档外，`/api/**` 默认要求有效 JWT；随后按数据库中的实时角色执行 RBAC。首个注册账号规范化为 `ADMIN`，后续自助注册账号规范化为 `REVIEWER`。平台角色变更和项目成员增删改会在同一事务写入 `access_audit_log`，治理中心可按动作类型和项目查看最近证据链。
 
 ## Projects
 
@@ -39,10 +45,15 @@
 | `DELETE` | `/api/projects/{id}` | 删除项目 |  |
 | `POST` | `/api/projects/{id}/retry-clone` | 重试仓库克隆 |  |
 | `GET` | `/api/projects/{id}/branches` | 查询项目分支 | 项目详情页展示；Review 创建页使用 |
+| `GET` | `/api/projects/{id}/members` | 查询项目成员 | 项目成员可读；返回 `OWNER`、`MAINTAINER`、`REVIEWER` 及权限集合 |
+| `PUT` | `/api/projects/{id}/members` | 添加成员或更新项目角色 | 仅项目 Owner 或平台 Admin；请求体传 `username`、`role` |
+| `DELETE` | `/api/projects/{id}/members/{userId}` | 移除项目成员 | 仅项目 Owner 或平台 Admin；禁止移除最后一个 Owner |
 
 当前前端接入状态：
 
 - 项目详情页读取 `/api/projects/{id}/branches` 展示仓库分支列表，并支持手动刷新；非默认分支可直接跳转创建 Review，并通过 query 预填 `projectId`、`sourceBranch`、`targetBranch`。创建 Review 页也使用该接口作为源分支/目标分支选项，并校验 URL 预填分支仍存在。
+- 项目列表仅返回当前用户参与的项目，平台 Admin 可应急查看全部项目。创建者自动成为 Owner；项目详情页可按用户名添加成员、调整角色和移除成员，并按当前项目角色隐藏编辑、删除和 GitLab 策略操作。
+- 项目创建者 Owner 分配、成员添加、项目角色变更和成员移除均写入访问审计；重复提交相同角色不会生成无效审计记录。
 
 ## Reviews
 
@@ -55,10 +66,12 @@
 | `GET` | `/api/reviews` | 分页查询 Review | Dashboard、项目详情 |
 | `GET` | `/api/reviews/{id}` | 查询 Review 详情 | Review 详情页 |
 | `PATCH` | `/api/reviews/{reviewId}/finding/{findingId}` | 更新 Finding 人工状态 | Review 详情页 |
-| `GET` | `/api/reviews/{id}/progress` | SSE 审查进度 | Review 详情页 |
+| `GET` | `/api/reviews/{id}/progress` | SSE 审查进度 | Review 详情页；原生 EventSource 通过受限 `access_token` query 参数鉴权，仍校验项目成员权限 |
 | `GET` | `/api/reviews/{id}/risk` | 获取风险预测 | Review 详情页智能分析 |
 | `POST` | `/api/reviews/{id}/generate-tests` | 生成测试覆盖计划 | Review 详情页智能分析 |
 | `POST` | `/api/reviews/{id}/refactor-plan` | 生成重构计划 | Review 详情页智能分析 |
+
+所有 Review 资源都会先由 Review 或 Finding 反查 `project_id`：读操作要求项目 `VIEW`，创建、Finding 状态、Gate 决策和分析操作要求 `REVIEW_EXECUTE`。平台 Admin 可全局访问；签名验证后的 GitLab Webhook 作为系统触发保留自动 Review 能力。
 
 ### Pre-PR Gate
 
@@ -208,14 +221,28 @@
 | Method | Path | 用途 | 备注 |
 | --- | --- | --- | --- |
 | `GET` | `/api/integration/ci-config` | 查询 CI 回写配置 | 支持 `connectorKey`；默认 `github-checks` |
-| `PUT` | `/api/integration/ci-config` | 保存 CI 回写配置 | 支持 `github-checks`、`gitlab-merge-request`、`jenkins-pipeline` 等 connectorKey；Jenkins 支持 `jenkinsParameterTemplate`，CI Health 通知支持 `notificationWebhookUrl`，token 和 webhook secret 不在响应中明文返回 |
+| `GET` | `/api/integration/ci-config/list` | 查询连接器实例列表 | 可按 `provider` 筛选；Jenkins 多实例使用 `jenkins-pipeline:<instance-key>`，返回实例显示名和可选项目绑定 |
+| `PUT` | `/api/integration/ci-config` | 保存 CI 回写配置 | 支持 `github-checks`、`gitlab-merge-request`、`jenkins-pipeline` 及 Jenkins 实例 key；Jenkins 支持 `displayName`、`projectId`、`jenkinsParameterTemplate`，CI Health 通知支持 `notificationWebhookUrl`，token 和 webhook secret 不在响应中明文返回 |
+| `DELETE` | `/api/integration/ci-config` | 删除连接器实例 | 参数：`connectorKey`；用于治理中心移除不再使用的 Jenkins 实例 |
+| `POST` | `/api/integration/ci-config/test` | 测试已保存的 CI 连接 | 参数：`connectorKey`；GitHub 读取仓库元数据，GitLab 读取项目元数据，Jenkins 读取 Job 元数据，不触发构建或写状态；返回 `SUCCESS`、`FAILED`、`SKIPPED`、请求目标、耗时和测试时间，并记录 `CONNECTION_TEST` 动作 |
+| `GET` | `/api/integration/ci-config/credential-health` | 查询集成凭证静态加密健康度 | 返回 `SECURE`、`DEVELOPMENT_KEY`、`MIGRATION_REQUIRED`、`ROTATION_REQUIRED` 或 `KEY_MISMATCH`，以及当前密钥、历史密钥、明文和不可解密字段数量 |
+| `POST` | `/api/integration/ci-config/credential-rotation` | 轮换集成凭证 | 请求体必须传 `confirmation: "ROTATE CREDENTIALS"`；先预检全部凭据，再在单一事务中用当前主密钥重加密，并记录 `CREDENTIAL_ROTATION` 动作审计 |
 | `GET` | `/api/integration/ci-config/writebacks` | 查询最近 CI 回写记录 | 参数：`limit`，最大 50 |
 | `GET` | `/api/integration/ci-config/writebacks/health` | 查询 CI 集成健康度 | 参数：`limit`，默认 50；按 GitHub/GitLab/Jenkins connector 聚合最近回写记录，返回 `HEALTHY`、`DEGRADED`、`UNHEALTHY`、`NO_DATA` |
 | `POST` | `/api/integration/ci-config/writebacks/{id}/retry` | 手动重试失败回写 | 仅允许 `FAILED` 记录；重发当前持久化 Gate 状态；到期 `nextRetryAt` 记录也会由后端调度自动重试 |
 | `POST` | `/api/integration/ci-config/writebacks/jenkins/refresh` | 刷新 Jenkins 队列/构建结果 | 参数：`limit`，默认 20；读取 Jenkins queue/build API，把 build URL、build number 和 result 回写到 CI 日志；后端也会按 `review-agent.ci-writeback.jenkins-refresh-delay-ms` 自动刷新 |
 | `POST` | `/api/integration/webhooks/github` | 接收 GitHub webhook 投递 | 校验 `X-Hub-Signature-256`；使用 `X-GitHub-Delivery` 做幂等；写入投递日志 |
-| `POST` | `/api/integration/webhooks/gitlab` | 接收 GitLab webhook 投递 | 校验 `X-Gitlab-Token` / `X-GitLab-Token`；优先使用 `X-Gitlab-Delivery` 做幂等，缺失时以事件类型和 payload digest 生成稳定 delivery id；写入投递日志 |
-| `GET` | `/api/integration/webhooks/deliveries` | 查询最近 webhook 投递日志 | 参数：`limit`，最大 50；返回 provider、eventType、deliveryId、deliveryStatus、payloadDigest、错误信息和接收时间 |
+| `POST` | `/api/integration/webhooks/gitlab` | 接收 GitLab webhook 投递 | 校验 `X-Gitlab-Token` / `X-GitLab-Token`；优先使用 `X-Gitlab-Delivery` 做投递幂等，缺失时以事件类型和 payload digest 生成稳定 delivery id；已打开的 MR `open` / `reopen` / `update` 事件会按 `path_with_namespace` 匹配已接入项目并自动创建 Pre-PR Review；以项目、MR iid 和 last commit SHA 组成 revision key，在创建 Review 前唯一占位，避免不同 delivery 并发触发同一提交的重复 AI 审查，失败占位允许后续事件重试 |
+| `POST` | `/api/integration/webhooks/gitlab/review-triggers/retry` | 手动重试失败的 GitLab MR Review 触发 | 请求体传 `triggerKey`；允许领取 `FAILED` 或 `EXHAUSTED` 记录，使用持久化的 projectId、sourceBranch、targetBranch 重新创建 Pre-PR Review，并将结果同步回原投递日志 |
+| `GET` | `/api/integration/webhooks/gitlab/review-triggers/health` | 查询 GitLab MR Review 触发队列健康度 | 返回 `HEALTHY`、`DEGRADED`、`UNHEALTHY`，以及处理中、待重试、已耗尽、已完成数量和最早积压时间；存在 `EXHAUSTED` 时为不健康 |
+| `POST` | `/api/integration/webhooks/jenkins/reviews` | Jenkins Pipeline 触发 Pre-PR Review | 公共集成入口，必须通过 `X-Review-Agent-Token` 提交对应实例的 Webhook Secret；`X-Review-Agent-Connector` 指定实例，缺省为 `jenkins-pipeline`；请求包含项目、源/目标分支、Job、Build、Build URL 和 commit SHA；按实例及 Job/Build/Commit 幂等并返回 Review ID |
+| `GET` | `/api/integration/webhooks/jenkins/reviews/{reviewId}/gate` | Jenkins Pipeline 轮询 Review Gate | 使用相同 token 和实例请求头；仅允许查询由该 Jenkins 实例触发的 Review，返回 `RUNNING`、`PASSED`、`BLOCKED` 或 `NEEDS_HUMAN_REVIEW` |
+| `POST` | `/api/integration/webhooks/jenkins/review-triggers/retry` | 手动重试 Jenkins Review 触发 | 需要 `INTEGRATION_MANAGE`；请求体传 `connectorKey` 和 `triggerKey`，允许领取该实例的 `FAILED` 或 `EXHAUSTED` 记录 |
+| `GET` | `/api/integration/webhooks/jenkins/review-triggers/health` | 查询 Jenkins Review 触发队列健康度 | 需要 `INTEGRATION_VIEW`；参数 `connectorKey` 缺省为默认实例；健康统计、自动领取重试和积压按实例隔离 |
+| `GET` | `/api/integration/webhooks/deliveries` | 查询最近 webhook 投递日志 | 参数：`limit`，最大 50；返回 provider、eventType、deliveryId、deliveryStatus、payloadDigest、错误信息、MR 审查 triggerKey、触发状态/Review ID 和接收时间 |
+| `GET` | `/api/projects/{projectId}/gitlab-review-policy` | 查询项目级 GitLab 自动审核策略 | 未配置 GitLab API 的项目返回 `configured=false`；已配置项目返回自动审核开关、Draft/WIP 策略、自动 MR 摘要开关和目标分支匹配规则 |
+| `PUT` | `/api/projects/{projectId}/gitlab-review-policy` | 更新项目级 GitLab 自动审核策略 | 支持 `autoReviewEnabled`、`reviewDrafts`、`publishSummaryEnabled`、`targetBranchPattern`；分支规则可用逗号或换行分隔并支持 `*` 通配符 |
+| `POST` | `/api/integration/gitlab/merge-requests/summary-note` | 发布 Review 摘要到 GitLab MR Note | 请求包含 `reviewId`、可选 `mergeRequestIid` 和 Markdown `body`；Webhook 自动创建的 Review 会从触发记录解析 MR iid，手工 Review 可显式传入；结果写入 `integration_action_log`，actionType 为 `MR_SUMMARY_NOTE` |
 | `POST` | `/api/integration/sarif/upload` | 上传 SARIF 到 GitHub Code Scanning | 读取 GitHub 集成配置；请求体包含 `commitSha`、`ref`、`sarif` |
 | `POST` | `/api/integration/pr-summary/comment` | 回写 PR Summary 评论 | 使用 GitHub Issues comments API；请求体包含 `pullNumber`、`body` |
 | `GET` | `/api/integration/actions` | 查询最近集成动作日志 | 参数：`limit`，最大 50；覆盖 SARIF 上传、PR Summary 评论等外部动作 |
@@ -224,8 +251,12 @@
 
 - Review 详情页保留本地 SARIF 下载，同时新增“一键上传扫描”，会读取当前 Review 的 SARIF、`sourceCommit/targetCommit` 和分支 ref 后调用 `/api/integration/sarif/upload`。
 - Review 详情页新增 “PR Summary” 操作，用户输入 Pull Request 编号后，将当前 Review 摘要、Gate 状态、严重度统计和前 5 条 Finding 组合成 Markdown 并调用 `/api/integration/pr-summary/comment`。
-- 治理中心 “CI 回写就绪度” 面板新增最近集成动作与 webhook 投递日志列表，分别调用 `/api/integration/actions` 和 `/api/integration/webhooks/deliveries?limit=10` 展示外部动作状态与 GitHub/GitLab 投递接收、拒绝、重复状态。
-- 治理中心 CI 配置表单已支持在 GitHub Checks / Status、GitLab Merge Request / Pipeline、Jenkins Pipeline Gate 之间切换；切换时按 connectorKey 读取对应配置，保存时写入 provider、仓库/项目或 Jenkins Job 绑定、URL、token、webhook secret 和 Jenkins 参数模板。GitHub/GitLab webhook 均复用 `webhook_secret` 做签名或 token 校验，并写入统一投递日志。Jenkins 参数模板使用换行或 `&` 分隔的 `key=value`，支持 `${reviewId}`、`${state}`、`${jenkinsState}`、`${commitSha}`、`${context}`、`${description}`、`${connectorKey}`、`${repoOwner}`、`${repoName}`、`${defaultBranch}` 占位符。后端回写日志会记录对应 provider、request URL、成功/失败/跳过原因和重试时间；Jenkins 触发成功时优先记录 Jenkins 返回的队列 `Location`，并支持手动与自动刷新队列/构建结果。治理中心也会读取 `/writebacks/health` 展示每个 provider 的集成健康状态、成功/失败/跳过计数和最近外部构建结果，并把 `UNHEALTHY`、`DEGRADED`、`NO_DATA` 转成 CI Health Actions，提示凭证、仓库绑定、重试、Jenkins 构建刷新或发布烟测等下一步处理动作。
+- 治理中心 “CI 回写就绪度” 面板新增最近集成动作与 webhook 投递日志列表，分别调用 `/api/integration/actions` 和 `/api/integration/webhooks/deliveries?limit=10` 展示外部动作状态与 GitHub/GitLab/Jenkins 投递接收、拒绝、重复状态；GitLab MR 与 Jenkins Pipeline 分别展示独立触发队列健康汇总和最早积压时间。投递记录显示 `PROCESSED`、`DEDUPLICATED`、`SKIPPED`、`FAILED`、`EXHAUSTED` 触发结果、revision key、重试次数和下次重试时间，并可跳转到新建或复用的 Review，失败及死信记录按 provider 路由到对应重试接口。
+- 治理中心 CI 配置表单已支持 GitHub Checks / Status、GitLab Merge Request / Pipeline 和 Jenkins Pipeline Gate。Jenkins 可创建多个具名实例，每个实例拥有独立 URL、凭证、Webhook Secret、Job、参数模板和可选项目边界；入站触发、幂等、Gate 查询、队列健康、失败重试、出站 Gate 回写和构建结果刷新都按实例隔离。配置区优先生成 `reviewAgentGate(...)` Shared Library 用法，也保留底层 Jenkinsfile `httpRequest` 示例；仓库内 `jenkins-shared-library/` 可直接注册为 Jenkins Global Pipeline Library。Jenkins 参数模板使用换行或 `&` 分隔的 `key=value`，支持 `${reviewId}`、`${state}`、`${jenkinsState}`、`${commitSha}`、`${context}`、`${description}`、`${connectorKey}`、`${repoOwner}`、`${repoName}`、`${defaultBranch}` 占位符。后端回写日志记录 provider、实际 connectorKey、请求 URL、成功/失败/跳过原因和重试时间；Jenkins 触发成功时优先记录队列 `Location`，并支持手动与自动刷新队列/构建结果。治理中心按实例展示 Review 触发队列健康度，并把回写链路的 `UNHEALTHY`、`DEGRADED`、`NO_DATA` 转成 CI Health Actions。
+- 项目详情页在 GitLab API 模式下展示“GitLab 自动审核策略”，可关闭项目自动触发、默认排除 Draft/WIP、通过 `main, release/*` 一类规则限制目标分支，并可选择在 Review 完成后自动发布 MR Summary Note。自动摘要默认关闭；发布失败不会回滚已完成的 Review，而是写入触发消息和 `MR_SUMMARY_NOTE` 动作审计。全局 GitLab connector 的 `checksEnabled=false` 同样会停止自动创建 Review；Webhook 仍进入投递日志并记录具体跳过原因。
+- 治理中心 CI 配置提供“保存并测试”：先保存当前 GitHub/GitLab/Jenkins 表单，再发起只读连接验证并显示真实目标 URL、状态和耗时。Jenkins 测试仅访问 Job `/api/json`，不会触发 Pipeline；测试结果进入最近集成动作，便于审计配置上线前是否验证成功。
+- `integration_ci_config.api_token`、`integration_ci_config.webhook_secret`、`project_gitlab_config.gitlab_token` 使用 AES-256-GCM `enc:v1:` 信封静态加密。应用启动时会升级旧明文，MyBatis TypeHandler 对后续读写透明加解密；生产必须设置稳定的 `REVIEW_AGENT_CREDENTIAL_KEY`。轮换时先把旧密钥以逗号分隔放入 `REVIEW_AGENT_CREDENTIAL_PREVIOUS_KEYS`，重启并确认不存在 `KEY_MISMATCH`，再通过治理中心执行事务化轮换；全部凭据归属当前密钥后移除历史密钥配置。
+- Review 详情页“回流摘要”支持在 GitHub PR 与 GitLab MR 之间切换，复用当前 Review 的摘要、Gate 和主要 Finding 生成 Markdown。GitLab Webhook Review 无需再次填写 MR iid；发布结果会显示真实 `POSTED` / `SKIPPED` / `FAILED`，并进入治理中心最近集成动作列表。
 - 运营中心调用 `/api/operations/ci-health-actions`，把 CI 健康异常纳入 Owner + SLA 的运营视图，并透出最近 writeback id、请求 URL、Jenkins queue/build URL；页面可直接重试失败回写或刷新 Jenkins 构建结果，便于企业集成负责人持续处理 GitLab/Jenkins/GitHub 回写异常。
 
 ## Knowledge
@@ -274,7 +305,7 @@
 2. **CI 与代码扫描集成**
    - 已落地：GitHub Commit Status 回写。
    - 已落地：CI 回写配置、provider-aware 状态发布、最近回写日志、失败记录手动重试、到期自动重试、Jenkins 参数模板、Jenkins 队列/构建结果手动与自动刷新，以及 GitHub/GitLab/Jenkins 集成健康度汇总；治理中心已提供三类连接器配置、健康展示和异常行动项入口。
-   - 已落地：GitHub webhook 签名校验、GitLab webhook token 校验、delivery 幂等和投递日志。
+- 已落地：GitHub webhook 签名校验、GitLab webhook token 校验、delivery 幂等、GitLab MR revision 级并发去重、失败触发自动/手动重试、死信终态、队列健康度和投递日志。自动重试默认每分钟扫描到期任务，失败后按指数退避并封顶 30 分钟；累计 5 次仍失败时进入 `EXHAUSTED` 并停止自动消耗，可通过治理页人工重试。扫描间隔可通过 `review-agent.webhook-review.retry-delay-ms` 调整。
    - 已落地：SARIF 导出和 GitHub Code Scanning 上传入口。
    - 已落地：PR Summary 对话区评论回写入口。
 

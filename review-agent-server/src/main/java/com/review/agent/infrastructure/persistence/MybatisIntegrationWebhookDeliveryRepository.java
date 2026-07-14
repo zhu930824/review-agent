@@ -1,6 +1,7 @@
 package com.review.agent.infrastructure.persistence;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.review.agent.domain.entity.CiStatusConfig;
 import com.review.agent.domain.entity.IntegrationWebhookDeliveryLog;
 import lombok.RequiredArgsConstructor;
@@ -41,5 +42,36 @@ public class MybatisIntegrationWebhookDeliveryRepository implements IntegrationW
     @Override
     public void save(IntegrationWebhookDeliveryLog log) {
         deliveryLogMapper.insert(log);
+    }
+
+    @Override
+    public void updateTriggerResult(
+            String triggerKey,
+            String status,
+            Long reviewId,
+            String message,
+            Integer retryCount,
+            java.time.LocalDateTime nextRetryAt) {
+        updateTriggerResult(null, triggerKey, status, reviewId, message, retryCount, nextRetryAt);
+    }
+
+    @Override
+    public void updateTriggerResult(
+            String connectorKey,
+            String triggerKey,
+            String status,
+            Long reviewId,
+            String message,
+            Integer retryCount,
+            java.time.LocalDateTime nextRetryAt) {
+        deliveryLogMapper.update(null, new LambdaUpdateWrapper<IntegrationWebhookDeliveryLog>()
+                .set(IntegrationWebhookDeliveryLog::getTriggerStatus, status)
+                .set(IntegrationWebhookDeliveryLog::getTriggerReviewId, reviewId)
+                .set(IntegrationWebhookDeliveryLog::getTriggerMessage, message)
+                .set(IntegrationWebhookDeliveryLog::getTriggerRetryCount, retryCount)
+                .set(IntegrationWebhookDeliveryLog::getTriggerNextRetryAt, nextRetryAt)
+                .set(IntegrationWebhookDeliveryLog::getUpdatedAt, java.time.LocalDateTime.now())
+                .eq(connectorKey != null, IntegrationWebhookDeliveryLog::getConnectorKey, connectorKey)
+                .eq(IntegrationWebhookDeliveryLog::getTriggerKey, triggerKey));
     }
 }

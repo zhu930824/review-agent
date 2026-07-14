@@ -1069,3 +1069,72 @@
 1. 在模型配置页面增加一个“测试调用”按钮，调用 `/api/model-config/invocations/smoke-test` 并展示 SUCCESS / FAILED、错误信息和 token/cost usage。
 2. 在真实环境配置 HTTP adapter 后，用 smoke-test 产生一条真实 `model_call_telemetry`，再观察 Operations / Governance 的 telemetry-readiness 是否从 `NO_TELEMETRY` 进入下一类状态。
 3. 如果需要避免误触真实模型成本，可给 smoke-test 增加后端开关或管理员权限约束。
+
+## 2026-07-14 企业访问控制继续：权限变更审计
+
+### 已完成切片
+
+1. 访问审计持久化
+   - 新增 `V26__access_audit_log.sql`，保存操作者、目标用户、项目、动作类型、前后角色、状态、说明和时间。
+   - 新增统一的 `AccessAuditLogService`，查询最多 100 条最近记录，支持动作类型和项目 ID 筛选。
+2. 权限变更证据链
+   - 平台角色调整、项目创建者 Owner 分配、项目成员添加、项目角色调整和成员移除都在原事务内写审计。
+   - 重复提交相同角色直接返回，不产生无意义记录；最后一个平台管理员和最后一个项目 Owner 的既有保护继续生效。
+3. 治理中心展示
+   - 平台访问控制下增加访问权限审计卡片，展示操作者、目标用户、项目、前后角色和发生时间。
+   - 支持按五类权限动作和项目 ID 筛选，平台角色更新后自动刷新审计列表。
+4. 测试策略
+   - 按当前阶段要求不新增单元测试，通过现有测试、后端编译和前端生产构建做回归验证。
+
+### 下一步建议
+
+1. 接入企业 SSO / LDAP，将企业身份组映射到平台角色和项目成员。
+2. 为访问审计增加 CSV 导出、保留期限和外部 SIEM 推送策略。
+3. 将项目级审计按 Owner 可见范围下沉到项目详情页，减少平台管理员代查成本。
+
+## 2026-07-14 Jenkins Pipeline 入站审查闭环
+
+### 已完成切片
+
+1. Pipeline 触发与 Gate 查询
+   - 新增 `POST /api/integration/webhooks/jenkins/reviews`，使用 Jenkins connector 的 Webhook Secret 作为 `X-Review-Agent-Token`，从现有 Jenkinsfile 创建 Pre-PR Review。
+   - 新增 `GET /api/integration/webhooks/jenkins/reviews/{reviewId}/gate`，仅允许查询由 Jenkins connector 触发的 Review，供 Pipeline 轮询并按 Gate 状态阻断构建。
+2. 幂等、重试与隔离
+   - `V27__generalize_review_trigger_queue.sql` 为通用触发队列增加外部事件、URL 和 commit 字段。
+   - Jenkins 以 Project/Job/Build/commit/分支生成稳定触发键；失败任务指数退避，5 次后进入 `EXHAUSTED`，支持调度和手动重试。
+   - GitLab 和 Jenkins 的到期查询、健康统计、最早积压均按 connectorKey 隔离，修复多连接器共用队列时的串数据风险。
+3. 治理中心
+   - Jenkins 配置区增加完整 Jenkinsfile `httpRequest` 示例，覆盖凭证、触发请求、Review ID 解析、Gate 轮询和构建阻断。
+   - Webhook 区同时显示 GitLab/Jenkins review queue；失败记录按 provider 调用对应重试接口。
+4. 测试策略
+   - 按当前要求不新增单元测试，通过后端编译/现有测试、前端现有测试和生产构建验证。
+
+### 下一步建议
+
+1. 把 Jenkins connector 从平台单实例配置扩展为多 Jenkins Controller/Folder 连接器，支持不同团队独立凭证和权限边界。
+2. 为 Jenkins 入站调用增加短期签名时间戳和 nonce，在共享 secret 基础上进一步抵御重放。
+3. 增加 Jenkins Shared Library 封装，将 Jenkinsfile 中的 HTTP 与 Gate 轮询收敛为一个 `reviewAgentGate(...)` 步骤。
+
+## 2026-07-14 Jenkins 多实例与 Shared Library
+
+### 已完成切片
+
+1. 多实例配置
+   - 新增 `V28__jenkins_connector_instances.sql`，为 CI 配置增加显示名和可选项目绑定。
+   - Jenkins 实例使用 `jenkins-pipeline:<instance-key>`，治理中心支持查询、新建、切换和删除实例；默认 `jenkins-pipeline` 保持兼容。
+2. 全链路实例隔离
+   - Pipeline 通过 `X-Review-Agent-Connector` 选择实例，凭证校验后再执行项目边界校验。
+   - 入站幂等、Gate 所有权、触发健康和失败重试按实例隔离；出站 Gate 回写和 Jenkins queue/build 刷新读取各自实例配置。
+   - 项目绑定实例只处理对应项目，避免不同团队共享 Controller 配置或凭证。
+3. Jenkins 使用体验
+   - 新增 `jenkins-shared-library/vars/reviewAgentGate.groovy`，用一个步骤封装凭证、Review 触发、Gate 轮询、超时和构建阻断。
+   - 治理中心优先展示 Shared Library 调用片段，同时保留底层 `httpRequest` Jenkinsfile 片段用于未接入共享库的团队。
+   - 每个实例单独展示触发队列健康度，失败任务重试会携带实例 key。
+4. 测试策略
+   - 按当前要求不新增单元测试，使用现有后端测试、前端测试、生产构建和 diff 检查回归。
+
+### 下一步建议
+
+1. 在真实 Jenkins Controller 上注册 Shared Library，验证凭证、Folder 权限、Multibranch 环境变量和代理网络。
+2. 为 Jenkins 入站增加时间戳与 nonce 签名，进一步限制共享 Secret 被截获后的重放窗口。
+3. 增加实例级使用量、Gate 通过率和耗时趋势，形成团队维度的 AI Review 运营看板。

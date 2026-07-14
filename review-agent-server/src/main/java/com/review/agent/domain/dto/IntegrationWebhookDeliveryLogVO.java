@@ -15,6 +15,12 @@ public class IntegrationWebhookDeliveryLogVO {
     private String deliveryStatus;
     private String payloadDigest;
     private String errorMessage;
+    private String triggerStatus;
+    private String triggerKey;
+    private Long triggerReviewId;
+    private String triggerMessage;
+    private Integer triggerRetryCount;
+    private LocalDateTime triggerNextRetryAt;
     private LocalDateTime receivedAt;
     private LocalDateTime processedAt;
     private LocalDateTime createdAt;

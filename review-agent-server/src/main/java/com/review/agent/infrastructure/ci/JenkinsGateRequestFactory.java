@@ -50,6 +50,12 @@ public class JenkinsGateRequestFactory {
         return headers;
     }
 
+    public String buildJobApiUrl(CiStatusConfig config) {
+        UriComponentsBuilder builder = jobUrlBuilder(config);
+        builder.pathSegment("api", "json");
+        return builder.queryParam("tree", "name,url,buildable,color").build().toUriString();
+    }
+
     public CiProviderStatusRequest withCrumb(CiProviderStatusRequest request, JenkinsCrumb crumb) {
         if (crumb == null || !hasText(crumb.field()) || !hasText(crumb.value())) {
             return request;
@@ -60,6 +66,10 @@ public class JenkinsGateRequestFactory {
     }
 
     private String buildJobUrl(CiStatusConfig config) {
+        return jobUrlBuilder(config).pathSegment("buildWithParameters").build().toUriString();
+    }
+
+    private UriComponentsBuilder jobUrlBuilder(CiStatusConfig config) {
         UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(trimTrailingSlash(config.getRepoUrl()));
         if (hasText(config.getRepoOwner())) {
             for (String folder : config.getRepoOwner().split("/")) {
@@ -68,8 +78,8 @@ public class JenkinsGateRequestFactory {
                 }
             }
         }
-        builder.pathSegment("job", config.getRepoName(), "buildWithParameters");
-        return builder.build().toUriString();
+        builder.pathSegment("job", config.getRepoName());
+        return builder;
     }
 
     private String authorizationHeader(CiStatusConfig config) {

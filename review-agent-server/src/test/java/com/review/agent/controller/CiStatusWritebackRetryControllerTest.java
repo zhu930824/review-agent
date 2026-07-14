@@ -23,7 +23,10 @@ class CiStatusWritebackRetryControllerTest {
             nullCiStatusConfigService(),
             writebackLogService,
             retryService,
-            jenkinsRefreshService);
+            jenkinsRefreshService,
+            null,
+            null,
+            null);
 
     @Test
     void retryWritebackDelegatesToRetryService() {

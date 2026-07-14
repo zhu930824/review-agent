@@ -19,6 +19,8 @@ import com.review.agent.infrastructure.git.GitService;
 import com.review.agent.infrastructure.persistence.ProjectGitLabConfigMapper;
 import com.review.agent.infrastructure.persistence.ProjectMapper;
 import com.review.agent.service.ProjectService;
+import com.review.agent.service.ProjectAccessService;
+import com.review.agent.infrastructure.auth.ProjectPermission;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,6 +38,7 @@ public class ProjectServiceImpl implements ProjectService {
     private final GitService gitService;
     private final ProjectGitLabConfigMapper gitLabConfigMapper;
     private final GitLabDiffService gitLabDiffService;
+    private final ProjectAccessService projectAccessService;
 
     @Value("${review-agent.repo-base-path:./repos}")
     private String repoBasePath;
@@ -52,6 +55,7 @@ public class ProjectServiceImpl implements ProjectService {
         project.setUpdatedAt(LocalDateTime.now());
 
         projectMapper.insert(project);
+        projectAccessService.addCurrentUserAsOwner(project.getId());
 
         // 如果提供了 GitLab token，配置 API 模式
         if (request.getGitlabToken() != null && !request.getGitlabToken().isBlank()) {
@@ -88,6 +92,9 @@ public class ProjectServiceImpl implements ProjectService {
         config.setGitlabToken(token);
         config.setProjectPath(repoInfo.getProjectPath());
         config.setEnabled(true);
+        config.setAutoReviewEnabled(true);
+        config.setReviewDrafts(false);
+        config.setPublishSummaryEnabled(false);
         config.setCreatedAt(LocalDateTime.now());
         config.setUpdatedAt(LocalDateTime.now());
         gitLabConfigMapper.insert(config);
@@ -97,6 +104,13 @@ public class ProjectServiceImpl implements ProjectService {
     public PageResult<ProjectVO> listProjects(PageRequest pageRequest) {
         Page<Project> page = new Page<>(pageRequest.getPageNum(), pageRequest.getPageSize());
         LambdaQueryWrapper<Project> wrapper = new LambdaQueryWrapper<>();
+        if (!projectAccessService.hasGlobalProjectAccess()) {
+            List<Long> accessibleProjectIds = projectAccessService.listAccessibleProjectIds();
+            if (accessibleProjectIds.isEmpty()) {
+                return new PageResult<>(0L, pageRequest.getPageNum(), pageRequest.getPageSize(), List.of());
+            }
+            wrapper.in(Project::getId, accessibleProjectIds);
+        }
         wrapper.orderByDesc(Project::getCreatedAt);
 
         Page<Project> result = projectMapper.selectPage(page, wrapper);
@@ -108,11 +122,13 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     public ProjectVO getProject(Long id) {
+        projectAccessService.require(id, ProjectPermission.VIEW);
         return toVO(requireProject(id));
     }
 
     @Override
     public ProjectVO updateProject(Long id, UpdateProjectRequest request) {
+        projectAccessService.require(id, ProjectPermission.PROJECT_MANAGE);
         Project project = requireProject(id);
         if (request.getName() != null) {
             project.setName(request.getName());
@@ -133,12 +149,14 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     public void deleteProject(Long id) {
+        projectAccessService.require(id, ProjectPermission.MEMBER_MANAGE);
         requireProject(id);
         projectMapper.deleteById(id);
     }
 
     @Override
     public void retryClone(Long id) {
+        projectAccessService.require(id, ProjectPermission.PROJECT_MANAGE);
         Project project = requireProject(id);
         if (gitLabDiffService.isGitLabConfigured(id)) {
             // GitLab API 模式无需重试克隆，直接标记为就绪
@@ -156,6 +174,7 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     public List<String> getBranches(Long id) {
+        projectAccessService.require(id, ProjectPermission.VIEW);
         requireProject(id);
         if (gitLabDiffService.isGitLabConfigured(id)) {
             return gitLabDiffService.getBranches(id);

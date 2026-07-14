@@ -3,6 +3,8 @@ package com.review.agent.domain.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.review.agent.infrastructure.security.CredentialStringTypeHandler;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -13,7 +15,7 @@ import java.time.LocalDateTime;
  * 无需在本地克隆仓库。
  */
 @Data
-@TableName("project_gitlab_config")
+@TableName(value = "project_gitlab_config", autoResultMap = true)
 public class ProjectGitLabConfig {
 
     @TableId(type = IdType.AUTO)
@@ -26,6 +28,7 @@ public class ProjectGitLabConfig {
     private String gitlabHost;
 
     /** GitLab Personal Access Token（需具备 read_api + read_repository 权限） */
+    @TableField(typeHandler = CredentialStringTypeHandler.class)
     private String gitlabToken;
 
     /** GitLab 项目路径（URL 编码），如 group%2Fproject */
@@ -33,6 +36,14 @@ public class ProjectGitLabConfig {
 
     /** 是否启用 API 模式获取 diff */
     private Boolean enabled;
+
+    private Boolean autoReviewEnabled;
+
+    private Boolean reviewDrafts;
+
+    private Boolean publishSummaryEnabled;
+
+    private String targetBranchPattern;
 
     private LocalDateTime createdAt;
 

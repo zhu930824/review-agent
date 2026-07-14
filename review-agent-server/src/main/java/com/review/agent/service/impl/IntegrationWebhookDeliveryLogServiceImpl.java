@@ -33,6 +33,12 @@ public class IntegrationWebhookDeliveryLogServiceImpl implements IntegrationWebh
         vo.setDeliveryStatus(log.getDeliveryStatus());
         vo.setPayloadDigest(log.getPayloadDigest());
         vo.setErrorMessage(log.getErrorMessage());
+        vo.setTriggerStatus(log.getTriggerStatus());
+        vo.setTriggerKey(log.getTriggerKey());
+        vo.setTriggerReviewId(log.getTriggerReviewId());
+        vo.setTriggerMessage(log.getTriggerMessage());
+        vo.setTriggerRetryCount(log.getTriggerRetryCount());
+        vo.setTriggerNextRetryAt(log.getTriggerNextRetryAt());
         vo.setReceivedAt(log.getReceivedAt());
         vo.setProcessedAt(log.getProcessedAt());
         vo.setCreatedAt(log.getCreatedAt());

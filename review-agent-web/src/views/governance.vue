@@ -257,7 +257,7 @@
                     预览
                   </a-button>
                   <a-button
-                    v-if="change.status === 'PROPOSED'"
+                    v-if="can('GOVERNANCE_MANAGE') && change.status === 'PROPOSED'"
                     type="primary"
                     size="small"
                     :loading="actingRulePackChangeId === change.id && actingRulePackChangeAction === 'approve'"
@@ -266,7 +266,7 @@
                     批准
                   </a-button>
                   <a-button
-                    v-if="change.status === 'APPROVED'"
+                    v-if="can('GOVERNANCE_MANAGE') && change.status === 'APPROVED'"
                     type="primary"
                     size="small"
                     :loading="actingRulePackChangeId === change.id && actingRulePackChangeAction === 'apply'"
@@ -275,7 +275,7 @@
                     应用
                   </a-button>
                   <a-button
-                    v-if="change.status === 'PROPOSED' || change.status === 'APPROVED'"
+                    v-if="can('GOVERNANCE_MANAGE') && (change.status === 'PROPOSED' || change.status === 'APPROVED')"
                     size="small"
                     danger
                     :loading="actingRulePackChangeId === change.id && actingRulePackChangeAction === 'reject'"
@@ -284,7 +284,7 @@
                     拒绝
                   </a-button>
                   <a-button
-                    v-if="change.status === 'APPLIED'"
+                    v-if="can('GOVERNANCE_MANAGE') && change.status === 'APPLIED'"
                     size="small"
                     :loading="actingRulePackChangeId === change.id && actingRulePackChangeAction === 'rollback'"
                     @click="handleRulePackChangeAction(change, 'rollback')"
@@ -417,9 +417,57 @@
               <div v-else style="font-size:12px;color:#94a3b8">No CI health data yet.</div>
             </div>
             <a-form layout="vertical" size="small" style="margin-top:4px">
+              <a-alert
+                v-if="credentialSecurityHealth"
+                show-icon
+                :type="credentialSecurityHealth.status === 'SECURE' ? 'success' : ['MIGRATION_REQUIRED', 'KEY_MISMATCH'].includes(credentialSecurityHealth.status) ? 'error' : 'warning'"
+                :message="`Credential security: ${credentialSecurityHealth.status}`"
+                style="margin-bottom:12px"
+              >
+                <template #description>
+                  <div>{{ credentialSecurityHealth.recommendation }}</div>
+                  <a-space :size="4" wrap style="margin-top:6px">
+                    <a-tag color="green">Active {{ credentialSecurityHealth.activeKeyCredentialCount }}</a-tag>
+                    <a-tag :color="credentialSecurityHealth.previousKeyCredentialCount > 0 ? 'orange' : 'default'">
+                      Previous {{ credentialSecurityHealth.previousKeyCredentialCount }}
+                    </a-tag>
+                    <a-tag :color="credentialSecurityHealth.plaintextCredentialCount > 0 ? 'red' : 'default'">
+                      Plaintext {{ credentialSecurityHealth.plaintextCredentialCount }}
+                    </a-tag>
+                    <a-tag :color="credentialSecurityHealth.unreadableCredentialCount > 0 ? 'red' : 'default'">
+                      Unreadable {{ credentialSecurityHealth.unreadableCredentialCount }}
+                    </a-tag>
+                  </a-space>
+                  <div
+                    v-if="can('CREDENTIAL_ROTATE') && credentialSecurityHealth.rotationRequired && credentialSecurityHealth.unreadableCredentialCount === 0"
+                    style="margin-top:8px"
+                  >
+                    <a-popconfirm
+                      title="确认使用当前主密钥重新加密全部历史凭据？"
+                      ok-text="执行轮换"
+                      cancel-text="取消"
+                      @confirm="rotateCredentials"
+                    >
+                      <a-button size="small" danger :loading="credentialRotationRunning">
+                        轮换到当前密钥
+                      </a-button>
+                    </a-popconfirm>
+                  </div>
+                </template>
+              </a-alert>
+              <a-alert
+                v-if="credentialRotationResult"
+                type="success"
+                show-icon
+                closable
+                :message="`Credential rotation: ${credentialRotationResult.status}`"
+                :description="`${credentialRotationResult.message} Rotated ${credentialRotationResult.rotatedCredentialCount}.`"
+                style="margin-bottom:12px"
+                @close="credentialRotationResult = null"
+              />
               <a-form-item label="CI Provider">
                 <a-select
-                  v-model:value="ciConfigForm.connectorKey"
+                  v-model:value="ciProviderSelection"
                   style="width:100%"
                   @change="handleCiConnectorChange"
                 >
@@ -435,6 +483,65 @@
                   {{ selectedCiProviderOption.description }}
                 </div>
               </a-form-item>
+              <div v-if="ciConfigForm.provider === 'JENKINS'" class="jenkins-instance-toolbar">
+                <a-space :size="8" wrap style="width:100%">
+                  <a-select
+                    v-if="!creatingJenkinsInstance"
+                    v-model:value="ciConfigForm.connectorKey"
+                    style="min-width:240px;flex:1"
+                    placeholder="选择 Jenkins 实例"
+                    @change="selectJenkinsInstance"
+                  >
+                    <a-select-option
+                      v-for="instance in jenkinsInstances"
+                      :key="instance.connectorKey"
+                      :value="instance.connectorKey"
+                    >
+                      {{ instance.displayName || instance.connectorKey }}
+                      <span v-if="instance.projectId"> · Project #{{ instance.projectId }}</span>
+                    </a-select-option>
+                  </a-select>
+                  <a-button v-if="can('INTEGRATION_MANAGE')" size="small" @click="startNewJenkinsInstance">
+                    新建实例
+                  </a-button>
+                  <a-popconfirm
+                    v-if="can('INTEGRATION_MANAGE') && !creatingJenkinsInstance && ciConfigForm.connectorKey"
+                    title="删除当前 Jenkins 实例配置？历史日志会保留。"
+                    ok-text="删除"
+                    cancel-text="取消"
+                    @confirm="deleteJenkinsInstance"
+                  >
+                    <a-button size="small" danger>删除实例</a-button>
+                  </a-popconfirm>
+                  <a-button v-if="creatingJenkinsInstance" size="small" @click="cancelNewJenkinsInstance">取消</a-button>
+                </a-space>
+              </div>
+              <a-row v-if="ciConfigForm.provider === 'JENKINS'" :gutter="8">
+                <a-col :xs="24" :md="8">
+                  <a-form-item
+                    label="实例 Key"
+                    :validate-status="creatingJenkinsInstance && !jenkinsInstanceKeyValid ? 'error' : undefined"
+                    :help="creatingJenkinsInstance && !jenkinsInstanceKeyValid ? '使用小写字母、数字、点、下划线或连字符，最长 64 位' : undefined"
+                  >
+                    <a-input
+                      v-model:value="ciConfigForm.instanceKey"
+                      :disabled="!creatingJenkinsInstance"
+                      addon-before="jenkins-pipeline:"
+                      placeholder="team-a"
+                    />
+                  </a-form-item>
+                </a-col>
+                <a-col :xs="24" :md="8">
+                  <a-form-item label="实例名称">
+                    <a-input v-model:value="ciConfigForm.displayName" placeholder="研发一部 Jenkins" />
+                  </a-form-item>
+                </a-col>
+                <a-col :xs="24" :md="8">
+                  <a-form-item label="绑定项目 ID">
+                    <a-input-number v-model:value="ciConfigForm.projectId" :min="1" :precision="0" style="width:100%" placeholder="留空表示全局" />
+                  </a-form-item>
+                </a-col>
+              </a-row>
               <a-row :gutter="8">
                 <a-col :xs="24" :md="12">
                   <a-form-item :label="selectedCiProviderOption.ownerLabel">
@@ -466,6 +573,22 @@ REVIEW_AGENT_COMMIT_SHA=${commitSha}
 REVIEW_AGENT_CONTEXT=${context}"
                 />
               </a-form-item>
+              <div v-if="ciConfigForm.provider === 'JENKINS'" class="jenkins-inbound-guide">
+                <a-space :size="6" wrap style="margin-bottom:6px">
+                  <a-tag color="processing">Pipeline 入站审查</a-tag>
+                  <code>POST /api/integration/webhooks/jenkins/reviews</code>
+                  <a-tag :color="ciConfigForm.webhookSecretConfigured ? 'green' : 'orange'">
+                    {{ ciConfigForm.webhookSecretConfigured ? 'Webhook Secret 已配置' : '需先配置 Webhook Secret' }}
+                  </a-tag>
+                </a-space>
+                <div style="font-size:12px;color:#64748b;line-height:1.5;margin-bottom:6px">
+                  Jenkins 使用 <code>X-Review-Agent-Token</code> 触发 Pre-PR Review，再轮询专用 Gate 接口决定流水线是否放行。
+                </div>
+                <div style="font-size:12px;font-weight:600;color:#475569;margin-bottom:6px">推荐：Shared Library</div>
+                <pre class="jenkins-pipeline-snippet" style="margin-bottom:8px">{{ jenkinsSharedLibrarySnippet }}</pre>
+                <div style="font-size:12px;font-weight:600;color:#475569;margin-bottom:6px">低层 HTTP 调用</div>
+                <pre class="jenkins-pipeline-snippet">{{ jenkinsPipelineSnippet }}</pre>
+              </div>
               <a-row :gutter="8">
                 <a-col :xs="24" :md="12">
                   <a-form-item label="API Token">
@@ -481,12 +604,28 @@ REVIEW_AGENT_CONTEXT=${context}"
               <a-space :size="12" wrap>
                 <a-checkbox v-model:checked="ciConfigForm.checksEnabled">{{ selectedCiProviderOption.writebackLabel }}</a-checkbox>
                 <a-checkbox v-model:checked="ciConfigForm.sarifUploadEnabled">启用 SARIF 上传</a-checkbox>
-                <a-button type="primary" size="small" :loading="ciConfigSaving" @click="saveCiStatusConfig">保存配置</a-button>
+                <a-button v-if="can('INTEGRATION_MANAGE')" type="primary" size="small" :loading="ciConfigSaving" :disabled="!jenkinsInstanceKeyValid" @click="saveCiStatusConfig">保存配置</a-button>
+                <a-button v-if="can('INTEGRATION_MANAGE')" size="small" :loading="ciConnectionTesting" :disabled="!jenkinsInstanceKeyValid" @click="testCiConnection">
+                  <template #icon><ApiOutlined /></template>
+                  保存并测试
+                </a-button>
               </a-space>
+              <a-alert
+                v-if="ciConnectionTestResult"
+                show-icon
+                :type="ciConnectionTestResult.status === 'SUCCESS' ? 'success' : ciConnectionTestResult.status === 'FAILED' ? 'error' : 'warning'"
+                :message="`${ciConnectionTestResult.provider || ciConnectionTestResult.connectorKey}: ${ciConnectionTestResult.status}`"
+                style="margin-top:10px"
+              >
+                <template #description>
+                  <div>{{ ciConnectionTestResult.message }} · {{ ciConnectionTestResult.latencyMs }}ms</div>
+                  <div v-if="ciConnectionTestResult.requestUrl" style="margin-top:2px;word-break:break-all">{{ ciConnectionTestResult.requestUrl }}</div>
+                </template>
+              </a-alert>
             </a-form>
             <div>
               <div style="font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:6px">最近回写</div>
-              <a-space style="width:100%;justify-content:flex-end;margin-bottom:6px">
+              <a-space v-if="can('INTEGRATION_MANAGE')" style="width:100%;justify-content:flex-end;margin-bottom:6px">
                 <a-button size="small" :loading="jenkinsResultRefreshing" @click="refreshJenkinsResults">
                   刷新 Jenkins 结果
                 </a-button>
@@ -514,7 +653,7 @@ REVIEW_AGENT_CONTEXT=${context}"
                       </a-tag>
                       <a-tag>retry {{ item.retryCount }}</a-tag>
                       <a-button
-                        v-if="item.writebackStatus === 'FAILED'"
+                        v-if="can('INTEGRATION_MANAGE') && item.writebackStatus === 'FAILED'"
                         size="small"
                         :loading="ciWritebackRetryingIds.has(item.id)"
                         @click="retryCiWriteback(item)"
@@ -551,6 +690,40 @@ REVIEW_AGENT_CONTEXT=${context}"
               <div v-else style="font-size:12px;color:#94a3b8">暂无集成动作</div>
             </div>
             <div>
+              <div v-if="webhookTriggerHealth" style="padding:8px 10px;margin-bottom:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+                <a-space :size="8" wrap>
+                  <span style="font-size:12px;font-weight:600;color:#475569">GitLab review queue</span>
+                  <a-tag :color="ciHealthColor(webhookTriggerHealth.healthStatus)">{{ webhookTriggerHealth.healthStatus }}</a-tag>
+                  <span style="font-size:12px;color:#64748b">{{ webhookTriggerHealth.summary }}</span>
+                  <span v-if="webhookTriggerHealth.oldestPendingAt" style="font-size:11px;color:#94a3b8">
+                    Oldest {{ formatDateTime(webhookTriggerHealth.oldestPendingAt) }}
+                  </span>
+                </a-space>
+              </div>
+              <template v-for="instance in jenkinsInstances" :key="`health-${instance.connectorKey}`">
+                <div
+                  v-if="jenkinsReviewTriggerHealth[instance.connectorKey]"
+                  style="padding:8px 10px;margin-bottom:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px"
+                >
+                  <a-space :size="8" wrap>
+                    <span style="font-size:12px;font-weight:600;color:#475569">
+                      {{ instance.displayName || instance.connectorKey }} review queue
+                    </span>
+                    <a-tag :color="ciHealthColor(jenkinsReviewTriggerHealth[instance.connectorKey].healthStatus)">
+                      {{ jenkinsReviewTriggerHealth[instance.connectorKey].healthStatus }}
+                    </a-tag>
+                    <span style="font-size:12px;color:#64748b">
+                      {{ jenkinsReviewTriggerHealth[instance.connectorKey].summary }}
+                    </span>
+                    <span
+                      v-if="jenkinsReviewTriggerHealth[instance.connectorKey].oldestPendingAt"
+                      style="font-size:11px;color:#94a3b8"
+                    >
+                      Oldest {{ formatDateTime(jenkinsReviewTriggerHealth[instance.connectorKey].oldestPendingAt || '') }}
+                    </span>
+                  </a-space>
+                </div>
+              </template>
               <div style="font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:6px">Recent Webhook Deliveries</div>
               <a-space v-if="webhookDeliveries.length" direction="vertical" :size="6" style="width:100%">
                 <a-card
@@ -568,6 +741,33 @@ REVIEW_AGENT_CONTEXT=${context}"
                       <div style="font-size:12px;color:#94a3b8;margin-top:4px;word-break:break-all">
                         {{ item.deliveryId }}
                       </div>
+                      <div v-if="item.triggerStatus" style="font-size:12px;color:#64748b;margin-top:2px">
+                        Review trigger:
+                        <a-tag :color="webhookTriggerStatusColor(item.triggerStatus)" style="margin-left:4px">
+                          {{ item.triggerStatus }}
+                        </a-tag>
+                        <router-link v-if="item.triggerReviewId" :to="`/reviews/${item.triggerReviewId}`" style="margin-left:4px">
+                          #{{ item.triggerReviewId }}
+                        </router-link>
+                      </div>
+                      <div v-if="item.triggerKey" style="font-size:11px;color:#94a3b8;margin-top:2px;word-break:break-all">
+                        {{ item.triggerKey }}
+                      </div>
+                      <div v-if="item.triggerMessage" style="font-size:12px;color:#d97706;margin-top:2px;line-height:1.4">{{ item.triggerMessage }}</div>
+                      <div v-if="item.triggerNextRetryAt" style="font-size:11px;color:#64748b;margin-top:2px">
+                        Retry {{ item.triggerRetryCount ?? 0 }} · next {{ formatDateTime(item.triggerNextRetryAt) }}
+                      </div>
+                      <a-button
+                        v-if="can('INTEGRATION_MANAGE') && ['FAILED', 'EXHAUSTED'].includes(item.triggerStatus || '') && item.triggerKey"
+                        type="link"
+                        size="small"
+                        :loading="retryingWebhookTriggerKey === item.triggerKey"
+                        style="height:24px;padding:0;margin-top:2px"
+                        @click="retryWebhookReviewTrigger(item)"
+                      >
+                        <template #icon><SyncOutlined /></template>
+                        Retry review trigger
+                      </a-button>
                       <div v-if="item.errorMessage" style="font-size:12px;color:#dc2626;margin-top:2px;line-height:1.4">{{ item.errorMessage }}</div>
                     </div>
                     <a-tag :color="webhookDeliveryStatusColor(item.deliveryStatus)">{{ item.deliveryStatus }}</a-tag>
@@ -645,6 +845,98 @@ REVIEW_AGENT_CONTEXT=${context}"
       </a-col>
     </a-row>
 
+    <a-card v-if="can('ACCESS_MANAGE')" size="small" class="governance-card-scroll">
+      <template #title>
+        <a-space :size="8">
+          <UserOutlined style="font-size:16px;color:#4f46e5" />
+          <span style="font-weight:600;font-size:14px">平台访问控制</span>
+        </a-space>
+      </template>
+      <a-list :data-source="userAccessUsers" :loading="userAccessLoading" size="small">
+        <template #renderItem="{ item }">
+          <a-list-item>
+            <a-list-item-meta :description="`${item.email || 'No email'} · ${item.status}`">
+              <template #title>
+                <span>{{ item.displayName || item.username }}</span>
+                <span style="margin-left:6px;color:#94a3b8;font-size:12px">@{{ item.username }}</span>
+              </template>
+            </a-list-item-meta>
+            <a-select
+              :value="item.normalizedRole"
+              :loading="updatingUserRoleId === item.id"
+              style="width:190px"
+              @change="updateUserRole(item, $event)"
+            >
+              <a-select-option value="ADMIN">平台管理员</a-select-option>
+              <a-select-option value="GOVERNANCE_MANAGER">治理管理员</a-select-option>
+              <a-select-option value="OPERATOR">运营人员</a-select-option>
+              <a-select-option value="REVIEWER">审查员</a-select-option>
+            </a-select>
+          </a-list-item>
+        </template>
+      </a-list>
+    </a-card>
+
+    <a-card v-if="can('ACCESS_MANAGE')" size="small" class="governance-card-scroll">
+      <template #title>
+        <a-space :size="8">
+          <SafetyOutlined style="font-size:16px;color:#4f46e5" />
+          <span style="font-weight:600;font-size:14px">访问权限审计</span>
+        </a-space>
+      </template>
+      <template #extra>
+        <a-space :size="8" wrap>
+          <a-select
+            v-model:value="accessAuditActionFilter"
+            allow-clear
+            placeholder="全部变更类型"
+            style="width:210px"
+            @change="loadAccessAuditLogs"
+          >
+            <a-select-option value="PLATFORM_ROLE_CHANGED">平台角色变更</a-select-option>
+            <a-select-option value="PROJECT_OWNER_ASSIGNED">项目 Owner 分配</a-select-option>
+            <a-select-option value="PROJECT_MEMBER_ADDED">项目成员添加</a-select-option>
+            <a-select-option value="PROJECT_MEMBER_ROLE_CHANGED">项目角色变更</a-select-option>
+            <a-select-option value="PROJECT_MEMBER_REMOVED">项目成员移除</a-select-option>
+          </a-select>
+          <a-input-number
+            v-model:value="accessAuditProjectFilter"
+            :min="1"
+            :precision="0"
+            placeholder="项目 ID"
+            style="width:120px"
+            @press-enter="loadAccessAuditLogs"
+          />
+          <a-button :loading="accessAuditLoading" @click="loadAccessAuditLogs">
+            <template #icon><SyncOutlined /></template>
+            刷新
+          </a-button>
+        </a-space>
+      </template>
+      <a-list :data-source="accessAuditLogs" :loading="accessAuditLoading" size="small">
+        <template #renderItem="{ item }">
+          <a-list-item>
+            <a-list-item-meta :description="item.detail || '权限配置已更新'">
+              <template #title>
+                <a-space :size="6" wrap>
+                  <a-tag :color="accessAuditActionColor(item.actionType)">{{ accessAuditActionLabel(item.actionType) }}</a-tag>
+                  <span>{{ item.actorUsername || 'SYSTEM' }}</span>
+                  <span style="color:#94a3b8">→</span>
+                  <span>{{ item.targetUsername || `用户 #${item.targetUserId}` }}</span>
+                  <a-tag v-if="item.projectId">项目 #{{ item.projectId }}</a-tag>
+                  <span v-if="item.previousRole || item.newRole" style="color:#64748b;font-size:12px">
+                    {{ item.previousRole || '未授权' }} → {{ item.newRole || '已移除' }}
+                  </span>
+                </a-space>
+              </template>
+            </a-list-item-meta>
+            <span style="color:#94a3b8;font-size:12px;white-space:nowrap">{{ formatDateTime(item.createdAt) }}</span>
+          </a-list-item>
+        </template>
+        <template #locale><a-empty description="暂无权限变更记录" :image="undefined" /></template>
+      </a-list>
+    </a-card>
+
     <a-modal
       v-model:open="rulePackDryRunModalOpen"
       title="规则包变更预览"
@@ -716,13 +1008,16 @@ REVIEW_AGENT_CONTEXT=${context}"
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { BarChartOutlined, CheckCircleOutlined, ExclamationCircleOutlined, AppstoreOutlined, ThunderboltOutlined, SafetyOutlined, UserOutlined, EnvironmentOutlined, SyncOutlined, PlayCircleOutlined, SettingOutlined, ClockCircleOutlined } from '@ant-design/icons-vue'
-import type { BusinessImpact, CapabilityStatus, CiIntegrationHealthVO, CiStatusConfigVO, CiStatusWritebackLogVO, GovernanceRulePack, GovernanceRulePackChange, GovernanceRulePackDryRun, GovernanceRulePackVersion, IntegrationActionLogVO, IntegrationConnector, IntegrationWebhookDeliveryLogVO, MarketCapability, RolloutStage, WorkflowTemplate } from '@/types/governance'
+import type { BusinessImpact, CapabilityStatus, CiConnectionTestResultVO, CiIntegrationHealthVO, CiStatusConfigVO, CiStatusWritebackLogVO, CredentialRotationResultVO, CredentialSecurityHealthVO, GitLabReviewTriggerHealthVO, GovernanceRulePack, GovernanceRulePackChange, GovernanceRulePackDryRun, GovernanceRulePackVersion, IntegrationActionLogVO, IntegrationConnector, IntegrationWebhookDeliveryLogVO, JenkinsReviewTriggerHealthVO, MarketCapability, RolloutStage, WorkflowTemplate } from '@/types/governance'
 import type { TelemetryReadinessItem } from '@/types/operations'
+import type { AccessAuditLog, UserAccess } from '@/types/auth'
 import { useApi } from '@/composables/useApi'
+import { useAccess } from '@/composables/useAccess'
 import { compileGovernancePolicyPack, getCapabilityCoverageSummary, getCiStatusIntegrationReadiness, getConnectorsByStage, getRecommendedNextActions, governanceRulePacks as fallbackRulePacks, integrationConnectors as fallbackConnectors, marketCapabilities as fallbackCapabilities, workflowTemplates as fallbackWorkflowTemplates } from '@/utils/governanceCatalog'
 import { buildCiHealthActions, ciHealthActionColor, buildTelemetryGapActions, telemetryReadinessColor } from '@/utils/governanceTelemetry'
 
-const { get, post, put } = useApi()
+const { get, post, put, patch, del: remove } = useApi()
+const { can, loadAccessProfile } = useAccess()
 const marketCapabilities = ref<MarketCapability[]>(fallbackCapabilities)
 const integrationConnectors = ref<IntegrationConnector[]>(fallbackConnectors)
 const governanceRulePacks = ref<GovernanceRulePack[]>(fallbackRulePacks)
@@ -744,10 +1039,28 @@ const releasePolicy = computed(() => compileGovernancePolicyPack(
 ))
 const ciStatusReadiness = getCiStatusIntegrationReadiness()
 const ciConfigSaving = ref(false)
+const ciConnectionTesting = ref(false)
+const ciConnectionTestResult = ref<CiConnectionTestResultVO | null>(null)
+const credentialSecurityHealth = ref<CredentialSecurityHealthVO | null>(null)
+const credentialRotationRunning = ref(false)
+const credentialRotationResult = ref<CredentialRotationResultVO | null>(null)
+const userAccessUsers = ref<UserAccess[]>([])
+const userAccessLoading = ref(false)
+const updatingUserRoleId = ref<number | null>(null)
+const accessAuditLogs = ref<AccessAuditLog[]>([])
+const accessAuditLoading = ref(false)
+const accessAuditActionFilter = ref<string | undefined>()
+const accessAuditProjectFilter = ref<number | null>(null)
 const ciWritebacks = ref<CiStatusWritebackLogVO[]>([])
 const ciIntegrationHealth = ref<CiIntegrationHealthVO[]>([])
 const integrationActions = ref<IntegrationActionLogVO[]>([])
 const webhookDeliveries = ref<IntegrationWebhookDeliveryLogVO[]>([])
+const webhookTriggerHealth = ref<GitLabReviewTriggerHealthVO | null>(null)
+const jenkinsReviewTriggerHealth = ref<Record<string, JenkinsReviewTriggerHealthVO>>({})
+const jenkinsInstances = ref<CiStatusConfigVO[]>([])
+const creatingJenkinsInstance = ref(false)
+const ciProviderSelection = ref('github-checks')
+const retryingWebhookTriggerKey = ref<string | null>(null)
 const telemetryReadinessItems = ref<TelemetryReadinessItem[]>([])
 const ciWritebackRetryingIds = ref<Set<number>>(new Set())
 const jenkinsResultRefreshing = ref(false)
@@ -800,6 +1113,9 @@ const ciProviderOptions = [
 ]
 const ciConfigForm = reactive({
   connectorKey: 'github-checks',
+  instanceKey: '',
+  displayName: '',
+  projectId: null as number | null,
   provider: 'GITHUB',
   repoOwner: '',
   repoName: '',
@@ -819,8 +1135,62 @@ const ciConfigForm = reactive({
 const telemetryGapActions = computed(() => buildTelemetryGapActions(telemetryReadinessItems.value))
 const ciHealthActions = computed(() => buildCiHealthActions(ciIntegrationHealth.value))
 const selectedCiProviderOption = computed(() =>
-  ciProviderOptions.find(option => option.connectorKey === ciConfigForm.connectorKey) || ciProviderOptions[0]
+  ciProviderOptions.find(option => option.connectorKey === ciProviderSelection.value) || ciProviderOptions[0]
 )
+const activeJenkinsConnectorKey = computed(() => creatingJenkinsInstance.value
+  ? `jenkins-pipeline:${ciConfigForm.instanceKey.trim().toLowerCase()}`
+  : (ciConfigForm.connectorKey || 'jenkins-pipeline'))
+const jenkinsInstanceKeyValid = computed(() => ciConfigForm.provider !== 'JENKINS'
+  || !creatingJenkinsInstance.value
+  || /^[a-z0-9][a-z0-9._-]{0,63}$/.test(ciConfigForm.instanceKey.trim().toLowerCase()))
+const jenkinsSharedLibrarySnippet = computed(() => `reviewAgentGate(
+  reviewAgentUrl: 'https://review-agent.example.com',
+  projectId: ${ciConfigForm.projectId || 'env.REVIEW_AGENT_PROJECT_ID'},
+  connectorKey: '${activeJenkinsConnectorKey.value}',
+  credentialId: 'review-agent-webhook-secret',
+  targetBranch: env.CHANGE_TARGET ?: 'main'
+)`)
+const jenkinsPipelineSnippet = computed(() => `withCredentials([string(credentialsId: 'review-agent-webhook-secret', variable: 'REVIEW_AGENT_TOKEN')]) {
+  def trigger = httpRequest(
+    httpMode: 'POST',
+    url: "\${env.REVIEW_AGENT_URL}/api/integration/webhooks/jenkins/reviews",
+    customHeaders: [
+      [name: 'X-Review-Agent-Token', value: env.REVIEW_AGENT_TOKEN, maskValue: true],
+      [name: 'X-Review-Agent-Connector', value: '${activeJenkinsConnectorKey.value}'],
+      [name: 'X-Jenkins-Delivery', value: "\${env.JOB_NAME}:\${env.BUILD_NUMBER}"]
+    ],
+    contentType: 'APPLICATION_JSON',
+    requestBody: groovy.json.JsonOutput.toJson([
+      projectId: env.REVIEW_AGENT_PROJECT_ID as Long,
+      sourceBranch: env.BRANCH_NAME,
+      targetBranch: env.CHANGE_TARGET ?: 'main',
+      jobName: env.JOB_NAME,
+      buildNumber: env.BUILD_NUMBER,
+      buildUrl: env.BUILD_URL,
+      commitSha: env.GIT_COMMIT
+    ])
+  )
+  def review = new groovy.json.JsonSlurperClassic().parseText(trigger.content).data
+  if (review.triggerStatus != 'PROCESSED') {
+    error("Review Agent trigger: \${review.triggerStatus} \${review.triggerMessage ?: ''}")
+  }
+  timeout(time: 30, unit: 'MINUTES') {
+    waitUntil {
+      def gateResponse = httpRequest(
+        url: "\${env.REVIEW_AGENT_URL}/api/integration/webhooks/jenkins/reviews/\${review.triggerReviewId}/gate",
+        customHeaders: [
+          [name: 'X-Review-Agent-Token', value: env.REVIEW_AGENT_TOKEN, maskValue: true],
+          [name: 'X-Review-Agent-Connector', value: '${activeJenkinsConnectorKey.value}']
+        ]
+      )
+      def gate = new groovy.json.JsonSlurperClassic().parseText(gateResponse.content).data
+      if (gate.gateStatus == 'PASSED') return true
+      if (gate.gateStatus in ['BLOCKED', 'NEEDS_HUMAN_REVIEW']) error("Review Agent gate: \${gate.gateStatus}")
+      sleep 10
+      return false
+    }
+  }
+}`)
 
 async function loadGovernanceCatalog() {
   try {
@@ -904,8 +1274,17 @@ function viewRulePackVersionSnapshot(version: GovernanceRulePackVersion) {
 }
 
 function applyCiStatusConfig(config: CiStatusConfigVO) {
-  const option = ciProviderOptions.find(item => item.connectorKey === (config.connectorKey || ciConfigForm.connectorKey)) || selectedCiProviderOption.value
+  const connectorFamily = config.connectorKey?.startsWith('jenkins-pipeline')
+    ? 'jenkins-pipeline'
+    : (config.connectorKey || ciProviderSelection.value)
+  const option = ciProviderOptions.find(item => item.connectorKey === connectorFamily) || selectedCiProviderOption.value
+  ciProviderSelection.value = option.connectorKey
   ciConfigForm.connectorKey = config.connectorKey || option.connectorKey
+  ciConfigForm.instanceKey = ciConfigForm.connectorKey.startsWith('jenkins-pipeline:')
+    ? ciConfigForm.connectorKey.slice('jenkins-pipeline:'.length)
+    : ''
+  ciConfigForm.displayName = config.displayName || ''
+  ciConfigForm.projectId = config.projectId ?? null
   ciConfigForm.provider = config.provider || option.provider
   ciConfigForm.repoOwner = config.repoOwner || ''
   ciConfigForm.repoName = config.repoName || ''
@@ -931,7 +1310,74 @@ async function loadCiStatusConfig(connectorKey = ciConfigForm.connectorKey) {
   }
 }
 
+async function loadJenkinsInstances() {
+  try {
+    const res = await get<CiStatusConfigVO[]>('/integration/ci-config/list?provider=JENKINS')
+    jenkinsInstances.value = res.data ?? []
+  } catch (e) {
+    console.error('load Jenkins connector instances failed', e)
+    jenkinsInstances.value = []
+  }
+}
+
+async function selectJenkinsInstance(connectorKey: string) {
+  creatingJenkinsInstance.value = false
+  await loadCiStatusConfig(connectorKey)
+}
+
+function startNewJenkinsInstance() {
+  creatingJenkinsInstance.value = true
+  ciProviderSelection.value = 'jenkins-pipeline'
+  ciConfigForm.connectorKey = ''
+  ciConfigForm.instanceKey = ''
+  ciConfigForm.displayName = ''
+  ciConfigForm.projectId = null
+  ciConfigForm.provider = 'JENKINS'
+  ciConfigForm.repoOwner = ''
+  ciConfigForm.repoName = ''
+  ciConfigForm.repoUrl = ''
+  ciConfigForm.defaultBranch = 'main'
+  ciConfigForm.statusContext = 'Review Agent Gate'
+  ciConfigForm.jenkinsParameterTemplate = ''
+  ciConfigForm.notificationWebhookUrl = ''
+  ciConfigForm.checksEnabled = true
+  ciConfigForm.sarifUploadEnabled = false
+  ciConfigForm.apiToken = ''
+  ciConfigForm.webhookSecret = ''
+  ciConfigForm.tokenConfigured = false
+  ciConfigForm.webhookSecretConfigured = false
+}
+
+async function cancelNewJenkinsInstance() {
+  creatingJenkinsInstance.value = false
+  const preferred = jenkinsInstances.value.find(item => item.connectorKey === 'jenkins-pipeline')
+    || jenkinsInstances.value[0]
+  if (preferred) {
+    await loadCiStatusConfig(preferred.connectorKey)
+  } else {
+    await handleCiConnectorChange('github-checks')
+  }
+}
+
+async function deleteJenkinsInstance() {
+  if (!ciConfigForm.connectorKey) return
+  try {
+    await remove(`/integration/ci-config?connectorKey=${encodeURIComponent(ciConfigForm.connectorKey)}`)
+    await loadJenkinsInstances()
+    const next = jenkinsInstances.value[0]
+    if (next) {
+      await loadCiStatusConfig(next.connectorKey)
+    } else {
+      startNewJenkinsInstance()
+    }
+    await loadJenkinsReviewTriggerHealth()
+  } catch (e) {
+    console.error('delete Jenkins connector instance failed', e)
+  }
+}
+
 async function handleCiConnectorChange(connectorKey: string) {
+  ciConnectionTestResult.value = null
   const option = ciProviderOptions.find(item => item.connectorKey === connectorKey) || ciProviderOptions[0]
   ciConfigForm.provider = option.provider
   ciConfigForm.statusContext = option.statusPlaceholder
@@ -939,6 +1385,18 @@ async function handleCiConnectorChange(connectorKey: string) {
   ciConfigForm.notificationWebhookUrl = ''
   ciConfigForm.apiToken = ''
   ciConfigForm.webhookSecret = ''
+  creatingJenkinsInstance.value = false
+  if (connectorKey === 'jenkins-pipeline') {
+    await loadJenkinsInstances()
+    const preferred = jenkinsInstances.value.find(item => item.connectorKey === 'jenkins-pipeline')
+      || jenkinsInstances.value[0]
+    if (preferred) {
+      await loadCiStatusConfig(preferred.connectorKey)
+    } else {
+      startNewJenkinsInstance()
+    }
+    return
+  }
   await loadCiStatusConfig(connectorKey)
 }
 
@@ -960,6 +1418,72 @@ async function loadCiIntegrationHealth() {
   }
 }
 
+async function loadCredentialSecurityHealth() {
+  try {
+    const res = await get<CredentialSecurityHealthVO>('/integration/ci-config/credential-health')
+    credentialSecurityHealth.value = res.data ?? null
+  } catch (e) {
+    console.error('load credential security health failed', e)
+  }
+}
+
+async function loadUserAccess() {
+  if (!can('ACCESS_MANAGE')) return
+  userAccessLoading.value = true
+  try {
+    const res = await get<UserAccess[]>('/access/users')
+    userAccessUsers.value = res.data ?? []
+  } catch (e) {
+    console.error('load platform access users failed', e)
+  } finally {
+    userAccessLoading.value = false
+  }
+}
+
+async function loadAccessAuditLogs() {
+  if (!can('ACCESS_MANAGE')) return
+  accessAuditLoading.value = true
+  try {
+    const params = new URLSearchParams({ limit: '50' })
+    if (accessAuditActionFilter.value) params.set('actionType', accessAuditActionFilter.value)
+    if (accessAuditProjectFilter.value) params.set('projectId', String(accessAuditProjectFilter.value))
+    const res = await get<AccessAuditLog[]>(`/access/audit-logs?${params.toString()}`)
+    accessAuditLogs.value = res.data ?? []
+  } catch (e) {
+    console.error('load access audit logs failed', e)
+  } finally {
+    accessAuditLoading.value = false
+  }
+}
+
+async function updateUserRole(user: UserAccess, role: string) {
+  updatingUserRoleId.value = user.id
+  try {
+    await patch<UserAccess>(`/access/users/${user.id}/role`, { role })
+    await Promise.all([loadUserAccess(), loadAccessAuditLogs(), loadAccessProfile(true)])
+  } catch (e) {
+    console.error('update platform user role failed', e)
+  } finally {
+    updatingUserRoleId.value = null
+  }
+}
+
+async function rotateCredentials() {
+  credentialRotationRunning.value = true
+  credentialRotationResult.value = null
+  try {
+    const res = await post<CredentialRotationResultVO>('/integration/ci-config/credential-rotation', {
+      confirmation: 'ROTATE CREDENTIALS',
+    })
+    credentialRotationResult.value = res.data ?? null
+    await Promise.all([loadCredentialSecurityHealth(), loadIntegrationActions()])
+  } catch (e) {
+    console.error('rotate integration credentials failed', e)
+  } finally {
+    credentialRotationRunning.value = false
+  }
+}
+
 async function loadIntegrationActions() {
   try {
     const res = await get<IntegrationActionLogVO[]>('/integration/actions')
@@ -978,6 +1502,51 @@ async function loadWebhookDeliveries() {
   }
 }
 
+async function loadWebhookTriggerHealth() {
+  try {
+    const res = await get<GitLabReviewTriggerHealthVO>('/integration/webhooks/gitlab/review-triggers/health')
+    webhookTriggerHealth.value = res.data ?? null
+  } catch (e) {
+    console.error('load GitLab review trigger health failed', e)
+  }
+}
+
+async function loadJenkinsReviewTriggerHealth() {
+  const entries = await Promise.all(jenkinsInstances.value.map(async instance => {
+    try {
+      const res = await get<JenkinsReviewTriggerHealthVO>(
+        `/integration/webhooks/jenkins/review-triggers/health?connectorKey=${encodeURIComponent(instance.connectorKey)}`,
+      )
+      return [instance.connectorKey, res.data] as const
+    } catch (e) {
+      console.error(`load Jenkins review trigger health failed: ${instance.connectorKey}`, e)
+      return [instance.connectorKey, undefined] as const
+    }
+  }))
+  jenkinsReviewTriggerHealth.value = Object.fromEntries(
+    entries.filter((entry): entry is readonly [string, JenkinsReviewTriggerHealthVO] => Boolean(entry[1])),
+  )
+}
+
+async function retryWebhookReviewTrigger(item: IntegrationWebhookDeliveryLogVO) {
+  if (!item.triggerKey) return
+  retryingWebhookTriggerKey.value = item.triggerKey
+  try {
+    const providerPath = item.provider === 'JENKINS' ? 'jenkins' : 'gitlab'
+    await post(`/integration/webhooks/${providerPath}/review-triggers/retry`, {
+      connectorKey: item.connectorKey,
+      triggerKey: item.triggerKey,
+    })
+    await loadWebhookDeliveries()
+    await loadCredentialSecurityHealth()
+    await Promise.all([loadWebhookTriggerHealth(), loadJenkinsReviewTriggerHealth()])
+  } catch (e) {
+    console.error('retry review trigger failed', e)
+  } finally {
+    retryingWebhookTriggerKey.value = null
+  }
+}
+
 async function loadTelemetryReadiness() {
   try {
     const res = await get<TelemetryReadinessItem[]>('/operations/telemetry-readiness')
@@ -987,11 +1556,16 @@ async function loadTelemetryReadiness() {
   }
 }
 
-async function saveCiStatusConfig() {
+async function saveCiStatusConfig(): Promise<boolean> {
   ciConfigSaving.value = true
   try {
+    const connectorKey = ciConfigForm.provider === 'JENKINS' && creatingJenkinsInstance.value
+      ? `jenkins-pipeline:${ciConfigForm.instanceKey.trim().toLowerCase()}`
+      : ciConfigForm.connectorKey
     const payload = {
-      connectorKey: ciConfigForm.connectorKey,
+      connectorKey,
+      displayName: ciConfigForm.displayName,
+      projectId: ciConfigForm.projectId,
       provider: ciConfigForm.provider,
       repoOwner: ciConfigForm.repoOwner,
       repoName: ciConfigForm.repoName,
@@ -1006,15 +1580,40 @@ async function saveCiStatusConfig() {
       webhookSecret: ciConfigForm.webhookSecret,
     }
     const res = await put<CiStatusConfigVO>('/integration/ci-config', payload)
-    if (res.data) applyCiStatusConfig(res.data)
+    if (res.data) {
+      applyCiStatusConfig(res.data)
+      creatingJenkinsInstance.value = false
+    }
+    if (ciConfigForm.provider === 'JENKINS') await loadJenkinsInstances()
     await loadCiWritebacks()
     await loadCiIntegrationHealth()
     await loadIntegrationActions()
     await loadWebhookDeliveries()
+    await loadJenkinsReviewTriggerHealth()
+    return true
   } catch (e) {
     console.error('保存 CI 回写配置失败', e)
+    return false
   } finally {
     ciConfigSaving.value = false
+  }
+}
+
+async function testCiConnection() {
+  ciConnectionTesting.value = true
+  ciConnectionTestResult.value = null
+  try {
+    const saved = await saveCiStatusConfig()
+    if (!saved) return
+    const res = await post<CiConnectionTestResultVO>(
+      `/integration/ci-config/test?connectorKey=${encodeURIComponent(ciConfigForm.connectorKey)}`,
+    )
+    ciConnectionTestResult.value = res.data ?? null
+    await loadIntegrationActions()
+  } catch (e) {
+    console.error('测试 CI 连接失败', e)
+  } finally {
+    ciConnectionTesting.value = false
   }
 }
 
@@ -1046,14 +1645,21 @@ async function refreshJenkinsResults() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await loadAccessProfile()
+  await loadJenkinsInstances()
   loadGovernanceCatalog()
   loadCiStatusConfig()
   loadCiWritebacks()
   loadCiIntegrationHealth()
+  loadCredentialSecurityHealth()
   loadIntegrationActions()
   loadWebhookDeliveries()
+  loadWebhookTriggerHealth()
+  loadJenkinsReviewTriggerHealth()
   loadTelemetryReadiness()
+  loadUserAccess()
+  loadAccessAuditLogs()
 })
 
 const capabilityColumns = [
@@ -1079,7 +1685,34 @@ function writebackStatusColor(status: string) { return { SUCCESS: 'green', FAILE
 function ciHealthColor(status: string) { return { HEALTHY: 'green', DEGRADED: 'orange', UNHEALTHY: 'red', NO_DATA: 'default' }[status] ?? 'default' }
 function jenkinsBuildResultColor(status: string) { return { SUCCESS: 'green', FAILURE: 'red', UNSTABLE: 'orange', ABORTED: 'default', CANCELLED: 'default', BUILDING: 'blue', QUEUED: 'processing' }[status] ?? 'default' }
 function actionStatusColor(status: string) { return { UPLOADED: 'green', POSTED: 'green', FAILED: 'red', SKIPPED: 'default' }[status] ?? 'default' }
+function accessAuditActionLabel(actionType: string) { return { PLATFORM_ROLE_CHANGED: '平台角色变更', PROJECT_OWNER_ASSIGNED: '项目 Owner 分配', PROJECT_MEMBER_ADDED: '项目成员添加', PROJECT_MEMBER_ROLE_CHANGED: '项目角色变更', PROJECT_MEMBER_REMOVED: '项目成员移除' }[actionType] ?? actionType }
+function accessAuditActionColor(actionType: string) { return { PLATFORM_ROLE_CHANGED: 'purple', PROJECT_OWNER_ASSIGNED: 'blue', PROJECT_MEMBER_ADDED: 'green', PROJECT_MEMBER_ROLE_CHANGED: 'orange', PROJECT_MEMBER_REMOVED: 'red' }[actionType] ?? 'default' }
 function webhookDeliveryStatusColor(status: string) { return { ACCEPTED: 'green', REJECTED: 'red', DUPLICATE: 'default' }[status] ?? 'default' }
+function webhookTriggerStatusColor(status: string) { return { PROCESSED: 'green', DEDUPLICATED: 'blue', SKIPPED: 'default', FAILED: 'red', EXHAUSTED: 'red' }[status] ?? 'default' }
+function formatDateTime(value: string) { return new Date(value).toLocaleString() }
 function rulePackChangeStatusColor(status: string) { return { PROPOSED: 'orange', APPROVED: 'blue', APPLIED: 'green', REJECTED: 'red', ROLLED_BACK: 'default' }[status] ?? 'default' }
 function rulePackVersionStatusColor(status: string) { return { ACTIVE: 'green', ARCHIVED: 'default', ROLLED_BACK: 'orange' }[status] ?? 'default' }
 </script>
+
+<style scoped>
+.jenkins-inbound-guide {
+  margin-bottom: 16px;
+  padding: 12px 0;
+  border-top: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.jenkins-pipeline-snippet {
+  max-height: 320px;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre;
+}
+</style>
